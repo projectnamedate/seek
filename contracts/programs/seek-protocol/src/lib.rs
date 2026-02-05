@@ -1,5 +1,5 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Mint, Token, TokenAccount};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("SeekXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
 
@@ -22,6 +22,31 @@ pub const PROTOCOL_SHARE_BPS: u64 = 500;     // 5% to protocol treasury
 
 /// Jackpot odds: 1 in 500 chance on every win
 pub const SINGULARITY_ODDS: u64 = 500;
+
+/// Timer durations in seconds
+pub const TIER_1_DURATION: i64 = 600;  // 10 minutes
+pub const TIER_2_DURATION: i64 = 300;  // 5 minutes
+pub const TIER_3_DURATION: i64 = 120;  // 2 minutes
+
+/// Validate bet amount and return tier
+pub fn validate_bet_amount(bet_amount: u64) -> Result<u8> {
+    match bet_amount {
+        TIER_1_BET => Ok(1),
+        TIER_2_BET => Ok(2),
+        TIER_3_BET => Ok(3),
+        _ => Err(SeekError::InvalidBetAmount.into()),
+    }
+}
+
+/// Get timer duration for a tier
+pub fn get_tier_duration(tier: u8) -> i64 {
+    match tier {
+        1 => TIER_1_DURATION,
+        2 => TIER_2_DURATION,
+        3 => TIER_3_DURATION,
+        _ => TIER_1_DURATION, // Default fallback
+    }
+}
 
 /// Custom error codes for the Seek protocol
 #[error_code]
@@ -184,6 +209,70 @@ pub mod seek_protocol {
 
         Ok(())
     }
+
+    /// Accept a bounty - player places their bet and starts the hunt
+    /// bet_amount must be exactly 100, 200, or 300 SKR (with 9 decimals)
+    pub fn accept_bounty(ctx: Context<AcceptBounty>, bet_amount: u64) -> Result<()> {
+        // Validate bet amount and get tier
+        let tier = validate_bet_amount(bet_amount)?;
+
+        // Get current timestamp
+        let clock = Clock::get()?;
+        let current_time = clock.unix_timestamp;
+
+        // Calculate expiration based on tier
+        let duration = get_tier_duration(tier);
+        let expires_at = current_time
+            .checked_add(duration)
+            .ok_or(SeekError::MathOverflow)?;
+
+        // Calculate 2x payout
+        let payout_amount = bet_amount
+            .checked_mul(2)
+            .ok_or(SeekError::MathOverflow)?;
+
+        // Initialize bounty account
+        let bounty = &mut ctx.accounts.bounty;
+        bounty.player = ctx.accounts.player.key();
+        bounty.global_state = ctx.accounts.global_state.key();
+        bounty.bet_amount = bet_amount;
+        bounty.payout_amount = payout_amount;
+        bounty.created_at = current_time;
+        bounty.expires_at = expires_at;
+        bounty.status = BountyStatus::Pending;
+        bounty.tier = tier;
+        bounty.singularity_won = false;
+        bounty.bump = ctx.bumps.bounty;
+
+        // Transfer bet from player to house vault
+        let transfer_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.player_token_account.to_account_info(),
+                to: ctx.accounts.house_vault.to_account_info(),
+                authority: ctx.accounts.player.to_account_info(),
+            },
+        );
+        token::transfer(transfer_ctx, bet_amount)?;
+
+        // Update global state
+        let global_state = &mut ctx.accounts.global_state;
+        global_state.house_fund_balance = global_state
+            .house_fund_balance
+            .checked_add(bet_amount)
+            .ok_or(SeekError::MathOverflow)?;
+        global_state.total_bounties_created = global_state
+            .total_bounties_created
+            .checked_add(1)
+            .ok_or(SeekError::MathOverflow)?;
+
+        msg!("Bounty accepted!");
+        msg!("Player: {}", bounty.player);
+        msg!("Bet: {} SKR (Tier {})", bet_amount / 1_000_000_000, tier);
+        msg!("Expires at: {}", expires_at);
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -244,4 +333,59 @@ pub struct Initialize<'info> {
 
     /// Rent sysvar
     pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+#[instruction(bet_amount: u64)]
+pub struct AcceptBounty<'info> {
+    /// Player accepting the bounty
+    #[account(mut)]
+    pub player: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// Bounty PDA - unique per player + timestamp
+    #[account(
+        init,
+        payer = player,
+        space = Bounty::SIZE,
+        seeds = [b"bounty", player.key().as_ref(), &Clock::get()?.unix_timestamp.to_le_bytes()],
+        bump
+    )]
+    pub bounty: Account<'info, Bounty>,
+
+    /// Player's SKR token account
+    #[account(
+        mut,
+        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = player_token_account.owner == player.key() @ SeekError::Unauthorized
+    )]
+    pub player_token_account: Account<'info, TokenAccount>,
+
+    /// House vault to receive bet
+    #[account(
+        mut,
+        seeds = [b"house_vault"],
+        bump,
+        constraint = house_vault.key() == global_state.house_vault
+    )]
+    pub house_vault: Account<'info, TokenAccount>,
+
+    /// The SKR token mint
+    #[account(
+        address = SKR_MINT @ SeekError::InvalidMint
+    )]
+    pub skr_mint: Account<'info, Mint>,
+
+    /// System program
+    pub system_program: Program<'info, System>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
 }
