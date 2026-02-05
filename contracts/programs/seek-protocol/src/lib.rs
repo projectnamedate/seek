@@ -176,6 +176,50 @@ impl Bounty {
     pub const SIZE: usize = 8 + 32 * 2 + 8 * 4 + 1 * 4;
 }
 
+// ============================================================================
+// EVENTS - Emitted for frontend and indexer tracking
+// ============================================================================
+
+/// Emitted when a player accepts a bounty
+#[event]
+pub struct BountyAccepted {
+    pub player: Pubkey,
+    pub bounty: Pubkey,
+    pub bet_amount: u64,
+    pub tier: u8,
+    pub expires_at: i64,
+}
+
+/// Emitted when a bounty is won
+#[event]
+pub struct BountyWon {
+    pub player: Pubkey,
+    pub bounty: Pubkey,
+    pub payout: u64,
+    pub singularity_won: bool,
+    pub singularity_amount: u64,
+}
+
+/// Emitted when a bounty is lost
+#[event]
+pub struct BountyLost {
+    pub player: Pubkey,
+    pub bounty: Pubkey,
+    pub bet_amount: u64,
+    pub house_share: u64,
+    pub singularity_share: u64,
+    pub burn_share: u64,
+    pub protocol_share: u64,
+}
+
+/// Emitted when house is funded
+#[event]
+pub struct HouseFunded {
+    pub authority: Pubkey,
+    pub amount: u64,
+    pub new_balance: u64,
+}
+
 #[program]
 pub mod seek_protocol {
     use super::*;
