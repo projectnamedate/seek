@@ -28,6 +28,11 @@ pub const TIER_1_DURATION: i64 = 600;  // 10 minutes
 pub const TIER_2_DURATION: i64 = 300;  // 5 minutes
 pub const TIER_3_DURATION: i64 = 120;  // 2 minutes
 
+/// Trust-minimization constants
+pub const CHALLENGE_PERIOD: i64 = 300;       // 5 minutes to challenge a result
+pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original bet to dispute
+pub const DISPUTE_WINDOW: i64 = 600;         // 10 minutes to file dispute after resolution
+
 /// Validate bet amount and return tier
 pub fn validate_bet_amount(bet_amount: u64) -> Result<u8> {
     match bet_amount {
@@ -77,6 +82,37 @@ pub enum SeekError {
 
     #[msg("Unauthorized access")]
     Unauthorized,
+
+    // Trust-minimization errors
+    #[msg("Invalid mission commitment hash")]
+    InvalidMissionHash,
+
+    #[msg("Mission already revealed")]
+    MissionAlreadyRevealed,
+
+    #[msg("Mission not yet revealed")]
+    MissionNotRevealed,
+
+    #[msg("Challenge period has not ended")]
+    ChallengePeriodActive,
+
+    #[msg("Challenge period has ended")]
+    ChallengePeriodEnded,
+
+    #[msg("Dispute window has expired")]
+    DisputeWindowExpired,
+
+    #[msg("Bounty already disputed")]
+    AlreadyDisputed,
+
+    #[msg("Invalid dispute stake amount")]
+    InvalidDisputeStake,
+
+    #[msg("Bounty not in disputed state")]
+    NotDisputed,
+
+    #[msg("Bounty is still in challenge period")]
+    StillInChallengePeriod,
 }
 
 /// Global protocol state - tracks all protocol-wide metrics
