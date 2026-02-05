@@ -22,6 +22,37 @@ pub const PROTOCOL_SHARE_BPS: u64 = 500;     // 5% to protocol treasury
 /// Jackpot odds: 1 in 500 chance on every win
 pub const SINGULARITY_ODDS: u64 = 500;
 
+/// Custom error codes for the Seek protocol
+#[error_code]
+pub enum SeekError {
+    #[msg("Invalid bet amount. Must be 100, 200, or 300 SKR")]
+    InvalidBetAmount,
+
+    #[msg("Bounty is not in pending state")]
+    BountyNotPending,
+
+    #[msg("Bounty has already been resolved")]
+    BountyAlreadyResolved,
+
+    #[msg("Bounty timer has expired")]
+    BountyExpired,
+
+    #[msg("Bounty timer has not expired yet")]
+    BountyNotExpired,
+
+    #[msg("Insufficient funds in house vault")]
+    InsufficientHouseFunds,
+
+    #[msg("Arithmetic overflow occurred")]
+    MathOverflow,
+
+    #[msg("Invalid token mint. Must be SKR")]
+    InvalidMint,
+
+    #[msg("Unauthorized access")]
+    Unauthorized,
+}
+
 #[program]
 pub mod seek_protocol {
     use super::*;
