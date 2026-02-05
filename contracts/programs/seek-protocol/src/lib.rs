@@ -165,9 +165,17 @@ impl GlobalState {
 pub enum BountyStatus {
     /// Bounty accepted, player is hunting
     Pending,
-    /// Player successfully completed the bounty
+    /// Photo submitted, awaiting resolution
+    Submitted,
+    /// Resolved as win, in challenge period (optimistic)
+    ChallengeWon,
+    /// Resolved as loss, in challenge period (optimistic)
+    ChallengeLost,
+    /// Player disputed the loss result
+    Disputed,
+    /// Final: Player won (after challenge period)
     Won,
-    /// Player failed (timeout or invalid submission)
+    /// Final: Player lost (after challenge period)
     Lost,
     /// Bounty was cancelled
     Cancelled,
@@ -191,7 +199,7 @@ pub struct Bounty {
     /// Unix timestamp when bounty was accepted
     pub created_at: i64,
 
-    /// Unix timestamp when bounty expires
+    /// Unix timestamp when bounty expires (hunt timer)
     pub expires_at: i64,
 
     /// Current status of the bounty
@@ -205,11 +213,43 @@ pub struct Bounty {
 
     /// Bump seed for PDA derivation
     pub bump: u8,
+
+    // === COMMIT-REVEAL FIELDS ===
+    /// Hash of (mission_id || salt) - committed at bounty creation
+    pub mission_commitment: [u8; 32],
+
+    /// Revealed mission ID (set when backend reveals)
+    pub mission_id: [u8; 32],
+
+    /// Whether mission has been revealed
+    pub mission_revealed: bool,
+
+    // === OPTIMISTIC RESOLUTION FIELDS ===
+    /// Timestamp when resolution was submitted (challenge period starts)
+    pub resolved_at: i64,
+
+    /// Timestamp when challenge period ends
+    pub challenge_ends_at: i64,
+
+    /// Whether the proposed result was a win
+    pub proposed_win: bool,
+
+    // === DISPUTE FIELDS ===
+    /// Whether this bounty has been disputed
+    pub is_disputed: bool,
+
+    /// Dispute stake amount (if disputed)
+    pub dispute_stake: u64,
+
+    /// Timestamp when dispute was filed
+    pub disputed_at: i64,
 }
 
 impl Bounty {
-    /// Account size: 8 (disc) + 32*2 (pubkeys) + 8*4 (u64/i64s) + 1*4 (u8/bool/enum)
-    pub const SIZE: usize = 8 + 32 * 2 + 8 * 4 + 1 * 4;
+    /// Account size calculation:
+    /// 8 (discriminator) + 32*2 (pubkeys) + 8*7 (u64/i64s) + 1*5 (u8/bool/enum)
+    /// + 32*2 (commitment + mission_id) = 8 + 64 + 56 + 5 + 64 = 197, round to 200
+    pub const SIZE: usize = 200;
 }
 
 // ============================================================================
