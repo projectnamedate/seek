@@ -1,0 +1,22 @@
+[package]
+name = "seek-protocol"
+version = "0.1.0"
+description = "Seek Protocol - Pokemon GO for crypto scavenger hunts on Solana"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/seek-protocol/seek"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "seek_protocol"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = { version = "0.32.0", features = ["init-if-needed"] }
+anchor-spl = "0.32.0"
