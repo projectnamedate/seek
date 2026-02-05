@@ -43,15 +43,26 @@ Pokemon GO for crypto. Bet $SKR, find real-world objects, win 2x your bet. Built
 
 ```
 seek/
-├── contracts/           # Solana smart contracts
+├── contracts/              # Solana smart contracts
 │   ├── programs/
 │   │   └── seek-protocol/
 │   │       └── src/
 │   │           └── lib.rs
 │   ├── Anchor.toml
 │   └── Cargo.toml
-├── backend/            # Node.js API server (coming soon)
-└── mobile/             # React Native app (coming soon)
+├── backend/                # Node.js API server
+│   └── src/
+│       ├── config/         # Environment configuration
+│       ├── data/           # Mission pool (300 bounties)
+│       ├── routes/         # API endpoints
+│       ├── services/       # Business logic
+│       │   ├── ai.service.ts       # GPT-4V validation
+│       │   ├── bounty.service.ts   # Bounty management
+│       │   ├── exif.service.ts     # Photo metadata
+│       │   └── solana.service.ts   # Blockchain interaction
+│       ├── types/          # TypeScript definitions
+│       └── index.ts        # Express server
+└── mobile/                 # React Native app (coming soon)
 ```
 
 ## Smart Contract Features
@@ -63,15 +74,54 @@ seek/
 - PDA-based account management
 - Event emission for real-time tracking
 
+## Backend API
+
+**Endpoints:**
+- `POST /api/bounty/start` - Start a bounty hunt
+- `POST /api/bounty/submit` - Submit photo for validation
+- `GET /api/bounty/:id` - Get bounty status
+- `GET /api/bounty/player/:wallet` - Get player's active bounty
+- `GET /api/health` - Health check
+- `GET /api/health/stats` - Protocol statistics
+
+**Photo Validation:**
+1. EXIF metadata extraction (timestamp, GPS, device)
+2. Screenshot detection (no GPS + no device = reject)
+3. Timestamp validation (max 5 min old)
+4. GPT-4V object detection with confidence scoring
+5. Minimum 70% confidence threshold
+
 ## Development
 
 ```bash
-# Build contracts
+# Smart Contracts
 cd contracts
 anchor build
 
-# Run tests
-anchor test
+# Backend
+cd backend
+cp .env.example .env  # Configure environment
+npm install
+npm run dev           # Start development server
+```
+
+## Environment Variables
+
+```bash
+# Server
+PORT=3001
+NODE_ENV=development
+
+# Solana
+SOLANA_RPC_URL=https://api.devnet.solana.com
+AUTHORITY_PRIVATE_KEY=your_base58_private_key
+
+# Program
+SEEK_PROGRAM_ID=Seek111111111111111111111111111111111111111
+SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
+
+# OpenAI
+OPENAI_API_KEY=sk-your-api-key
 ```
 
 ## License
