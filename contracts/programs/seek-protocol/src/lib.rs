@@ -374,7 +374,12 @@ pub mod seek_protocol {
 
     /// Accept a bounty - player places their bet and starts the hunt
     /// bet_amount must be exactly 100, 200, or 300 SKR (with 9 decimals)
-    pub fn accept_bounty(ctx: Context<AcceptBounty>, bet_amount: u64) -> Result<()> {
+    /// mission_commitment is hash(mission_id || salt) for commit-reveal
+    pub fn accept_bounty(
+        ctx: Context<AcceptBounty>,
+        bet_amount: u64,
+        mission_commitment: [u8; 32],
+    ) -> Result<()> {
         // Validate bet amount and get tier
         let tier = validate_bet_amount(bet_amount)?;
 
@@ -405,6 +410,21 @@ pub mod seek_protocol {
         bounty.tier = tier;
         bounty.singularity_won = false;
         bounty.bump = ctx.bumps.bounty;
+
+        // Commit-reveal: store mission commitment hash
+        bounty.mission_commitment = mission_commitment;
+        bounty.mission_id = [0u8; 32];
+        bounty.mission_revealed = false;
+
+        // Optimistic resolution: initialize to zero
+        bounty.resolved_at = 0;
+        bounty.challenge_ends_at = 0;
+        bounty.proposed_win = false;
+
+        // Dispute: initialize to false
+        bounty.is_disputed = false;
+        bounty.dispute_stake = 0;
+        bounty.disputed_at = 0;
 
         // Transfer bet from player to house vault
         let transfer_ctx = CpiContext::new(
