@@ -463,6 +463,32 @@ pub mod seek_protocol {
 
         Ok(())
     }
+
+    /// Fund the house vault - authority deposits SKR for player payouts
+    pub fn fund_house(ctx: Context<FundHouse>, amount: u64) -> Result<()> {
+        // Transfer from authority to house vault
+        let transfer_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.authority_token_account.to_account_info(),
+                to: ctx.accounts.house_vault.to_account_info(),
+                authority: ctx.accounts.authority.to_account_info(),
+            },
+        );
+        token::transfer(transfer_ctx, amount)?;
+
+        // Update tracked balance
+        let global_state = &mut ctx.accounts.global_state;
+        global_state.house_fund_balance = global_state
+            .house_fund_balance
+            .checked_add(amount)
+            .ok_or(SeekError::MathOverflow)?;
+
+        msg!("House funded with {} SKR", amount / 1_000_000_000);
+        msg!("New balance: {} SKR", global_state.house_fund_balance / 1_000_000_000);
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -643,6 +669,44 @@ pub struct ResolveBounty<'info> {
         address = SKR_MINT @ SeekError::InvalidMint
     )]
     pub skr_mint: Account<'info, Mint>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct FundHouse<'info> {
+    /// Authority funding the house
+    #[account(
+        mut,
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// Authority's SKR token account
+    #[account(
+        mut,
+        constraint = authority_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = authority_token_account.owner == authority.key() @ SeekError::Unauthorized
+    )]
+    pub authority_token_account: Account<'info, TokenAccount>,
+
+    /// House vault to receive funds
+    #[account(
+        mut,
+        seeds = [b"house_vault"],
+        bump,
+        constraint = house_vault.key() == global_state.house_vault
+    )]
+    pub house_vault: Account<'info, TokenAccount>,
 
     /// Token program
     pub token_program: Program<'info, Token>,
