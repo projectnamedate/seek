@@ -824,6 +824,137 @@ pub mod seek_protocol {
 
         Ok(())
     }
+
+    /// Dispute a bounty result - player stakes additional SKR to challenge
+    /// Can only dispute LOSS results during challenge period
+    pub fn dispute_bounty(ctx: Context<DisputeBounty>) -> Result<()> {
+        let bounty = &mut ctx.accounts.bounty;
+        let clock = Clock::get()?;
+        let current_time = clock.unix_timestamp;
+
+        // Can only dispute losses (no point disputing wins)
+        require!(
+            bounty.status == BountyStatus::ChallengeLost,
+            SeekError::BountyNotPending
+        );
+
+        // Must be within challenge period
+        require!(
+            current_time < bounty.challenge_ends_at,
+            SeekError::ChallengePeriodEnded
+        );
+
+        // Cannot dispute twice
+        require!(!bounty.is_disputed, SeekError::AlreadyDisputed);
+
+        // Calculate dispute stake (50% of original bet)
+        let dispute_stake = bounty.bet_amount
+            .checked_mul(DISPUTE_STAKE_BPS)
+            .ok_or(SeekError::MathOverflow)?
+            .checked_div(10000)
+            .ok_or(SeekError::MathOverflow)?;
+
+        // Transfer dispute stake from player to house vault
+        let transfer_ctx = CpiContext::new(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.player_token_account.to_account_info(),
+                to: ctx.accounts.house_vault.to_account_info(),
+                authority: ctx.accounts.player.to_account_info(),
+            },
+        );
+        token::transfer(transfer_ctx, dispute_stake)?;
+
+        // Mark as disputed
+        bounty.is_disputed = true;
+        bounty.dispute_stake = dispute_stake;
+        bounty.disputed_at = current_time;
+        bounty.status = BountyStatus::Disputed;
+
+        emit!(BountyDisputed {
+            bounty: bounty.key(),
+            player: bounty.player,
+            dispute_stake,
+        });
+
+        msg!("Bounty disputed! Stake: {} SKR", dispute_stake / 1_000_000_000);
+
+        Ok(())
+    }
+
+    /// Resolve a dispute - authority reviews and decides
+    /// player_wins = true: player gets original bet back + dispute stake
+    /// player_wins = false: dispute stake forfeited, loss stands
+    pub fn resolve_dispute(ctx: Context<ResolveDispute>, player_wins: bool) -> Result<()> {
+        let bounty = &mut ctx.accounts.bounty;
+        let global_state = &mut ctx.accounts.global_state;
+
+        // Verify bounty is disputed
+        require!(
+            bounty.status == BountyStatus::Disputed,
+            SeekError::NotDisputed
+        );
+
+        let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        if player_wins {
+            // Player wins dispute: refund bet + dispute stake + payout
+            let total_refund = bounty.bet_amount
+                .checked_add(bounty.dispute_stake)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_add(bounty.bet_amount) // Extra bet as compensation
+                .ok_or(SeekError::MathOverflow)?;
+
+            let transfer_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.house_vault.to_account_info(),
+                    to: ctx.accounts.player_token_account.to_account_info(),
+                    authority: global_state.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token::transfer(transfer_ctx, total_refund)?;
+
+            global_state.house_fund_balance = global_state
+                .house_fund_balance
+                .checked_sub(total_refund)
+                .ok_or(SeekError::MathOverflow)?;
+
+            bounty.status = BountyStatus::Won;
+            global_state.total_bounties_won = global_state
+                .total_bounties_won
+                .checked_add(1)
+                .ok_or(SeekError::MathOverflow)?;
+
+            msg!("Dispute resolved: PLAYER WINS | Refund: {} SKR", total_refund / 1_000_000_000);
+        } else {
+            // Player loses dispute: stake forfeited, mark as lost
+            // Dispute stake stays in house vault
+            global_state.house_fund_balance = global_state
+                .house_fund_balance
+                .checked_add(bounty.dispute_stake)
+                .ok_or(SeekError::MathOverflow)?;
+
+            bounty.status = BountyStatus::Lost;
+            global_state.total_bounties_lost = global_state
+                .total_bounties_lost
+                .checked_add(1)
+                .ok_or(SeekError::MathOverflow)?;
+
+            msg!("Dispute resolved: PLAYER LOSES | Stake forfeited");
+        }
+
+        emit!(DisputeResolved {
+            bounty: bounty.key(),
+            player: bounty.player,
+            player_won_dispute: player_wins,
+            stake_returned: player_wins,
+        });
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
