@@ -58,25 +58,48 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // Generate demo bounty
+  // Start bounty - try API first, fallback to local demo
   useEffect(() => {
-    const targets = DEMO_TARGETS[tier];
-    const randomTarget = targets[Math.floor(Math.random() * targets.length)];
-    const now = Date.now();
+    const startBounty = async () => {
+      const wallet = walletService.getWalletState();
 
-    const demoBounty: Bounty = {
-      id: `demo-${now}`,
-      tier,
-      target: randomTarget.target,
-      targetHint: randomTarget.hint,
-      startTime: now,
-      endTime: now + tierData.timeLimit * 1000,
-      status: 'revealing',
-      betAmount: tierData.bet,
-      potentialWin: tierData.bet * 2,
+      // Try API first
+      try {
+        const result = await apiService.startBounty(
+          wallet.address || 'demo-wallet',
+          tier
+        );
+
+        if (result.success && result.bounty) {
+          console.log('[BountyReveal] Got bounty from API:', result.bounty);
+          setBounty(result.bounty);
+          return;
+        }
+      } catch (error) {
+        console.log('[BountyReveal] API unavailable, using local demo');
+      }
+
+      // Fallback to local demo data
+      const targets = DEMO_TARGETS[tier];
+      const randomTarget = targets[Math.floor(Math.random() * targets.length)];
+      const now = Date.now();
+
+      const demoBounty: Bounty = {
+        id: `demo-${now}`,
+        tier,
+        target: randomTarget.target,
+        targetHint: randomTarget.hint,
+        startTime: now,
+        endTime: now + tierData.timeLimit * 1000,
+        status: 'revealing',
+        betAmount: tierData.bet,
+        potentialWin: tierData.bet * 2,
+      };
+
+      setBounty(demoBounty);
     };
 
-    setBounty(demoBounty);
+    startBounty();
   }, [tier]);
 
   // Reveal animation sequence
