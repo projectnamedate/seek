@@ -62,7 +62,17 @@ seek/
 │       │   └── solana.service.ts   # Blockchain interaction
 │       ├── types/          # TypeScript definitions
 │       └── index.ts        # Express server
-└── mobile/                 # React Native app (coming soon)
+└── mobile/                 # React Native + Expo app
+    └── src/
+        ├── components/     # Reusable UI components
+        ├── context/        # Global state management
+        ├── hooks/          # Custom React hooks
+        ├── navigation/     # React Navigation setup
+        ├── screens/        # App screens
+        ├── services/       # API & wallet services
+        ├── theme/          # Design system
+        ├── types/          # TypeScript definitions
+        └── utils/          # Helper functions
 ```
 
 ## Smart Contract Features
@@ -91,6 +101,29 @@ seek/
 4. GPT-4V object detection with confidence scoring
 5. Minimum 70% confidence threshold
 
+## Demo Mode
+
+For hackathon demos, the app works without blockchain:
+
+```bash
+# 1. Start backend with demo endpoints
+cd backend
+cp .env.example .env
+# Set your OPENAI_API_KEY in .env
+npm install
+npm run dev
+
+# 2. Start mobile app
+cd mobile
+npm install
+npx expo start
+
+# 3. Run on Android (Seeker phone)
+# Press 'a' in Expo CLI or scan QR code
+```
+
+Demo endpoints skip blockchain but use **real GPT-4V validation** - judges can see AI analyzing actual photos!
+
 ## Development
 
 ```bash
@@ -103,6 +136,11 @@ cd backend
 cp .env.example .env  # Configure environment
 npm install
 npm run dev           # Start development server
+
+# Mobile
+cd mobile
+npm install
+npx expo start        # Start Expo development server
 ```
 
 ## Environment Variables
