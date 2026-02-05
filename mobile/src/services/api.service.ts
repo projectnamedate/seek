@@ -1,11 +1,14 @@
 import axios from 'axios';
-import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
 import { Bounty, TierNumber, ValidationResult } from '../types';
 
 // API configuration
+// For demo, use your local network IP or ngrok tunnel
 const API_BASE_URL = __DEV__
-  ? 'http://localhost:3001/api'
+  ? 'http://192.168.1.100:3001/api' // Update with your local IP
   : 'https://api.seek.app/api';
+
+// Demo mode - uses simplified endpoints without blockchain
+const DEMO_MODE = true;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -15,33 +18,32 @@ const api = axios.create({
   },
 });
 
-// Convert tier number to bet amount
-const tierToBet = (tier: TierNumber): number => {
-  const bets: Record<TierNumber, number> = {
-    1: 100,
-    2: 200,
-    3: 300,
-  };
-  return bets[tier];
-};
-
 /**
- * Start a new bounty hunt
+ * Start a new bounty hunt (demo mode)
+ * Uses real backend but simplified flow
  */
 export async function startBounty(
   wallet: string,
   tier: TierNumber
 ): Promise<{ success: boolean; bounty?: Bounty; error?: string }> {
   try {
-    const response = await api.post('/bounty/start', {
-      wallet,
+    const endpoint = DEMO_MODE ? '/bounty/demo/start' : '/bounty/start';
+
+    const response = await api.post(endpoint, {
       tier,
-      betAmount: tierToBet(tier),
+      wallet,
     });
 
+    if (response.data.success && response.data.bounty) {
+      return {
+        success: true,
+        bounty: response.data.bounty,
+      };
+    }
+
     return {
-      success: true,
-      bounty: response.data.bounty,
+      success: false,
+      error: response.data.error || 'Failed to start bounty',
     };
   } catch (error: any) {
     console.error('[API] Start bounty error:', error);
@@ -53,19 +55,17 @@ export async function startBounty(
 }
 
 /**
- * Submit a photo for AI validation
+ * Submit a photo for AI validation (demo mode)
+ * Uses REAL GPT-4V validation!
  */
 export async function submitPhoto(
   bountyId: string,
   photoUri: string
 ): Promise<{ success: boolean; validation?: ValidationResult; error?: string }> {
   try {
-    // Read photo as base64
-    const base64 = await readAsStringAsync(photoUri, {
-      encoding: EncodingType.Base64,
-    });
+    const endpoint = DEMO_MODE ? '/bounty/demo/submit' : '/bounty/submit';
 
-    // Create form data
+    // Create form data with photo
     const formData = new FormData();
     formData.append('bountyId', bountyId);
     formData.append('photo', {
@@ -74,16 +74,27 @@ export async function submitPhoto(
       name: 'capture.jpg',
     } as any);
 
-    const response = await axios.post(`${API_BASE_URL}/bounty/submit`, formData, {
+    console.log(`[API] Submitting photo for bounty: ${bountyId}`);
+
+    const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
       timeout: 60000, // AI validation can take time
     });
 
+    console.log('[API] Validation response:', response.data);
+
+    if (response.data.success && response.data.validation) {
+      return {
+        success: true,
+        validation: response.data.validation,
+      };
+    }
+
     return {
-      success: true,
-      validation: response.data.validation,
+      success: false,
+      error: response.data.error || 'Validation failed',
     };
   } catch (error: any) {
     console.error('[API] Submit photo error:', error);
@@ -104,7 +115,7 @@ export async function getBountyStatus(
     const response = await api.get(`/bounty/${bountyId}`);
     return {
       success: true,
-      bounty: response.data.bounty,
+      bounty: response.data.data,
     };
   } catch (error: any) {
     console.error('[API] Get bounty error:', error);
@@ -125,9 +136,16 @@ export async function getPlayerBounty(
     const response = await api.get(`/bounty/player/${wallet}`);
     return {
       success: true,
-      bounty: response.data.bounty || null,
+      bounty: response.data.data || null,
     };
   } catch (error: any) {
+    // 404 is expected when player has no active bounty
+    if (error.response?.status === 404) {
+      return {
+        success: true,
+        bounty: null,
+      };
+    }
     console.error('[API] Get player bounty error:', error);
     return {
       success: false,
