@@ -98,6 +98,58 @@ impl GlobalState {
     pub const SIZE: usize = 8 + 32 * 4 + 8 * 7 + 1;
 }
 
+/// Bounty status enum
+#[derive(AnchorSerialize, AnchorDeserialize, Clone, Copy, PartialEq, Eq)]
+pub enum BountyStatus {
+    /// Bounty accepted, player is hunting
+    Pending,
+    /// Player successfully completed the bounty
+    Won,
+    /// Player failed (timeout or invalid submission)
+    Lost,
+    /// Bounty was cancelled
+    Cancelled,
+}
+
+/// Individual bounty PDA - created when player accepts a hunt
+#[account]
+pub struct Bounty {
+    /// Player who accepted this bounty
+    pub player: Pubkey,
+
+    /// Global state this bounty belongs to
+    pub global_state: Pubkey,
+
+    /// Bet amount in SKR lamports (100B, 200B, or 300B)
+    pub bet_amount: u64,
+
+    /// Potential payout (2x bet)
+    pub payout_amount: u64,
+
+    /// Unix timestamp when bounty was accepted
+    pub created_at: i64,
+
+    /// Unix timestamp when bounty expires
+    pub expires_at: i64,
+
+    /// Current status of the bounty
+    pub status: BountyStatus,
+
+    /// Bounty tier (1, 2, or 3)
+    pub tier: u8,
+
+    /// Whether this bounty won the singularity jackpot
+    pub singularity_won: bool,
+
+    /// Bump seed for PDA derivation
+    pub bump: u8,
+}
+
+impl Bounty {
+    /// Account size: 8 (disc) + 32*2 (pubkeys) + 8*4 (u64/i64s) + 1*4 (u8/bool/enum)
+    pub const SIZE: usize = 8 + 32 * 2 + 8 * 4 + 1 * 4;
+}
+
 #[program]
 pub mod seek_protocol {
     use super::*;
