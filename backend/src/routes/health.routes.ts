@@ -48,4 +48,31 @@ router.get('/stats', async (req: Request, res: Response) => {
   }
 });
 
+/**
+ * GET /api/health/demo
+ * Demo-friendly stats (no blockchain calls)
+ */
+router.get('/demo', (req: Request, res: Response) => {
+  const bountyStats = getBountyStats();
+
+  res.status(200).json({
+    success: true,
+    data: {
+      status: 'Demo Mode Active',
+      bounties: {
+        ...bountyStats,
+        winRate: bountyStats.total > 0
+          ? Math.round((bountyStats.won / (bountyStats.won + bountyStats.lost || 1)) * 100)
+          : 0,
+      },
+      features: {
+        aiValidation: true,
+        blockchain: false,
+        singularityJackpot: 'simulated',
+      },
+      version: '1.0.0-demo',
+    },
+  });
+});
+
 export default router;
