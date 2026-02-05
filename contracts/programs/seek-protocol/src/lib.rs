@@ -310,6 +310,15 @@ pub mod seek_protocol {
             .checked_add(1)
             .ok_or(SeekError::MathOverflow)?;
 
+        // Emit event
+        emit!(BountyAccepted {
+            player: bounty.player,
+            bounty: bounty.key(),
+            bet_amount,
+            tier,
+            expires_at,
+        });
+
         msg!("Bounty accepted!");
         msg!("Player: {}", bounty.player);
         msg!("Bet: {} SKR (Tier {})", bet_amount / 1_000_000_000, tier);
@@ -371,9 +380,12 @@ pub mod seek_protocol {
                 .checked_rem(SINGULARITY_ODDS)
                 .ok_or(SeekError::MathOverflow)?;
 
+            // Track jackpot amount for event
+            let mut jackpot_won: u64 = 0;
+
             if roll == 0 && global_state.singularity_balance > 0 {
                 // JACKPOT! Transfer entire singularity pool to player
-                let jackpot_amount = global_state.singularity_balance;
+                jackpot_won = global_state.singularity_balance;
 
                 let jackpot_ctx = CpiContext::new_with_signer(
                     ctx.accounts.token_program.to_account_info(),
@@ -384,7 +396,7 @@ pub mod seek_protocol {
                     },
                     signer_seeds,
                 );
-                token::transfer(jackpot_ctx, jackpot_amount)?;
+                token::transfer(jackpot_ctx, jackpot_won)?;
 
                 bounty.singularity_won = true;
                 global_state.singularity_balance = 0;
@@ -393,7 +405,7 @@ pub mod seek_protocol {
                     .checked_add(1)
                     .ok_or(SeekError::MathOverflow)?;
 
-                msg!("SINGULARITY WON! Jackpot: {} SKR", jackpot_amount / 1_000_000_000);
+                msg!("SINGULARITY WON! Jackpot: {} SKR", jackpot_won / 1_000_000_000);
             }
 
             bounty.status = BountyStatus::Won;
@@ -401,6 +413,15 @@ pub mod seek_protocol {
                 .total_bounties_won
                 .checked_add(1)
                 .ok_or(SeekError::MathOverflow)?;
+
+            // Emit win event
+            emit!(BountyWon {
+                player: bounty.player,
+                bounty: bounty.key(),
+                payout: bounty.payout_amount,
+                singularity_won: bounty.singularity_won,
+                singularity_amount: jackpot_won,
+            });
 
             msg!("Bounty WON! Payout: {} SKR", bounty.payout_amount / 1_000_000_000);
         } else {
@@ -498,6 +519,17 @@ pub mod seek_protocol {
                 .checked_add(1)
                 .ok_or(SeekError::MathOverflow)?;
 
+            // Emit loss event
+            emit!(BountyLost {
+                player: bounty.player,
+                bounty: bounty.key(),
+                bet_amount: bet,
+                house_share,
+                singularity_share,
+                burn_share,
+                protocol_share,
+            });
+
             msg!("Bounty LOST. Distribution:");
             msg!("  House: {} SKR (70%)", house_share / 1_000_000_000);
             msg!("  Singularity: {} SKR (15%)", singularity_share / 1_000_000_000);
@@ -527,6 +559,13 @@ pub mod seek_protocol {
             .house_fund_balance
             .checked_add(amount)
             .ok_or(SeekError::MathOverflow)?;
+
+        // Emit event
+        emit!(HouseFunded {
+            authority: ctx.accounts.authority.key(),
+            amount,
+            new_balance: global_state.house_fund_balance,
+        });
 
         msg!("House funded with {} SKR", amount / 1_000_000_000);
         msg!("New balance: {} SKR", global_state.house_fund_balance / 1_000_000_000);
