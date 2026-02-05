@@ -512,21 +512,81 @@ pub mod seek_protocol {
         Ok(())
     }
 
-    /// Resolve a bounty - called by backend after AI validation
-    /// success = true: player wins 2x bet + singularity roll
-    /// success = false: bet distributed 70/15/10/5
-    pub fn resolve_bounty(ctx: Context<ResolveBounty>, success: bool) -> Result<()> {
+    /// Propose bounty resolution (OPTIMISTIC) - starts challenge period
+    /// Result is NOT final until challenge period ends
+    /// success = true: proposes win
+    /// success = false: proposes loss
+    pub fn propose_resolution(ctx: Context<ProposeResolution>, success: bool) -> Result<()> {
         let bounty = &mut ctx.accounts.bounty;
-        let global_state = &mut ctx.accounts.global_state;
 
-        // Verify bounty is still pending
+        // Verify mission was revealed (commit-reveal completed)
+        require!(bounty.mission_revealed, SeekError::MissionNotRevealed);
+
+        // Verify bounty is in Submitted state
         require!(
-            bounty.status == BountyStatus::Pending,
+            bounty.status == BountyStatus::Submitted,
             SeekError::BountyAlreadyResolved
         );
 
-        // Get clock for singularity roll
+        // Get current time
         let clock = Clock::get()?;
+        let current_time = clock.unix_timestamp;
+
+        // Calculate challenge period end
+        let challenge_ends_at = current_time
+            .checked_add(CHALLENGE_PERIOD)
+            .ok_or(SeekError::MathOverflow)?;
+
+        // Set optimistic resolution fields
+        bounty.resolved_at = current_time;
+        bounty.challenge_ends_at = challenge_ends_at;
+        bounty.proposed_win = success;
+
+        // Update status to challenge period
+        bounty.status = if success {
+            BountyStatus::ChallengeWon
+        } else {
+            BountyStatus::ChallengeLost
+        };
+
+        emit!(BountyResolutionProposed {
+            bounty: bounty.key(),
+            player: bounty.player,
+            proposed_win: success,
+            challenge_ends_at,
+        });
+
+        msg!("Resolution proposed: {} | Challenge ends: {}",
+            if success { "WIN" } else { "LOSS" },
+            challenge_ends_at
+        );
+
+        Ok(())
+    }
+
+    /// Finalize bounty - called after challenge period ends (if no dispute)
+    /// Actually executes the payout or distribution
+    pub fn finalize_bounty(ctx: Context<FinalizeBounty>) -> Result<()> {
+        let bounty = &mut ctx.accounts.bounty;
+        let global_state = &mut ctx.accounts.global_state;
+
+        // Verify bounty is in challenge period
+        require!(
+            bounty.status == BountyStatus::ChallengeWon || bounty.status == BountyStatus::ChallengeLost,
+            SeekError::BountyNotPending
+        );
+
+        // Verify challenge period has ended
+        let current_time = clock.unix_timestamp;
+        require!(
+            current_time >= bounty.challenge_ends_at,
+            SeekError::ChallengePeriodActive
+        );
+
+        // Verify not disputed
+        require!(!bounty.is_disputed, SeekError::AlreadyDisputed);
+
+        let success = bounty.proposed_win;
 
         if success {
             // === WIN PATH ===
@@ -721,6 +781,13 @@ pub mod seek_protocol {
             msg!("  Burned: {} SKR (10%)", burn_share / 1_000_000_000);
             msg!("  Protocol: {} SKR (5%)", protocol_share / 1_000_000_000);
         }
+
+        // Emit finalized event
+        emit!(BountyFinalized {
+            bounty: bounty.key(),
+            player: bounty.player,
+            final_status: if success { 1 } else { 0 },
+        });
 
         Ok(())
     }
