@@ -1,15 +1,15 @@
-import OpenAI from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config';
 import { Mission, ValidationResult, PhotoMetadata } from '../types';
 import { isLikelyScreenshot, isPhotoRecent } from './exif.service';
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: config.openai.apiKey,
+// Initialize Anthropic client
+const anthropic = new Anthropic({
+  apiKey: config.anthropic.apiKey,
 });
 
 /**
- * Build the validation prompt for GPT-4V
+ * Build the validation prompt for Claude
  */
 function buildValidationPrompt(mission: Mission): string {
   return `You are a strict photo validator for a scavenger hunt game. Your job is to determine if a photo genuinely shows the target object.
@@ -38,7 +38,20 @@ Be STRICT. When in doubt, reject. The game's integrity depends on honest validat
 }
 
 /**
- * Validate a photo submission using GPT-4V
+ * Convert MIME type to Claude's media type format
+ */
+function getMediaType(mimeType: string): 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp' {
+  const type = mimeType.toLowerCase();
+  if (type === 'image/jpg' || type === 'image/jpeg') return 'image/jpeg';
+  if (type === 'image/png') return 'image/png';
+  if (type === 'image/gif') return 'image/gif';
+  if (type === 'image/webp') return 'image/webp';
+  // Default to jpeg for unknown types (like HEIC)
+  return 'image/jpeg';
+}
+
+/**
+ * Validate a photo submission using Claude Vision
  */
 export async function validatePhoto(
   imageBuffer: Buffer,
@@ -55,45 +68,46 @@ export async function validatePhoto(
   try {
     // Convert image to base64
     const base64Image = imageBuffer.toString('base64');
-    const dataUrl = `data:${mimeType};base64,${base64Image}`;
+    const mediaType = getMediaType(mimeType);
 
-    // Call GPT-4V for validation
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o', // GPT-4 with vision
+    console.log(`[AI] Validating photo for target: "${mission.description}"`);
+
+    // Call Claude for validation
+    const response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 500,
       messages: [
-        {
-          role: 'system',
-          content: buildValidationPrompt(mission),
-        },
         {
           role: 'user',
           content: [
             {
-              type: 'image_url',
-              image_url: {
-                url: dataUrl,
-                detail: 'high',
+              type: 'image',
+              source: {
+                type: 'base64',
+                media_type: mediaType,
+                data: base64Image,
               },
             },
             {
               type: 'text',
-              text: `Validate this photo for the target: "${mission.description}"`,
+              text: `${buildValidationPrompt(mission)}\n\nValidate this photo for the target: "${mission.description}"`,
             },
           ],
         },
       ],
-      max_tokens: 500,
-      temperature: 0.1, // Low temperature for consistent validation
     });
 
-    // Parse the response
-    const content = response.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('Empty response from AI');
+    // Extract text from response
+    const content = response.content[0];
+    if (content.type !== 'text') {
+      throw new Error('Unexpected response type from Claude');
     }
 
+    const responseText = content.text;
+    console.log(`[AI] Raw response: ${responseText.substring(0, 200)}...`);
+
     // Extract JSON from response (handle markdown code blocks)
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
       throw new Error('No JSON found in response');
     }
@@ -111,9 +125,11 @@ export async function validatePhoto(
       result.isValid = false;
     }
 
+    console.log(`[AI] Validation result: ${result.isValid ? 'PASS' : 'FAIL'} (${Math.round(result.confidence * 100)}%)`);
+
     return result;
   } catch (error) {
-    console.error('AI validation error:', error);
+    console.error('[AI] Validation error:', error);
 
     // Return failed validation on error
     return {

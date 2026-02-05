@@ -19,8 +19,8 @@ const envSchema = z.object({
   SEEK_PROGRAM_ID: z.string().min(32),
   SKR_MINT: z.string().min(32),
 
-  // OpenAI
-  OPENAI_API_KEY: z.string().startsWith('sk-'),
+  // Anthropic (Claude API)
+  ANTHROPIC_API_KEY: z.string().min(1),
 
   // Validation settings
   MAX_PHOTO_AGE_SECONDS: z.string().default('300'),
@@ -53,8 +53,8 @@ function loadConfig() {
       seekProgramId: parsed.data.SEEK_PROGRAM_ID,
       skrMint: parsed.data.SKR_MINT,
     },
-    openai: {
-      apiKey: parsed.data.OPENAI_API_KEY,
+    anthropic: {
+      apiKey: parsed.data.ANTHROPIC_API_KEY,
     },
     validation: {
       maxPhotoAgeSeconds: parseInt(parsed.data.MAX_PHOTO_AGE_SECONDS, 10),
