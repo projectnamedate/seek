@@ -465,6 +465,53 @@ pub mod seek_protocol {
         Ok(())
     }
 
+    /// Reveal the mission - backend reveals mission_id and salt after player submits photo
+    /// Verifies hash(mission_id || salt) matches the original commitment
+    pub fn reveal_mission(
+        ctx: Context<RevealMission>,
+        mission_id: [u8; 32],
+        salt: [u8; 32],
+    ) -> Result<()> {
+        let bounty = &mut ctx.accounts.bounty;
+
+        // Verify bounty is pending (photo submitted but not resolved)
+        require!(
+            bounty.status == BountyStatus::Pending || bounty.status == BountyStatus::Submitted,
+            SeekError::BountyAlreadyResolved
+        );
+
+        // Verify mission hasn't already been revealed
+        require!(!bounty.mission_revealed, SeekError::MissionAlreadyRevealed);
+
+        // Compute hash(mission_id || salt) and verify against commitment
+        let mut hasher_input = Vec::with_capacity(64);
+        hasher_input.extend_from_slice(&mission_id);
+        hasher_input.extend_from_slice(&salt);
+        let computed_hash = anchor_lang::solana_program::hash::hash(&hasher_input);
+
+        require!(
+            computed_hash.to_bytes() == bounty.mission_commitment,
+            SeekError::InvalidMissionHash
+        );
+
+        // Store revealed mission
+        bounty.mission_id = mission_id;
+        bounty.mission_revealed = true;
+
+        // Update status to Submitted
+        bounty.status = BountyStatus::Submitted;
+
+        emit!(MissionRevealed {
+            bounty: bounty.key(),
+            mission_id,
+            commitment_verified: true,
+        });
+
+        msg!("Mission revealed and verified!");
+
+        Ok(())
+    }
+
     /// Resolve a bounty - called by backend after AI validation
     /// success = true: player wins 2x bet + singularity roll
     /// success = false: bet distributed 70/15/10/5
