@@ -35,7 +35,7 @@ Pokemon GO for crypto. Bet $SKR, find real-world objects, win 2x your bet. Built
 
 - **Smart Contract**: Solana/Anchor (Rust)
 - **Backend**: Node.js + Express + TypeScript
-- **AI Validation**: OpenAI GPT-4V
+- **AI Validation**: Claude (Anthropic)
 - **Mobile**: React Native + Expo + Solana Mobile Stack
 - **Token**: $SKR (SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3)
 
@@ -98,7 +98,7 @@ seek/
 1. EXIF metadata extraction (timestamp, GPS, device)
 2. Screenshot detection (no GPS + no device = reject)
 3. Timestamp validation (max 5 min old)
-4. GPT-4V object detection with confidence scoring
+4. Claude Vision object detection with confidence scoring
 5. Minimum 70% confidence threshold
 
 ## Demo Mode
@@ -158,8 +158,8 @@ AUTHORITY_PRIVATE_KEY=your_base58_private_key
 SEEK_PROGRAM_ID=Seek111111111111111111111111111111111111111
 SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
 
-# OpenAI
-OPENAI_API_KEY=sk-your-api-key
+# Claude API (get from https://console.anthropic.com)
+ANTHROPIC_API_KEY=sk-ant-your-api-key
 ```
 
 ## License
