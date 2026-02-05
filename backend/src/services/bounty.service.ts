@@ -8,6 +8,12 @@ const activeBounties = new Map<string, ActiveBounty>();
 // Index by player wallet for quick lookup
 const bountyByPlayer = new Map<string, string>();
 
+// Logging helper
+function log(message: string, data?: any) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] [Bounty] ${message}`, data ? JSON.stringify(data) : '');
+}
+
 /**
  * Create a new bounty for a player
  */
