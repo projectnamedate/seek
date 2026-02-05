@@ -151,8 +151,8 @@ router.post('/demo/start', async (req: Request, res: Response) => {
         startTime: bounty.createdAt.getTime(),
         endTime: bounty.expiresAt.getTime(),
         status: 'hunting',
-        betAmount: BET_AMOUNTS[tier] / 1_000_000_000,
-        potentialWin: (BET_AMOUNTS[tier] * 2n) / 1_000_000_000n,
+        betAmount: Number(BET_AMOUNTS[tier] / 1_000_000_000n),
+        potentialWin: Number((BET_AMOUNTS[tier] * 2n) / 1_000_000_000n),
       },
     });
   } catch (error) {
