@@ -484,10 +484,13 @@ pub mod seek_protocol {
         require!(!bounty.mission_revealed, SeekError::MissionAlreadyRevealed);
 
         // Compute hash(mission_id || salt) and verify against commitment
-        let mut hasher_input = Vec::with_capacity(64);
-        hasher_input.extend_from_slice(&mission_id);
-        hasher_input.extend_from_slice(&salt);
-        let computed_hash = anchor_lang::solana_program::hash::hash(&hasher_input);
+        // Concatenate mission_id and salt, then hash
+        let mut input = [0u8; 64];
+        input[..32].copy_from_slice(&mission_id);
+        input[32..].copy_from_slice(&salt);
+
+        // Use Solana's SHA256 hash function
+        let computed_hash = solana_program::hash::hash(&input);
 
         require!(
             computed_hash.to_bytes() == bounty.mission_commitment,
@@ -577,6 +580,7 @@ pub mod seek_protocol {
         );
 
         // Verify challenge period has ended
+        let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
         require!(
             current_time >= bounty.challenge_ends_at,
@@ -1072,13 +1076,58 @@ pub struct AcceptBounty<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+// === NEW TRUST-MINIMIZATION ACCOUNT STRUCTS ===
+
 #[derive(Accounts)]
-pub struct ResolveBounty<'info> {
-    /// Authority resolving the bounty (backend signer)
+pub struct RevealMission<'info> {
+    /// Authority revealing the mission
     #[account(
         constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
     )]
     pub authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// The bounty to reveal mission for
+    #[account(
+        mut,
+        constraint = bounty.global_state == global_state.key()
+    )]
+    pub bounty: Account<'info, Bounty>,
+}
+
+#[derive(Accounts)]
+pub struct ProposeResolution<'info> {
+    /// Authority proposing the resolution
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// The bounty being resolved
+    #[account(
+        mut,
+        constraint = bounty.global_state == global_state.key()
+    )]
+    pub bounty: Account<'info, Bounty>,
+}
+
+#[derive(Accounts)]
+pub struct FinalizeBounty<'info> {
+    /// Anyone can finalize after challenge period (permissionless)
+    pub caller: Signer<'info>,
 
     /// Global state PDA
     #[account(
@@ -1088,11 +1137,10 @@ pub struct ResolveBounty<'info> {
     )]
     pub global_state: Account<'info, GlobalState>,
 
-    /// The bounty being resolved
+    /// The bounty being finalized
     #[account(
         mut,
-        constraint = bounty.global_state == global_state.key(),
-        constraint = bounty.status == BountyStatus::Pending @ SeekError::BountyAlreadyResolved
+        constraint = bounty.global_state == global_state.key()
     )]
     pub bounty: Account<'info, Bounty>,
 
@@ -1166,6 +1214,94 @@ pub struct FundHouse<'info> {
     pub authority_token_account: Account<'info, TokenAccount>,
 
     /// House vault to receive funds
+    #[account(
+        mut,
+        seeds = [b"house_vault"],
+        bump,
+        constraint = house_vault.key() == global_state.house_vault
+    )]
+    pub house_vault: Account<'info, TokenAccount>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct DisputeBounty<'info> {
+    /// Player disputing the bounty
+    #[account(
+        mut,
+        constraint = player.key() == bounty.player @ SeekError::Unauthorized
+    )]
+    pub player: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// The bounty being disputed
+    #[account(
+        mut,
+        constraint = bounty.global_state == global_state.key()
+    )]
+    pub bounty: Account<'info, Bounty>,
+
+    /// Player's token account for stake
+    #[account(
+        mut,
+        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = player_token_account.owner == player.key() @ SeekError::Unauthorized
+    )]
+    pub player_token_account: Account<'info, TokenAccount>,
+
+    /// House vault to receive stake
+    #[account(
+        mut,
+        seeds = [b"house_vault"],
+        bump,
+        constraint = house_vault.key() == global_state.house_vault
+    )]
+    pub house_vault: Account<'info, TokenAccount>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ResolveDispute<'info> {
+    /// Authority resolving the dispute
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// The disputed bounty
+    #[account(
+        mut,
+        constraint = bounty.global_state == global_state.key()
+    )]
+    pub bounty: Account<'info, Bounty>,
+
+    /// Player's token account for refund (if player wins)
+    #[account(
+        mut,
+        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = player_token_account.owner == bounty.player @ SeekError::Unauthorized
+    )]
+    pub player_token_account: Account<'info, TokenAccount>,
+
+    /// House vault
     #[account(
         mut,
         seeds = [b"house_vault"],
