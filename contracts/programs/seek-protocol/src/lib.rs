@@ -296,6 +296,48 @@ pub struct HouseFunded {
     pub new_balance: u64,
 }
 
+/// Emitted when mission is revealed (commit-reveal)
+#[event]
+pub struct MissionRevealed {
+    pub bounty: Pubkey,
+    pub mission_id: [u8; 32],
+    pub commitment_verified: bool,
+}
+
+/// Emitted when bounty enters challenge period (optimistic resolution)
+#[event]
+pub struct BountyResolutionProposed {
+    pub bounty: Pubkey,
+    pub player: Pubkey,
+    pub proposed_win: bool,
+    pub challenge_ends_at: i64,
+}
+
+/// Emitted when a bounty is disputed
+#[event]
+pub struct BountyDisputed {
+    pub bounty: Pubkey,
+    pub player: Pubkey,
+    pub dispute_stake: u64,
+}
+
+/// Emitted when a dispute is resolved
+#[event]
+pub struct DisputeResolved {
+    pub bounty: Pubkey,
+    pub player: Pubkey,
+    pub player_won_dispute: bool,
+    pub stake_returned: bool,
+}
+
+/// Emitted when bounty is finalized after challenge period
+#[event]
+pub struct BountyFinalized {
+    pub bounty: Pubkey,
+    pub player: Pubkey,
+    pub final_status: u8, // 0 = lost, 1 = won
+}
+
 #[program]
 pub mod seek_protocol {
     use super::*;
