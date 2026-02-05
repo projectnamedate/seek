@@ -273,6 +273,196 @@ pub mod seek_protocol {
 
         Ok(())
     }
+
+    /// Resolve a bounty - called by backend after AI validation
+    /// success = true: player wins 2x bet + singularity roll
+    /// success = false: bet distributed 70/15/10/5
+    pub fn resolve_bounty(ctx: Context<ResolveBounty>, success: bool) -> Result<()> {
+        let bounty = &mut ctx.accounts.bounty;
+        let global_state = &mut ctx.accounts.global_state;
+
+        // Verify bounty is still pending
+        require!(
+            bounty.status == BountyStatus::Pending,
+            SeekError::BountyAlreadyResolved
+        );
+
+        // Get clock for singularity roll
+        let clock = Clock::get()?;
+
+        if success {
+            // === WIN PATH ===
+            // Check house has enough funds for 2x payout
+            require!(
+                global_state.house_fund_balance >= bounty.payout_amount,
+                SeekError::InsufficientHouseFunds
+            );
+
+            // Transfer 2x bet to player
+            let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
+            let signer_seeds = &[&seeds[..]];
+
+            let transfer_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.house_vault.to_account_info(),
+                    to: ctx.accounts.player_token_account.to_account_info(),
+                    authority: global_state.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token::transfer(transfer_ctx, bounty.payout_amount)?;
+
+            // Update house balance (subtract 2x, but we received 1x, so net -1x)
+            global_state.house_fund_balance = global_state
+                .house_fund_balance
+                .checked_sub(bounty.payout_amount)
+                .ok_or(SeekError::MathOverflow)?;
+
+            // === SINGULARITY JACKPOT ROLL ===
+            // Use (slot + timestamp) % 500 for randomness
+            let slot = clock.slot;
+            let timestamp = clock.unix_timestamp as u64;
+            let roll = (slot.checked_add(timestamp).ok_or(SeekError::MathOverflow)?)
+                .checked_rem(SINGULARITY_ODDS)
+                .ok_or(SeekError::MathOverflow)?;
+
+            if roll == 0 && global_state.singularity_balance > 0 {
+                // JACKPOT! Transfer entire singularity pool to player
+                let jackpot_amount = global_state.singularity_balance;
+
+                let jackpot_ctx = CpiContext::new_with_signer(
+                    ctx.accounts.token_program.to_account_info(),
+                    Transfer {
+                        from: ctx.accounts.singularity_vault.to_account_info(),
+                        to: ctx.accounts.player_token_account.to_account_info(),
+                        authority: global_state.to_account_info(),
+                    },
+                    signer_seeds,
+                );
+                token::transfer(jackpot_ctx, jackpot_amount)?;
+
+                bounty.singularity_won = true;
+                global_state.singularity_balance = 0;
+                global_state.total_singularity_wins = global_state
+                    .total_singularity_wins
+                    .checked_add(1)
+                    .ok_or(SeekError::MathOverflow)?;
+
+                msg!("SINGULARITY WON! Jackpot: {} SKR", jackpot_amount / 1_000_000_000);
+            }
+
+            bounty.status = BountyStatus::Won;
+            global_state.total_bounties_won = global_state
+                .total_bounties_won
+                .checked_add(1)
+                .ok_or(SeekError::MathOverflow)?;
+
+            msg!("Bounty WON! Payout: {} SKR", bounty.payout_amount / 1_000_000_000);
+        } else {
+            // === LOSS PATH ===
+            // Distribute bet: 70% house, 15% singularity, 10% burn, 5% protocol
+            let bet = bounty.bet_amount;
+
+            // Calculate shares (using basis points for precision)
+            let house_share = bet
+                .checked_mul(HOUSE_SHARE_BPS)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_div(10000)
+                .ok_or(SeekError::MathOverflow)?;
+
+            let singularity_share = bet
+                .checked_mul(SINGULARITY_SHARE_BPS)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_div(10000)
+                .ok_or(SeekError::MathOverflow)?;
+
+            let burn_share = bet
+                .checked_mul(BURN_SHARE_BPS)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_div(10000)
+                .ok_or(SeekError::MathOverflow)?;
+
+            let protocol_share = bet
+                .checked_mul(PROTOCOL_SHARE_BPS)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_div(10000)
+                .ok_or(SeekError::MathOverflow)?;
+
+            let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
+            let signer_seeds = &[&seeds[..]];
+
+            // 70% stays in house vault (already there from accept_bounty)
+            // Just update the tracked balance
+            // We need to subtract the full bet first, then add back the house share
+            global_state.house_fund_balance = global_state
+                .house_fund_balance
+                .checked_sub(bet)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_add(house_share)
+                .ok_or(SeekError::MathOverflow)?;
+
+            // 15% transfer to singularity vault
+            let singularity_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.house_vault.to_account_info(),
+                    to: ctx.accounts.singularity_vault.to_account_info(),
+                    authority: global_state.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token::transfer(singularity_ctx, singularity_share)?;
+
+            global_state.singularity_balance = global_state
+                .singularity_balance
+                .checked_add(singularity_share)
+                .ok_or(SeekError::MathOverflow)?;
+
+            // 10% burn via SPL token burn
+            let burn_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                token::Burn {
+                    mint: ctx.accounts.skr_mint.to_account_info(),
+                    from: ctx.accounts.house_vault.to_account_info(),
+                    authority: global_state.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token::burn(burn_ctx, burn_share)?;
+
+            global_state.total_burned = global_state
+                .total_burned
+                .checked_add(burn_share)
+                .ok_or(SeekError::MathOverflow)?;
+
+            // 5% transfer to protocol treasury
+            let protocol_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.house_vault.to_account_info(),
+                    to: ctx.accounts.protocol_treasury.to_account_info(),
+                    authority: global_state.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token::transfer(protocol_ctx, protocol_share)?;
+
+            bounty.status = BountyStatus::Lost;
+            global_state.total_bounties_lost = global_state
+                .total_bounties_lost
+                .checked_add(1)
+                .ok_or(SeekError::MathOverflow)?;
+
+            msg!("Bounty LOST. Distribution:");
+            msg!("  House: {} SKR (70%)", house_share / 1_000_000_000);
+            msg!("  Singularity: {} SKR (15%)", singularity_share / 1_000_000_000);
+            msg!("  Burned: {} SKR (10%)", burn_share / 1_000_000_000);
+            msg!("  Protocol: {} SKR (5%)", protocol_share / 1_000_000_000);
+        }
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -385,6 +575,74 @@ pub struct AcceptBounty<'info> {
 
     /// System program
     pub system_program: Program<'info, System>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct ResolveBounty<'info> {
+    /// Authority resolving the bounty (backend signer)
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// The bounty being resolved
+    #[account(
+        mut,
+        constraint = bounty.global_state == global_state.key(),
+        constraint = bounty.status == BountyStatus::Pending @ SeekError::BountyAlreadyResolved
+    )]
+    pub bounty: Account<'info, Bounty>,
+
+    /// Player's token account for payout (on win)
+    #[account(
+        mut,
+        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = player_token_account.owner == bounty.player @ SeekError::Unauthorized
+    )]
+    pub player_token_account: Account<'info, TokenAccount>,
+
+    /// House vault
+    #[account(
+        mut,
+        seeds = [b"house_vault"],
+        bump,
+        constraint = house_vault.key() == global_state.house_vault
+    )]
+    pub house_vault: Account<'info, TokenAccount>,
+
+    /// Singularity vault for jackpot
+    #[account(
+        mut,
+        seeds = [b"singularity_vault"],
+        bump,
+        constraint = singularity_vault.key() == global_state.singularity_vault
+    )]
+    pub singularity_vault: Account<'info, TokenAccount>,
+
+    /// Protocol treasury for fees
+    #[account(
+        mut,
+        constraint = protocol_treasury.key() == global_state.protocol_treasury
+    )]
+    pub protocol_treasury: Account<'info, TokenAccount>,
+
+    /// SKR mint (needed for burn)
+    #[account(
+        mut,
+        address = SKR_MINT @ SeekError::InvalidMint
+    )]
+    pub skr_mint: Account<'info, Mint>,
 
     /// Token program
     pub token_program: Program<'info, Token>,
