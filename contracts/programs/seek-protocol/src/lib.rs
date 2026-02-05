@@ -338,6 +338,14 @@ pub struct BountyFinalized {
     pub final_status: u8, // 0 = lost, 1 = won
 }
 
+/// Emitted when authority withdraws from treasury
+#[event]
+pub struct TreasuryWithdrawn {
+    pub authority: Pubkey,
+    pub amount: u64,
+    pub destination: Pubkey,
+}
+
 #[program]
 pub mod seek_protocol {
     use super::*;
@@ -959,6 +967,43 @@ pub mod seek_protocol {
 
         Ok(())
     }
+
+    /// Withdraw from protocol treasury - authority only
+    /// Used to pay for operational costs (API, infra, team)
+    pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
+        let global_state = &ctx.accounts.global_state;
+
+        // Verify authority
+        require!(
+            ctx.accounts.authority.key() == global_state.authority,
+            SeekError::Unauthorized
+        );
+
+        // Transfer from treasury to authority's wallet
+        let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.protocol_treasury.to_account_info(),
+                to: ctx.accounts.authority_token_account.to_account_info(),
+                authority: ctx.accounts.global_state.to_account_info(),
+            },
+            signer_seeds,
+        );
+        token::transfer(transfer_ctx, amount)?;
+
+        emit!(TreasuryWithdrawn {
+            authority: ctx.accounts.authority.key(),
+            amount,
+            destination: ctx.accounts.authority_token_account.key(),
+        });
+
+        msg!("Treasury withdrawn: {} SKR", amount / 1_000_000_000);
+
+        Ok(())
+    }
 }
 
 #[derive(Accounts)]
@@ -1221,6 +1266,41 @@ pub struct FundHouse<'info> {
         constraint = house_vault.key() == global_state.house_vault
     )]
     pub house_vault: Account<'info, TokenAccount>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawTreasury<'info> {
+    /// Authority withdrawing funds
+    #[account(
+        mut,
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// Protocol treasury (source)
+    #[account(
+        mut,
+        constraint = protocol_treasury.key() == global_state.protocol_treasury
+    )]
+    pub protocol_treasury: Account<'info, TokenAccount>,
+
+    /// Authority's token account (destination)
+    #[account(
+        mut,
+        constraint = authority_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = authority_token_account.owner == authority.key() @ SeekError::Unauthorized
+    )]
+    pub authority_token_account: Account<'info, TokenAccount>,
 
     /// Token program
     pub token_program: Program<'info, Token>,
