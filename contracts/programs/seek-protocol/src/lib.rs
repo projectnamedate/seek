@@ -53,6 +53,51 @@ pub enum SeekError {
     Unauthorized,
 }
 
+/// Global protocol state - tracks all protocol-wide metrics
+#[account]
+pub struct GlobalState {
+    /// Authority who can manage the protocol
+    pub authority: Pubkey,
+
+    /// House vault token account (PDA-owned)
+    pub house_vault: Pubkey,
+
+    /// Singularity (jackpot) vault token account (PDA-owned)
+    pub singularity_vault: Pubkey,
+
+    /// Protocol treasury token account
+    pub protocol_treasury: Pubkey,
+
+    /// Total SKR currently in house vault
+    pub house_fund_balance: u64,
+
+    /// Total SKR in singularity jackpot pool
+    pub singularity_balance: u64,
+
+    /// Total SKR burned forever
+    pub total_burned: u64,
+
+    /// Total bounties created
+    pub total_bounties_created: u64,
+
+    /// Total bounties won by players
+    pub total_bounties_won: u64,
+
+    /// Total bounties lost by players
+    pub total_bounties_lost: u64,
+
+    /// Total singularity jackpots won
+    pub total_singularity_wins: u64,
+
+    /// Bump seed for PDA derivation
+    pub bump: u8,
+}
+
+impl GlobalState {
+    /// Account size: 8 (discriminator) + 32*4 (pubkeys) + 8*7 (u64s) + 1 (bump)
+    pub const SIZE: usize = 8 + 32 * 4 + 8 * 7 + 1;
+}
+
 #[program]
 pub mod seek_protocol {
     use super::*;
