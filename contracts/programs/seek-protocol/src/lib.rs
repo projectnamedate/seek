@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_spl::token::{Mint, Token, TokenAccount};
 
 declare_id!("SeekXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
 
@@ -154,10 +155,93 @@ impl Bounty {
 pub mod seek_protocol {
     use super::*;
 
-    pub fn initialize(_ctx: Context<Initialize>) -> Result<()> {
+    /// Initialize the Seek protocol
+    /// Creates global state and vault accounts
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        let global_state = &mut ctx.accounts.global_state;
+
+        // Set authority and vault addresses
+        global_state.authority = ctx.accounts.authority.key();
+        global_state.house_vault = ctx.accounts.house_vault.key();
+        global_state.singularity_vault = ctx.accounts.singularity_vault.key();
+        global_state.protocol_treasury = ctx.accounts.protocol_treasury.key();
+
+        // Initialize counters to zero
+        global_state.house_fund_balance = 0;
+        global_state.singularity_balance = 0;
+        global_state.total_burned = 0;
+        global_state.total_bounties_created = 0;
+        global_state.total_bounties_won = 0;
+        global_state.total_bounties_lost = 0;
+        global_state.total_singularity_wins = 0;
+
+        // Store bump for future PDA derivations
+        global_state.bump = ctx.bumps.global_state;
+
+        msg!("Seek Protocol initialized!");
+        msg!("Authority: {}", global_state.authority);
+        msg!("House Vault: {}", global_state.house_vault);
+
         Ok(())
     }
 }
 
 #[derive(Accounts)]
-pub struct Initialize {}
+pub struct Initialize<'info> {
+    /// Authority who will manage the protocol
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        init,
+        payer = authority,
+        space = GlobalState::SIZE,
+        seeds = [b"global_state"],
+        bump
+    )]
+    pub global_state: Account<'info, GlobalState>,
+
+    /// House vault - holds funds for payouts
+    #[account(
+        init,
+        payer = authority,
+        token::mint = skr_mint,
+        token::authority = global_state,
+        seeds = [b"house_vault"],
+        bump
+    )]
+    pub house_vault: Account<'info, TokenAccount>,
+
+    /// Singularity vault - accumulates jackpot funds
+    #[account(
+        init,
+        payer = authority,
+        token::mint = skr_mint,
+        token::authority = global_state,
+        seeds = [b"singularity_vault"],
+        bump
+    )]
+    pub singularity_vault: Account<'info, TokenAccount>,
+
+    /// Protocol treasury - receives protocol fees
+    #[account(
+        token::mint = skr_mint,
+    )]
+    pub protocol_treasury: Account<'info, TokenAccount>,
+
+    /// The SKR token mint
+    #[account(
+        address = SKR_MINT @ SeekError::InvalidMint
+    )]
+    pub skr_mint: Account<'info, Mint>,
+
+    /// System program for account creation
+    pub system_program: Program<'info, System>,
+
+    /// Token program for SPL operations
+    pub token_program: Program<'info, Token>,
+
+    /// Rent sysvar
+    pub rent: Sysvar<'info, Rent>,
+}
