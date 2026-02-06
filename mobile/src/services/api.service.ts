@@ -4,7 +4,7 @@ import { Bounty, TierNumber, ValidationResult } from '../types';
 // API configuration
 // For demo, use your local network IP or ngrok tunnel
 const API_BASE_URL = __DEV__
-  ? 'http://192.168.1.23:3001/api' // Update with your local IP
+  ? 'http://10.0.2.2:3001/api' // 10.0.2.2 = host machine from Android emulator
   : 'https://api.seek.app/api';
 
 // Demo mode - uses simplified endpoints without blockchain

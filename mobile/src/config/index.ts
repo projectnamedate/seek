@@ -3,7 +3,7 @@
 // API Configuration
 export const API_CONFIG = {
   // For development, update this to your local IP
-  DEV_URL: 'http://192.168.1.23:3001/api',
+  DEV_URL: 'http://10.0.2.2:3001/api', // 10.0.2.2 = host machine from Android emulator
   PROD_URL: 'https://api.seek.app/api',
   TIMEOUT: 30000,
   AI_VALIDATION_TIMEOUT: 60000,

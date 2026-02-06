@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,13 @@ import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TierNumber, TIERS, WalletState } from '../types';
 import walletService from '../services/wallet.service';
 
+// Tier colors
+const TIER_COLORS = {
+  1: '#10B981', // Green
+  2: '#F59E0B', // Yellow/Orange
+  3: '#F97316', // Orange
+};
+
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Home'>;
 };
@@ -20,7 +27,9 @@ export default function HomeScreen({ navigation }: Props) {
   const [wallet, setWallet] = useState<WalletState>(walletService.getWalletState());
   const [selectedTier, setSelectedTier] = useState<TierNumber>(1);
   const [isConnecting, setIsConnecting] = useState(false);
-  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  const [jackpot, setJackpot] = useState(12847); // Starting jackpot amount
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const jackpotAnim = useRef(new Animated.Value(1)).current;
 
   // Subscribe to wallet changes
   useEffect(() => {
@@ -47,6 +56,36 @@ export default function HomeScreen({ navigation }: Props) {
     return () => pulse.stop();
   }, []);
 
+  // Jackpot animation and random updates
+  useEffect(() => {
+    // Pulse animation for jackpot
+    const jackpotPulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(jackpotAnim, {
+          toValue: 1.02,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(jackpotAnim, {
+          toValue: 1,
+          duration: 500,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    jackpotPulse.start();
+
+    // Random jackpot increases
+    const interval = setInterval(() => {
+      setJackpot(prev => prev + Math.floor(Math.random() * 50) + 10);
+    }, 3000);
+
+    return () => {
+      jackpotPulse.stop();
+      clearInterval(interval);
+    };
+  }, []);
+
   const handleConnect = async () => {
     setIsConnecting(true);
     await walletService.connectWallet();
@@ -69,10 +108,11 @@ export default function HomeScreen({ navigation }: Props) {
     }
   };
 
-  const renderTierCard = (tierNum: TierNumber) => {
+  const renderTierButton = (tierNum: TierNumber) => {
     const tier = TIERS[tierNum];
     const isSelected = selectedTier === tierNum;
     const canAfford = wallet.connected && wallet.balance >= tier.bet;
+    const tierColor = TIER_COLORS[tierNum];
 
     return (
       <TouchableOpacity
@@ -80,39 +120,30 @@ export default function HomeScreen({ navigation }: Props) {
         onPress={() => setSelectedTier(tierNum)}
         disabled={!wallet.connected}
         activeOpacity={0.8}
+        style={styles.tierButtonWrapper}
       >
         <Animated.View
           style={[
-            styles.tierCard,
-            isSelected && styles.tierCardSelected,
-            !canAfford && wallet.connected && styles.tierCardDisabled,
+            styles.tierButton,
+            { backgroundColor: tierColor },
+            isSelected && styles.tierButtonSelected,
+            !canAfford && wallet.connected && styles.tierButtonDisabled,
             isSelected && { transform: [{ scale: pulseAnim }] },
           ]}
         >
-          <View style={styles.tierHeader}>
-            <Text style={styles.tierNumber}>TIER {tierNum}</Text>
-            <View style={[styles.difficultyBadge, getDifficultyStyle(tier.difficulty)]}>
-              <Text style={styles.difficultyText}>{tier.difficulty}</Text>
+          <View style={styles.tierButtonContent}>
+            <View style={styles.tierButtonLeft}>
+              <Text style={styles.tierButtonLabel}>{tier.difficulty.toUpperCase()}</Text>
+              <Text style={styles.tierButtonTime}>{formatTime(tier.timeLimit)}</Text>
+            </View>
+            <View style={styles.tierButtonRight}>
+              <Text style={styles.tierButtonBet}>{tier.bet} $SKR</Text>
+              <Text style={styles.tierButtonWin}>Win {tier.bet * 2}</Text>
             </View>
           </View>
-
-          <Text style={styles.tierBet}>{tier.bet} $SKR</Text>
-
-          <View style={styles.tierInfo}>
-            <Text style={styles.tierInfoLabel}>Time Limit</Text>
-            <Text style={styles.tierInfoValue}>{formatTime(tier.timeLimit)}</Text>
-          </View>
-
-          <View style={styles.tierInfo}>
-            <Text style={styles.tierInfoLabel}>Win</Text>
-            <Text style={[styles.tierInfoValue, styles.winAmount]}>
-              {tier.bet * 2} $SKR
-            </Text>
-          </View>
-
           {isSelected && (
-            <View style={styles.selectedIndicator}>
-              <Text style={styles.selectedText}>SELECTED</Text>
+            <View style={styles.tierSelectedBadge}>
+              <Text style={styles.tierSelectedText}>SELECTED</Text>
             </View>
           )}
         </Animated.View>
@@ -159,8 +190,21 @@ export default function HomeScreen({ navigation }: Props) {
       {/* Tier Selection */}
       <View style={styles.tiersSection}>
         <Text style={styles.sectionTitle}>Select Your Risk</Text>
-        <View style={styles.tiersGrid}>
-          {([1, 2, 3] as TierNumber[]).map(renderTierCard)}
+        <View style={styles.tiersStack}>
+          {([1, 2, 3] as TierNumber[]).map(renderTierButton)}
+        </View>
+      </View>
+
+      {/* Jackpot Monitor */}
+      <View style={styles.jackpotSection}>
+        <View style={styles.jackpotContainer}>
+          <Text style={styles.jackpotLabel}>SINGULARITY JACKPOT</Text>
+          <Animated.View style={{ transform: [{ scale: jackpotAnim }] }}>
+            <Text style={styles.jackpotAmount}>
+              {jackpot.toLocaleString()} $SKR
+            </Text>
+          </Animated.View>
+          <Text style={styles.jackpotSubtext}>1 in 500 chance to win it all</Text>
         </View>
       </View>
 
@@ -196,18 +240,6 @@ export default function HomeScreen({ navigation }: Props) {
   );
 }
 
-function getDifficultyStyle(difficulty: string) {
-  switch (difficulty) {
-    case 'Easy':
-      return { backgroundColor: colors.success };
-    case 'Medium':
-      return { backgroundColor: colors.warning };
-    case 'Hard':
-      return { backgroundColor: colors.error };
-    default:
-      return {};
-  }
-}
 
 function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60);
@@ -289,7 +321,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   tiersSection: {
-    flex: 1,
     paddingHorizontal: spacing.lg,
   },
   sectionTitle: {
@@ -298,85 +329,107 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 2,
     marginBottom: spacing.md,
+    textAlign: 'center',
   },
-  tiersGrid: {
-    flexDirection: 'row',
-    gap: spacing.sm,
+  tiersStack: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: spacing.md,
   },
-  tierCard: {
-    flex: 1,
-    backgroundColor: colors.darkAlt,
+  tierButtonWrapper: {
+    width: '100%',
+    maxWidth: 320,
+  },
+  tierButton: {
     borderRadius: borderRadius.lg,
     padding: spacing.md,
-    borderWidth: 2,
+    borderWidth: 3,
     borderColor: 'transparent',
-    minWidth: 100,
+    ...shadows.md,
   },
-  tierCardSelected: {
-    borderColor: colors.gold,
-    ...shadows.glow(colors.gold),
+  tierButtonSelected: {
+    borderColor: colors.textPrimary,
+    ...shadows.lg,
   },
-  tierCardDisabled: {
+  tierButtonDisabled: {
     opacity: 0.5,
   },
-  tierHeader: {
+  tierButtonContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: spacing.sm,
   },
-  tierNumber: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-    fontWeight: '600',
+  tierButtonLeft: {
+    flex: 1,
   },
-  difficultyBadge: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
-    borderRadius: borderRadius.sm,
+  tierButtonRight: {
+    alignItems: 'flex-end',
   },
-  difficultyText: {
+  tierButtonLabel: {
     color: colors.textPrimary,
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: fontSize.lg,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
-  tierBet: {
+  tierButtonTime: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: fontSize.sm,
+    marginTop: 2,
+  },
+  tierButtonBet: {
     color: colors.textPrimary,
     fontSize: fontSize.xl,
-    fontWeight: '700',
-    marginBottom: spacing.sm,
+    fontWeight: '800',
   },
-  tierInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: spacing.xs,
+  tierButtonWin: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: fontSize.sm,
+    marginTop: 2,
   },
-  tierInfoLabel: {
-    color: colors.textMuted,
-    fontSize: fontSize.xs,
-  },
-  tierInfoValue: {
-    color: colors.textSecondary,
-    fontSize: fontSize.xs,
-    fontWeight: '600',
-  },
-  winAmount: {
-    color: colors.success,
-  },
-  selectedIndicator: {
+  tierSelectedBadge: {
     position: 'absolute',
     top: -1,
     right: -1,
-    backgroundColor: colors.gold,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 2,
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
     borderTopRightRadius: borderRadius.lg - 2,
     borderBottomLeftRadius: borderRadius.sm,
   },
-  selectedText: {
+  tierSelectedText: {
     color: colors.dark,
-    fontSize: 8,
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  jackpotSection: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  jackpotContainer: {
+    backgroundColor: colors.darkAlt,
+    borderRadius: borderRadius.lg,
+    padding: spacing.md,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.purple,
+    ...shadows.glow(colors.purple),
+  },
+  jackpotLabel: {
+    color: colors.purple,
+    fontSize: fontSize.xs,
     fontWeight: '700',
+    letterSpacing: 2,
+    marginBottom: spacing.xs,
+  },
+  jackpotAmount: {
+    color: colors.gold,
+    fontSize: fontSize.xxl,
+    fontWeight: '900',
+  },
+  jackpotSubtext: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    marginTop: spacing.xs,
   },
   startSection: {
     padding: spacing.lg,

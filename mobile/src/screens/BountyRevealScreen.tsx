@@ -232,10 +232,16 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
             ]}
           >
             <Text style={styles.findLabel}>FIND</Text>
-            <Text style={styles.targetText}>{bounty.target}</Text>
+            <Text
+              style={styles.targetText}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+            >
+              {bounty.target}
+            </Text>
             <View style={styles.hintContainer}>
               <Text style={styles.hintLabel}>HINT</Text>
-              <Text style={styles.hintText}>{bounty.targetHint}</Text>
+              <Text style={styles.hintText} numberOfLines={2}>{bounty.targetHint}</Text>
             </View>
             <View style={styles.timeContainer}>
               <Text style={styles.timeLabel}>TIME LIMIT</Text>
@@ -305,12 +311,12 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   cardContainer: {
-    width: 280,
-    height: 400,
+    width: 300,
+    minHeight: 380,
   },
   card: {
     width: '100%',
-    height: '100%',
+    minHeight: 380,
     borderRadius: borderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
@@ -326,8 +332,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.darkAlt,
     borderWidth: 3,
     borderColor: colors.gold,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
   },
   questionMark: {
     fontSize: 120,
@@ -348,22 +354,23 @@ const styles = StyleSheet.create({
   },
   findLabel: {
     color: colors.textMuted,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     letterSpacing: 4,
-    marginBottom: spacing.sm,
+    marginBottom: spacing.xs,
   },
   targetText: {
     color: colors.gold,
-    fontSize: fontSize.xxl,
+    fontSize: fontSize.lg,
     fontWeight: '900',
     textAlign: 'center',
     textTransform: 'uppercase',
-    letterSpacing: 2,
+    letterSpacing: 1,
+    paddingHorizontal: spacing.sm,
   },
   hintContainer: {
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
     alignItems: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
   },
   hintLabel: {
     color: colors.textMuted,
@@ -373,12 +380,12 @@ const styles = StyleSheet.create({
   },
   hintText: {
     color: colors.textSecondary,
-    fontSize: fontSize.sm,
+    fontSize: fontSize.xs,
     textAlign: 'center',
     fontStyle: 'italic',
   },
   timeContainer: {
-    marginTop: spacing.xl,
+    marginTop: spacing.md,
     alignItems: 'center',
   },
   timeLabel: {
@@ -388,12 +395,12 @@ const styles = StyleSheet.create({
   },
   timeValue: {
     color: colors.cyan,
-    fontSize: fontSize.xl,
+    fontSize: fontSize.lg,
     fontWeight: '700',
     marginTop: spacing.xs,
   },
   rewardContainer: {
-    marginTop: spacing.lg,
+    marginTop: spacing.md,
     alignItems: 'center',
   },
   rewardLabel: {
@@ -403,7 +410,7 @@ const styles = StyleSheet.create({
   },
   rewardValue: {
     color: colors.success,
-    fontSize: fontSize.xl,
+    fontSize: fontSize.lg,
     fontWeight: '700',
     marginTop: spacing.xs,
   },
