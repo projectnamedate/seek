@@ -1,3 +1,6 @@
+// Polyfills must be imported first
+import './polyfill';
+
 import { registerRootComponent } from 'expo';
 
 import App from './App';
