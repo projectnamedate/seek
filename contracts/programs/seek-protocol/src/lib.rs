@@ -113,6 +113,9 @@ pub enum SeekError {
 
     #[msg("Bounty is still in challenge period")]
     StillInChallengePeriod,
+
+    #[msg("Timestamp is too far from current time")]
+    InvalidTimestamp,
 }
 
 /// Global protocol state - tracks all protocol-wide metrics
@@ -383,17 +386,25 @@ pub mod seek_protocol {
     /// Accept a bounty - player places their bet and starts the hunt
     /// bet_amount must be exactly 100, 200, or 300 SKR (with 9 decimals)
     /// mission_commitment is hash(mission_id || salt) for commit-reveal
+    /// timestamp must be within 60 seconds of current time (for PDA derivation)
     pub fn accept_bounty(
         ctx: Context<AcceptBounty>,
         bet_amount: u64,
+        timestamp: i64,
         mission_commitment: [u8; 32],
     ) -> Result<()> {
         // Validate bet amount and get tier
         let tier = validate_bet_amount(bet_amount)?;
 
-        // Get current timestamp
+        // Get current timestamp and validate provided timestamp is recent
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
+
+        // Timestamp must be within 60 seconds of current time
+        require!(
+            (current_time - timestamp).abs() <= 60,
+            SeekError::InvalidTimestamp
+        );
 
         // Calculate expiration based on tier
         let duration = get_tier_duration(tier);
@@ -498,7 +509,7 @@ pub mod seek_protocol {
         input[32..].copy_from_slice(&salt);
 
         // Use Solana's SHA256 hash function
-        let computed_hash = solana_program::hash::hash(&input);
+        let computed_hash = anchor_lang::solana_program::hash::hash(&input);
 
         require!(
             computed_hash.to_bytes() == bounty.mission_commitment,
@@ -1067,7 +1078,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(bet_amount: u64)]
+#[instruction(bet_amount: u64, timestamp: i64)]
 pub struct AcceptBounty<'info> {
     /// Player accepting the bounty
     #[account(mut)]
@@ -1086,7 +1097,7 @@ pub struct AcceptBounty<'info> {
         init,
         payer = player,
         space = Bounty::SIZE,
-        seeds = [b"bounty", player.key().as_ref(), &Clock::get()?.unix_timestamp.to_le_bytes()],
+        seeds = [b"bounty", player.key().as_ref(), &timestamp.to_le_bytes()],
         bump
     )]
     pub bounty: Account<'info, Bounty>,
