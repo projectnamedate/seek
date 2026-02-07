@@ -78,6 +78,7 @@ export function AppProvider({ children }: AppProviderProps) {
       setWallet({
         connected: true,
         address: mwa.account.publicKey.toString().slice(0, 4) + '...' + mwa.account.publicKey.toString().slice(-4),
+        skrName: null, // Will be fetched from API
         balance: 0, // Balance will be fetched from chain
         isDemo: false,
       });
@@ -85,6 +86,7 @@ export function AppProvider({ children }: AppProviderProps) {
       setWallet({
         connected: false,
         address: null,
+        skrName: null,
         balance: 0,
         isDemo: false,
       });
