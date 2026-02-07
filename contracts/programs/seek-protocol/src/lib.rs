@@ -16,8 +16,8 @@ pub const TIER_3_BET: u64 = 3_000_000_000_000;
 
 /// Distribution percentages (basis points, 10000 = 100%)
 pub const HOUSE_SHARE_BPS: u64 = 7000;      // 70% stays in house
-pub const SINGULARITY_SHARE_BPS: u64 = 1500; // 15% to jackpot pool
-pub const PROTOCOL_SHARE_BPS: u64 = 1500;    // 15% to protocol treasury
+pub const SINGULARITY_SHARE_BPS: u64 = 2000; // 20% to jackpot pool
+pub const PROTOCOL_SHARE_BPS: u64 = 1000;    // 10% to protocol treasury
 
 /// Jackpot odds: 1 in 500 chance on every win
 pub const SINGULARITY_ODDS: u64 = 500;
@@ -692,7 +692,7 @@ pub mod seek_protocol {
             msg!("Bounty WON! Payout: {} SKR", bounty.payout_amount / 1_000_000_000);
         } else {
             // === LOSS PATH ===
-            // Distribute bet: 70% house, 15% singularity, 15% protocol
+            // Distribute bet: 70% house, 20% singularity, 10% protocol
             let bet = bounty.bet_amount;
 
             // Calculate shares (using basis points for precision)
@@ -774,8 +774,8 @@ pub mod seek_protocol {
 
             msg!("Bounty LOST. Distribution:");
             msg!("  House: {} SKR (70%)", house_share / 1_000_000_000);
-            msg!("  Singularity: {} SKR (15%)", singularity_share / 1_000_000_000);
-            msg!("  Protocol: {} SKR (15%)", protocol_share / 1_000_000_000);
+            msg!("  Singularity: {} SKR (20%)", singularity_share / 1_000_000_000);
+            msg!("  Protocol: {} SKR (10%)", protocol_share / 1_000_000_000);
         }
 
         // Emit finalized event
