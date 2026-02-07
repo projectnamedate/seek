@@ -9,8 +9,8 @@ export interface Tier {
 }
 
 export const TIERS: Record<TierNumber, Tier> = {
-  1: { number: 1, bet: 1000, timeLimit: 600, difficulty: 'Easy' },
-  2: { number: 2, bet: 2000, timeLimit: 300, difficulty: 'Medium' },
+  1: { number: 1, bet: 1000, timeLimit: 300, difficulty: 'Easy' },
+  2: { number: 2, bet: 2000, timeLimit: 180, difficulty: 'Medium' },
   3: { number: 3, bet: 3000, timeLimit: 120, difficulty: 'Hard' },
 };
 

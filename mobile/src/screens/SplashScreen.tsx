@@ -15,9 +15,11 @@ interface Props {
 
 export default function SplashScreen({ onFinish }: Props) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.8)).current;
+  const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const textFadeAnim = useRef(new Animated.Value(0)).current;
   const sparkleAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0)).current;
+  const rotateAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Play sparkle sound
@@ -33,37 +35,66 @@ export default function SplashScreen({ onFinish }: Props) {
     };
     playSound();
 
+    // Start glow pulse loop
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(glowAnim, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
     // Animation sequence
     Animated.sequence([
-      // Logo fade in and scale
+      // Logo dramatic entrance - zoom from small with slight rotation
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
-          duration: 800,
+          duration: 600,
           useNativeDriver: true,
         }),
         Animated.spring(scaleAnim, {
+          toValue: 1.1,
+          tension: 40,
+          friction: 5,
+          useNativeDriver: true,
+        }),
+        Animated.timing(rotateAnim, {
           toValue: 1,
-          tension: 50,
-          friction: 7,
+          duration: 600,
+          easing: Easing.out(Easing.ease),
           useNativeDriver: true,
         }),
       ]),
+      // Settle to normal size
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 100,
+        friction: 8,
+        useNativeDriver: true,
+      }),
       // Sparkle effect
       Animated.timing(sparkleAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 400,
         easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       }),
       // Text fade in
       Animated.timing(textFadeAnim, {
         toValue: 1,
-        duration: 600,
+        duration: 500,
         useNativeDriver: true,
       }),
       // Hold for reading
-      Animated.delay(2500),
+      Animated.delay(2000),
       // Fade out
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -75,14 +106,40 @@ export default function SplashScreen({ onFinish }: Props) {
     });
   }, []);
 
+  const spin = rotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['-5deg', '0deg'],
+  });
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
+      {/* Glow effect behind logo */}
+      <Animated.View
+        style={[
+          styles.glowEffect,
+          {
+            opacity: glowAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0.3, 0.7],
+            }),
+            transform: [
+              {
+                scale: glowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 1.2],
+                }),
+              },
+            ],
+          },
+        ]}
+      />
+
       {/* Logo */}
       <Animated.View
         style={[
           styles.logoContainer,
           {
-            transform: [{ scale: scaleAnim }],
+            transform: [{ scale: scaleAnim }, { rotate: spin }],
           },
         ]}
       >
@@ -149,6 +206,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
+  },
+  glowEffect: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: colors.cyan,
+    ...shadows.glow(colors.cyan),
   },
   logoContainer: {
     position: 'relative',

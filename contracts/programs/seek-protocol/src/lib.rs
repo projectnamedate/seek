@@ -17,15 +17,14 @@ pub const TIER_3_BET: u64 = 3_000_000_000_000;
 /// Distribution percentages (basis points, 10000 = 100%)
 pub const HOUSE_SHARE_BPS: u64 = 7000;      // 70% stays in house
 pub const SINGULARITY_SHARE_BPS: u64 = 1500; // 15% to jackpot pool
-pub const BURN_SHARE_BPS: u64 = 1000;        // 10% burned forever
-pub const PROTOCOL_SHARE_BPS: u64 = 500;     // 5% to protocol treasury
+pub const PROTOCOL_SHARE_BPS: u64 = 1500;    // 15% to protocol treasury
 
 /// Jackpot odds: 1 in 500 chance on every win
 pub const SINGULARITY_ODDS: u64 = 500;
 
 /// Timer durations in seconds
-pub const TIER_1_DURATION: i64 = 600;  // 10 minutes
-pub const TIER_2_DURATION: i64 = 300;  // 5 minutes
+pub const TIER_1_DURATION: i64 = 300;  // 5 minutes
+pub const TIER_2_DURATION: i64 = 180;  // 3 minutes
 pub const TIER_3_DURATION: i64 = 120;  // 2 minutes
 
 /// Trust-minimization constants
@@ -287,7 +286,6 @@ pub struct BountyLost {
     pub bet_amount: u64,
     pub house_share: u64,
     pub singularity_share: u64,
-    pub burn_share: u64,
     pub protocol_share: u64,
 }
 
@@ -694,7 +692,7 @@ pub mod seek_protocol {
             msg!("Bounty WON! Payout: {} SKR", bounty.payout_amount / 1_000_000_000);
         } else {
             // === LOSS PATH ===
-            // Distribute bet: 70% house, 15% singularity, 10% burn, 5% protocol
+            // Distribute bet: 70% house, 15% singularity, 15% protocol
             let bet = bounty.bet_amount;
 
             // Calculate shares (using basis points for precision)
@@ -706,12 +704,6 @@ pub mod seek_protocol {
 
             let singularity_share = bet
                 .checked_mul(SINGULARITY_SHARE_BPS)
-                .ok_or(SeekError::MathOverflow)?
-                .checked_div(10000)
-                .ok_or(SeekError::MathOverflow)?;
-
-            let burn_share = bet
-                .checked_mul(BURN_SHARE_BPS)
                 .ok_or(SeekError::MathOverflow)?
                 .checked_div(10000)
                 .ok_or(SeekError::MathOverflow)?;
@@ -752,24 +744,7 @@ pub mod seek_protocol {
                 .checked_add(singularity_share)
                 .ok_or(SeekError::MathOverflow)?;
 
-            // 10% burn via SPL token burn
-            let burn_ctx = CpiContext::new_with_signer(
-                ctx.accounts.token_program.to_account_info(),
-                token::Burn {
-                    mint: ctx.accounts.skr_mint.to_account_info(),
-                    from: ctx.accounts.house_vault.to_account_info(),
-                    authority: global_state.to_account_info(),
-                },
-                signer_seeds,
-            );
-            token::burn(burn_ctx, burn_share)?;
-
-            global_state.total_burned = global_state
-                .total_burned
-                .checked_add(burn_share)
-                .ok_or(SeekError::MathOverflow)?;
-
-            // 5% transfer to protocol treasury
+            // 15% transfer to protocol treasury
             let protocol_ctx = CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 Transfer {
@@ -794,15 +769,13 @@ pub mod seek_protocol {
                 bet_amount: bet,
                 house_share,
                 singularity_share,
-                burn_share,
                 protocol_share,
             });
 
             msg!("Bounty LOST. Distribution:");
             msg!("  House: {} SKR (70%)", house_share / 1_000_000_000);
             msg!("  Singularity: {} SKR (15%)", singularity_share / 1_000_000_000);
-            msg!("  Burned: {} SKR (10%)", burn_share / 1_000_000_000);
-            msg!("  Protocol: {} SKR (5%)", protocol_share / 1_000_000_000);
+            msg!("  Protocol: {} SKR (15%)", protocol_share / 1_000_000_000);
         }
 
         // Emit finalized event
@@ -1232,13 +1205,6 @@ pub struct FinalizeBounty<'info> {
         constraint = protocol_treasury.key() == global_state.protocol_treasury
     )]
     pub protocol_treasury: Account<'info, TokenAccount>,
-
-    /// SKR mint (needed for burn)
-    #[account(
-        mut,
-        address = SKR_MINT @ SeekError::InvalidMint
-    )]
-    pub skr_mint: Account<'info, Mint>,
 
     /// Token program
     pub token_program: Program<'info, Token>,

@@ -27,8 +27,11 @@ export default function ResultScreen({ navigation, route }: Props) {
   // Animations
   const scaleAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const shakeAnim = useRef(new Animated.Value(0)).current;
+  const bgFlashAnim = useRef(new Animated.Value(0)).current;
   const confettiAnims = useRef(
-    [...Array(20)].map(() => ({
+    [...Array(30)].map(() => ({
       x: new Animated.Value(0),
       y: new Animated.Value(0),
       rotate: new Animated.Value(0),
@@ -45,10 +48,24 @@ export default function ResultScreen({ navigation, route }: Props) {
       playLoseSound();
     }
 
+    // Background flash
+    Animated.sequence([
+      Animated.timing(bgFlashAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(bgFlashAnim, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
     // Main reveal animation
     Animated.sequence([
       Animated.timing(scaleAnim, {
-        toValue: 1.2,
+        toValue: 1.3,
         duration: 400,
         easing: Easing.out(Easing.back(2)),
         useNativeDriver: true,
@@ -66,6 +83,35 @@ export default function ResultScreen({ navigation, route }: Props) {
       delay: 400,
       useNativeDriver: true,
     }).start();
+
+    // Win: continuous pulse, Lose: shake effect
+    if (isWin) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 800,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start();
+    } else {
+      // Shake animation for loss
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 5, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -5, duration: 50, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+      ]).start();
+    }
 
     // Confetti for wins
     if (isWin) {
@@ -146,11 +192,30 @@ export default function ResultScreen({ navigation, route }: Props) {
           />
         ))}
 
+      {/* Background Flash */}
+      <Animated.View
+        style={[
+          styles.bgFlash,
+          {
+            backgroundColor: isWin ? colors.success : colors.error,
+            opacity: bgFlashAnim.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, 0.3],
+            }),
+          },
+        ]}
+      />
+
       {/* Result Icon */}
       <Animated.View
         style={[
           styles.iconContainer,
-          { transform: [{ scale: scaleAnim }] },
+          {
+            transform: [
+              { scale: Animated.multiply(scaleAnim, pulseAnim) },
+              { translateX: shakeAnim },
+            ],
+          },
         ]}
       >
         <View
@@ -267,6 +332,13 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 2,
+  },
+  bgFlash: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   iconContainer: {
     marginTop: spacing.xxl,

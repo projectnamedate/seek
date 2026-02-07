@@ -163,7 +163,7 @@ export default function HomeScreen({ navigation }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, !wallet.connected && styles.dimmed]}>
         <Text style={styles.logo}>SEEK</Text>
         <Text style={styles.tagline}>Hunt. Capture. Win.</Text>
       </View>
@@ -199,7 +199,7 @@ export default function HomeScreen({ navigation }: Props) {
       </View>
 
       {/* Tier Selection */}
-      <View style={styles.tiersSection}>
+      <View style={[styles.tiersSection, !wallet.connected && styles.dimmed]} pointerEvents={wallet.connected ? 'auto' : 'none'}>
         <Text style={styles.sectionTitle}>Select Your Risk</Text>
         <View style={styles.tiersStack}>
           {([1, 2, 3] as TierNumber[]).map(renderTierButton)}
@@ -207,7 +207,7 @@ export default function HomeScreen({ navigation }: Props) {
       </View>
 
       {/* Jackpot Monitor */}
-      <View style={styles.jackpotSection}>
+      <View style={[styles.jackpotSection, !wallet.connected && styles.dimmed]}>
         <View style={styles.jackpotContainer}>
           <Text style={styles.jackpotLabel}>JACKPOT</Text>
           <Animated.View style={{ transform: [{ scale: jackpotAnim }] }}>
@@ -480,5 +480,8 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: 10,
     fontWeight: '700',
+  },
+  dimmed: {
+    opacity: 0.3,
   },
 });

@@ -27,13 +27,13 @@ export const GAME_CONFIG = {
 export const TIERS = {
   1: {
     bet: 1000,
-    timeLimit: 600, // 10 minutes
+    timeLimit: 300, // 5 minutes
     difficulty: 'Easy',
     color: '#cfe6e4', // light teal (Easy)
   },
   2: {
     bet: 2000,
-    timeLimit: 300, // 5 minutes
+    timeLimit: 180, // 3 minutes
     difficulty: 'Medium',
     color: '#95d2e6', // sky blue (Medium)
   },
