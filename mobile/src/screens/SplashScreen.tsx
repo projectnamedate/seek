@@ -113,26 +113,42 @@ export default function SplashScreen({ onFinish }: Props) {
 
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Glow effect behind logo */}
+      {/* Camera scope icon - positioned behind info box */}
       <Animated.View
         style={[
-          styles.glowEffect,
+          styles.scopeContainer,
           {
             opacity: glowAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0.3, 0.7],
+              outputRange: [0.6, 1],
             }),
             transform: [
               {
                 scale: glowAnim.interpolate({
                   inputRange: [0, 1],
-                  outputRange: [1, 1.2],
+                  outputRange: [0.95, 1.05],
                 }),
               },
             ],
           },
         ]}
-      />
+      >
+        {/* Outer ring */}
+        <View style={styles.scopeOuter}>
+          {/* Crosshairs */}
+          <View style={styles.scopeCrosshairH} />
+          <View style={styles.scopeCrosshairV} />
+          {/* Inner circle */}
+          <View style={styles.scopeInner}>
+            <View style={styles.scopeCenter} />
+          </View>
+          {/* Corner brackets */}
+          <View style={[styles.scopeBracket, styles.scopeBracketTL]} />
+          <View style={[styles.scopeBracket, styles.scopeBracketTR]} />
+          <View style={[styles.scopeBracket, styles.scopeBracketBL]} />
+          <View style={[styles.scopeBracket, styles.scopeBracketBR]} />
+        </View>
+      </Animated.View>
 
       {/* Logo */}
       <Animated.View
@@ -207,13 +223,79 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.xl,
   },
-  glowEffect: {
+  scopeContainer: {
     position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: colors.cyan,
+    top: '45%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scopeOuter: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    borderWidth: 3,
+    borderColor: colors.cyan,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...shadows.glow(colors.cyan),
+  },
+  scopeCrosshairH: {
+    position: 'absolute',
+    width: '100%',
+    height: 2,
+    backgroundColor: colors.cyan,
+  },
+  scopeCrosshairV: {
+    position: 'absolute',
+    width: 2,
+    height: '100%',
+    backgroundColor: colors.cyan,
+  },
+  scopeInner: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2,
+    borderColor: colors.cyan,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scopeCenter: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.cyan,
+  },
+  scopeBracket: {
+    position: 'absolute',
+    width: 20,
+    height: 20,
+    borderColor: colors.cyan,
+    borderWidth: 3,
+  },
+  scopeBracketTL: {
+    top: -8,
+    left: -8,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+  },
+  scopeBracketTR: {
+    top: -8,
+    right: -8,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+  },
+  scopeBracketBL: {
+    bottom: -8,
+    left: -8,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+  },
+  scopeBracketBR: {
+    bottom: -8,
+    right: -8,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
   },
   logoContainer: {
     position: 'relative',
