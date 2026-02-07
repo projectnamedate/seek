@@ -291,8 +291,8 @@ const styles = StyleSheet.create({
     width: 300,
     height: 300,
     borderRadius: 150,
-    backgroundColor: colors.gold,
-    ...shadows.glow(colors.gold),
+    backgroundColor: colors.cyan,
+    ...shadows.glow(colors.cyan),
   },
   header: {
     position: 'absolute',
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tierLabel: {
-    color: colors.gold,
+    color: colors.cyan,
     fontSize: fontSize.lg,
     fontWeight: '700',
     letterSpacing: 4,
@@ -325,18 +325,18 @@ const styles = StyleSheet.create({
   cardBack: {
     backgroundColor: colors.darkAlt,
     borderWidth: 3,
-    borderColor: colors.gold,
+    borderColor: colors.cyan,
   },
   cardFront: {
     backgroundColor: colors.darkAlt,
     borderWidth: 3,
-    borderColor: colors.gold,
+    borderColor: colors.cyan,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.md,
   },
   questionMark: {
     fontSize: 120,
-    color: colors.gold,
+    color: colors.cyan,
     fontWeight: '900',
   },
   revealingText: {
@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xs,
   },
   targetText: {
-    color: colors.gold,
+    color: colors.cyan,
     fontSize: fontSize.lg,
     fontWeight: '900',
     textAlign: 'center',

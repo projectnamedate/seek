@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: colors.cyan,
     alignItems: 'center',
   },
   targetLabel: {
@@ -284,7 +284,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   targetText: {
-    color: colors.gold,
+    color: colors.cyan,
     fontSize: fontSize.xl,
     fontWeight: '800',
     marginTop: spacing.xs,
@@ -328,7 +328,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   captureButtonCapturing: {
-    backgroundColor: colors.gold,
+    backgroundColor: colors.cyan,
   },
   capturingText: {
     color: colors.dark,
@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   permissionButton: {
-    backgroundColor: colors.purple,
+    backgroundColor: colors.cyan,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,

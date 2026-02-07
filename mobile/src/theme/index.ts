@@ -1,32 +1,36 @@
 // Seek Protocol Design System
-// Colors inspired by Solana, treasure hunting, and gaming
+// Colors based on Solana Mobile design scheme
 
 export const colors = {
-  // Primary palette
-  gold: '#FFB800',      // Rewards, wins, treasure
-  purple: '#8B5CF6',    // Solana brand, premium
-  cyan: '#06B6D4',      // Active states, info
+  // Primary palette - Solana Mobile
+  gold: '#cfe6e4',      // Rewards, wins (cyan glow)
+  cyan: '#61afbd',      // Primary accent (bright cyan)
+  cyanLight: '#95d2e6', // Secondary accent (sky blue)
+  teal: '#10282c',      // Deep teal accent
 
-  // Backgrounds
-  dark: '#0F172A',      // Primary background
-  darkAlt: '#1E293B',   // Cards, elevated surfaces
-  darkLight: '#334155', // Borders, subtle elements
+  // Backgrounds - Solana Mobile
+  dark: '#010101',      // Primary background (near black)
+  darkAlt: '#101618',   // Cards, elevated surfaces (dark navy)
+  darkLight: '#373c3e', // Borders, subtle elements
 
   // Status colors
-  success: '#10B981',   // Win, verified
+  success: '#61afbd',   // Win, verified (cyan)
   error: '#EF4444',     // Loss, error
-  warning: '#F59E0B',   // Pending, caution
+  warning: '#95d2e6',   // Pending, caution (sky blue)
 
-  // Text
-  textPrimary: '#FFFFFF',
-  textSecondary: '#94A3B8',
-  textMuted: '#64748B',
+  // Text - Solana Mobile
+  textPrimary: '#f6f6f5',   // Off-white
+  textSecondary: '#99b3be', // Medium gray
+  textMuted: '#373c3e',     // Light gray
+
+  // Legacy support
+  purple: '#61afbd',    // Map to cyan for compatibility
 
   // Gradients (as arrays for LinearGradient)
-  gradientGold: ['#FFB800', '#FF8C00'],
-  gradientPurple: ['#8B5CF6', '#6366F1'],
-  gradientCyan: ['#06B6D4', '#0EA5E9'],
-  gradientSuccess: ['#10B981', '#059669'],
+  gradientGold: ['#cfe6e4', '#95d2e6'],
+  gradientPurple: ['#61afbd', '#95d2e6'],
+  gradientCyan: ['#61afbd', '#cfe6e4'],
+  gradientSuccess: ['#61afbd', '#95d2e6'],
   gradientError: ['#EF4444', '#DC2626'],
 };
 
@@ -82,9 +86,9 @@ export const shadows = {
   glow: (color: string) => ({
     shadowColor: color,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
-    elevation: 10,
+    shadowOpacity: 0.6,
+    shadowRadius: 24,
+    elevation: 12,
   }),
 };
 

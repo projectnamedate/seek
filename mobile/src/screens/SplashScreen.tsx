@@ -156,9 +156,9 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 72,
     fontWeight: '900',
-    color: colors.gold,
+    color: colors.cyan,
     letterSpacing: 12,
-    ...shadows.glow(colors.gold),
+    ...shadows.glow(colors.cyan),
   },
   sparkle: {
     position: 'absolute',
@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
   },
   sparkleIcon: {
     fontSize: 24,
-    color: colors.gold,
+    color: colors.cyanLight,
   },
   tagline: {
     fontSize: fontSize.lg,
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.gold,
+    backgroundColor: colors.cyan,
     color: colors.dark,
     fontSize: fontSize.sm,
     fontWeight: '800',

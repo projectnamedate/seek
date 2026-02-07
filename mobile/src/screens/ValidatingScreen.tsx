@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 4,
-    backgroundColor: colors.purple,
+    backgroundColor: colors.cyan,
     opacity: 0.8,
   },
   targetInfo: {
@@ -301,7 +301,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
   },
   targetText: {
-    color: colors.gold,
+    color: colors.cyan,
     fontSize: fontSize.xl,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -317,7 +317,7 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     borderWidth: 4,
-    borderColor: colors.purple,
+    borderColor: colors.cyan,
     borderTopColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: '100%',
-    backgroundColor: colors.purple,
+    backgroundColor: colors.cyan,
     borderRadius: 2,
   },
   validationTextContainer: {

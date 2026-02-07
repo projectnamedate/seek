@@ -13,11 +13,11 @@ import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TierNumber, TIERS, WalletState } from '../types';
 import walletService from '../services/wallet.service';
 
-// Tier colors
+// Tier colors - Solana Mobile inspired
 const TIER_COLORS = {
-  1: '#10B981', // Green
-  2: '#F59E0B', // Yellow/Orange
-  3: '#F97316', // Orange
+  1: '#61afbd', // Bright cyan
+  2: '#95d2e6', // Sky blue
+  3: '#cfe6e4', // Light teal
 };
 
 type Props = {
@@ -269,7 +269,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: fontSize.xxxl,
     fontWeight: '900',
-    color: colors.gold,
+    color: colors.cyan,
     letterSpacing: 8,
   },
   tagline: {
@@ -313,12 +313,12 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xs,
   },
   balanceValue: {
-    color: colors.gold,
+    color: colors.cyanLight,
     fontSize: fontSize.lg,
     fontWeight: '700',
   },
   connectButton: {
-    backgroundColor: colors.purple,
+    backgroundColor: colors.cyan,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
@@ -420,18 +420,18 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.purple,
-    ...shadows.glow(colors.purple),
+    borderColor: colors.cyan,
+    ...shadows.glow(colors.cyan),
   },
   jackpotLabel: {
-    color: colors.purple,
+    color: colors.cyan,
     fontSize: fontSize.xs,
     fontWeight: '700',
     letterSpacing: 2,
     marginBottom: spacing.xs,
   },
   jackpotAmount: {
-    color: colors.gold,
+    color: colors.cyanLight,
     fontSize: fontSize.xxl,
     fontWeight: '900',
   },
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
   },
   startButton: {
-    backgroundColor: colors.gold,
+    backgroundColor: colors.cyan,
     borderRadius: borderRadius.lg,
     padding: spacing.lg,
     alignItems: 'center',
@@ -469,7 +469,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.xl + 8,
     right: spacing.lg,
-    backgroundColor: colors.purple,
+    backgroundColor: colors.teal,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
     borderRadius: borderRadius.sm,

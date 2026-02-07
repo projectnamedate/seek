@@ -23,25 +23,25 @@ export const GAME_CONFIG = {
   CHALLENGE_PERIOD: 300, // 5 minutes
 };
 
-// Tier Configuration
+// Tier Configuration - Solana Mobile colors
 export const TIERS = {
   1: {
     bet: 1000,
     timeLimit: 600, // 10 minutes
     difficulty: 'Easy',
-    color: '#10B981', // success green
+    color: '#61afbd', // bright cyan
   },
   2: {
     bet: 2000,
     timeLimit: 300, // 5 minutes
     difficulty: 'Medium',
-    color: '#F59E0B', // warning yellow
+    color: '#95d2e6', // sky blue
   },
   3: {
     bet: 3000,
     timeLimit: 120, // 2 minutes
     difficulty: 'Hard',
-    color: '#EF4444', // error red
+    color: '#cfe6e4', // light teal
   },
 } as const;
 

@@ -127,7 +127,7 @@ export default function ResultScreen({ navigation, route }: Props) {
             style={[
               styles.confetti,
               {
-                backgroundColor: [colors.gold, colors.purple, colors.cyan, colors.success][
+                backgroundColor: [colors.cyan, colors.cyanLight, colors.success, colors.textPrimary][
                   i % 4
                 ],
                 transform: [
@@ -232,7 +232,7 @@ export default function ResultScreen({ navigation, route }: Props) {
         <TouchableOpacity
           style={[
             styles.playAgainButton,
-            { backgroundColor: isWin ? colors.gold : colors.purple },
+            { backgroundColor: colors.cyan },
           ]}
           onPress={handlePlayAgain}
           activeOpacity={0.8}
