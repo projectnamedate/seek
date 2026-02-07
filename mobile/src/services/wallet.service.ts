@@ -4,7 +4,7 @@ import { WalletState } from '../types';
 const DEMO_WALLET = {
   address: 'Demo7...seeker',
   fullAddress: 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker',
-  initialBalance: 1000, // 1000 SKR to start
+  initialBalance: 10000, // 10000 SKR to start
 };
 
 // Singleton wallet state

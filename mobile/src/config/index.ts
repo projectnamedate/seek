@@ -13,7 +13,7 @@ export const API_CONFIG = {
 export const DEMO_MODE = {
   ENABLED: true, // Set to false for production
   WALLET_ADDRESS: 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker',
-  INITIAL_BALANCE: 1000,
+  INITIAL_BALANCE: 10000,
 };
 
 // Game Settings
@@ -26,19 +26,19 @@ export const GAME_CONFIG = {
 // Tier Configuration
 export const TIERS = {
   1: {
-    bet: 100,
+    bet: 1000,
     timeLimit: 600, // 10 minutes
     difficulty: 'Easy',
     color: '#10B981', // success green
   },
   2: {
-    bet: 200,
+    bet: 2000,
     timeLimit: 300, // 5 minutes
     difficulty: 'Medium',
     color: '#F59E0B', // warning yellow
   },
   3: {
-    bet: 300,
+    bet: 3000,
     timeLimit: 120, // 2 minutes
     difficulty: 'Hard',
     color: '#EF4444', // error red

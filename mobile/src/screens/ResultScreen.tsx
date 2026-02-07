@@ -13,6 +13,7 @@ import { RouteProp } from '@react-navigation/native';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList } from '../types';
 import walletService from '../services/wallet.service';
+import { playWinSound, playLoseSound } from '../utils/sounds';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Result'>;
@@ -36,9 +37,12 @@ export default function ResultScreen({ navigation, route }: Props) {
   ).current;
 
   useEffect(() => {
-    // Update wallet balance
+    // Play sound effect
     if (isWin) {
+      playWinSound();
       walletService.addWinnings(bounty.potentialWin);
+    } else {
+      playLoseSound();
     }
 
     // Main reveal animation

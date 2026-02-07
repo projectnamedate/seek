@@ -106,7 +106,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   useEffect(() => {
     if (!bounty) return;
 
-    // Spinning card animation
+    // Smooth continuous spin animation - linear for constant speed
     Animated.loop(
       Animated.timing(rotateAnim, {
         toValue: 1,
@@ -320,7 +320,6 @@ const styles = StyleSheet.create({
     borderRadius: borderRadius.xl,
     alignItems: 'center',
     justifyContent: 'center',
-    backfaceVisibility: 'hidden',
     ...shadows.lg,
   },
   cardBack: {

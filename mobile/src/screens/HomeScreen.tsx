@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Animated,
+  Easing,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
@@ -27,33 +28,41 @@ export default function HomeScreen({ navigation }: Props) {
   const [wallet, setWallet] = useState<WalletState>(walletService.getWalletState());
   const [selectedTier, setSelectedTier] = useState<TierNumber>(1);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [jackpot, setJackpot] = useState(12847); // Starting jackpot amount
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const [jackpot, setJackpot] = useState(128470); // Starting jackpot amount
   const jackpotAnim = useRef(new Animated.Value(1)).current;
+
+  // Individual pulse animations for each tier button
+  const tierAnims = useRef({
+    1: new Animated.Value(1),
+    2: new Animated.Value(1),
+    3: new Animated.Value(1),
+  }).current;
+
+  // Trigger single pulse animation on tier select
+  const handleTierSelect = (tierNum: TierNumber) => {
+    setSelectedTier(tierNum);
+
+    // Reset and play single pulse
+    tierAnims[tierNum].setValue(1);
+    Animated.sequence([
+      Animated.timing(tierAnims[tierNum], {
+        toValue: 1.08,
+        duration: 150,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(tierAnims[tierNum], {
+        toValue: 1,
+        duration: 150,
+        easing: Easing.in(Easing.ease),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
 
   // Subscribe to wallet changes
   useEffect(() => {
     return walletService.subscribeToWallet(setWallet);
-  }, []);
-
-  // Pulse animation for selected tier
-  useEffect(() => {
-    const pulse = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.05,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulse.start();
-    return () => pulse.stop();
   }, []);
 
   // Jackpot animation and random updates
@@ -77,7 +86,7 @@ export default function HomeScreen({ navigation }: Props) {
 
     // Random jackpot increases
     const interval = setInterval(() => {
-      setJackpot(prev => prev + Math.floor(Math.random() * 50) + 10);
+      setJackpot(prev => prev + Math.floor(Math.random() * 500) + 100);
     }, 3000);
 
     return () => {
@@ -117,7 +126,7 @@ export default function HomeScreen({ navigation }: Props) {
     return (
       <TouchableOpacity
         key={tierNum}
-        onPress={() => setSelectedTier(tierNum)}
+        onPress={() => handleTierSelect(tierNum)}
         disabled={!wallet.connected}
         activeOpacity={0.8}
         style={styles.tierButtonWrapper}
@@ -128,7 +137,7 @@ export default function HomeScreen({ navigation }: Props) {
             { backgroundColor: tierColor },
             isSelected && styles.tierButtonSelected,
             !canAfford && wallet.connected && styles.tierButtonDisabled,
-            isSelected && { transform: [{ scale: pulseAnim }] },
+            { transform: [{ scale: tierAnims[tierNum] }] },
           ]}
         >
           <View style={styles.tierButtonContent}>
@@ -198,7 +207,7 @@ export default function HomeScreen({ navigation }: Props) {
       {/* Jackpot Monitor */}
       <View style={styles.jackpotSection}>
         <View style={styles.jackpotContainer}>
-          <Text style={styles.jackpotLabel}>SINGULARITY JACKPOT</Text>
+          <Text style={styles.jackpotLabel}>JACKPOT</Text>
           <Animated.View style={{ transform: [{ scale: jackpotAnim }] }}>
             <Text style={styles.jackpotAmount}>
               {jackpot.toLocaleString()} $SKR

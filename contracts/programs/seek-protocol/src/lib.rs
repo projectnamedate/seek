@@ -7,12 +7,12 @@ declare_id!("Seek111111111111111111111111111111111111111");
 pub const SKR_MINT: Pubkey = pubkey!("SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3");
 
 /// Bet amounts in lamports (with 9 decimals)
-/// Tier 1: 100 $SKR = 100_000_000_000
-/// Tier 2: 200 $SKR = 200_000_000_000
-/// Tier 3: 300 $SKR = 300_000_000_000
-pub const TIER_1_BET: u64 = 100_000_000_000;
-pub const TIER_2_BET: u64 = 200_000_000_000;
-pub const TIER_3_BET: u64 = 300_000_000_000;
+/// Tier 1: 1000 $SKR = 1_000_000_000_000
+/// Tier 2: 2000 $SKR = 2_000_000_000_000
+/// Tier 3: 3000 $SKR = 3_000_000_000_000
+pub const TIER_1_BET: u64 = 1_000_000_000_000;
+pub const TIER_2_BET: u64 = 2_000_000_000_000;
+pub const TIER_3_BET: u64 = 3_000_000_000_000;
 
 /// Distribution percentages (basis points, 10000 = 100%)
 pub const HOUSE_SHARE_BPS: u64 = 7000;      // 70% stays in house
@@ -56,7 +56,7 @@ pub fn get_tier_duration(tier: u8) -> i64 {
 /// Custom error codes for the Seek protocol
 #[error_code]
 pub enum SeekError {
-    #[msg("Invalid bet amount. Must be 100, 200, or 300 SKR")]
+    #[msg("Invalid bet amount. Must be 1000, 2000, or 3000 SKR")]
     InvalidBetAmount,
 
     #[msg("Bounty is not in pending state")]
@@ -193,7 +193,7 @@ pub struct Bounty {
     /// Global state this bounty belongs to
     pub global_state: Pubkey,
 
-    /// Bet amount in SKR lamports (100B, 200B, or 300B)
+    /// Bet amount in SKR lamports (1000B, 2000B, or 3000B)
     pub bet_amount: u64,
 
     /// Potential payout (2x bet)
@@ -384,7 +384,7 @@ pub mod seek_protocol {
     }
 
     /// Accept a bounty - player places their bet and starts the hunt
-    /// bet_amount must be exactly 100, 200, or 300 SKR (with 9 decimals)
+    /// bet_amount must be exactly 1000, 2000, or 3000 SKR (with 9 decimals)
     /// mission_commitment is hash(mission_id || salt) for commit-reveal
     /// timestamp must be within 60 seconds of current time (for PDA derivation)
     pub fn accept_bounty(
