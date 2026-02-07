@@ -29,19 +29,19 @@ export const TIERS = {
     bet: 1000,
     timeLimit: 600, // 10 minutes
     difficulty: 'Easy',
-    color: '#61afbd', // bright cyan
+    color: '#cfe6e4', // light teal (Easy)
   },
   2: {
     bet: 2000,
     timeLimit: 300, // 5 minutes
     difficulty: 'Medium',
-    color: '#95d2e6', // sky blue
+    color: '#95d2e6', // sky blue (Medium)
   },
   3: {
     bet: 3000,
     timeLimit: 120, // 2 minutes
     difficulty: 'Hard',
-    color: '#cfe6e4', // light teal
+    color: '#61afbd', // bright cyan (Hard)
   },
 } as const;
 

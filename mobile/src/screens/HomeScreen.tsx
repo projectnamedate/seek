@@ -15,9 +15,9 @@ import walletService from '../services/wallet.service';
 
 // Tier colors - Solana Mobile inspired
 const TIER_COLORS = {
-  1: '#61afbd', // Bright cyan
-  2: '#95d2e6', // Sky blue
-  3: '#cfe6e4', // Light teal
+  1: '#cfe6e4', // Light teal (Easy)
+  2: '#95d2e6', // Sky blue (Medium)
+  3: '#61afbd', // Bright cyan (Hard)
 };
 
 type Props = {
@@ -375,23 +375,23 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
   },
   tierButtonLabel: {
-    color: colors.textPrimary,
+    color: colors.dark,
     fontSize: fontSize.lg,
     fontWeight: '800',
     letterSpacing: 1,
   },
   tierButtonTime: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(0,0,0,0.7)',
     fontSize: fontSize.sm,
     marginTop: 2,
   },
   tierButtonBet: {
-    color: colors.textPrimary,
+    color: colors.dark,
     fontSize: fontSize.xl,
     fontWeight: '800',
   },
   tierButtonWin: {
-    color: 'rgba(255,255,255,0.8)',
+    color: 'rgba(0,0,0,0.7)',
     fontSize: fontSize.sm,
     marginTop: 2,
   },
