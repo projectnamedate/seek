@@ -59,10 +59,14 @@ export async function validatePhoto(
   mission: Mission,
   metadata: PhotoMetadata
 ): Promise<ValidationResult> {
-  // Pre-checks before AI validation
-  const preCheckResult = performPreChecks(metadata);
-  if (!preCheckResult.passed) {
-    return preCheckResult.result;
+  // Skip strict pre-checks in development mode (emulator photos lack GPS/device info)
+  if (!config.server.isDev) {
+    const preCheckResult = performPreChecks(metadata);
+    if (!preCheckResult.passed) {
+      return preCheckResult.result;
+    }
+  } else {
+    console.log('[AI] Dev mode: skipping strict metadata pre-checks');
   }
 
   try {

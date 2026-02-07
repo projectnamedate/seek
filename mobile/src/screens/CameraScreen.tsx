@@ -186,6 +186,11 @@ export default function CameraScreen({ navigation, route }: Props) {
             </View>
           </View>
 
+          {/* Hint */}
+          <View style={styles.hintContainer}>
+            <Text style={styles.hintText}>{bounty.targetHint}</Text>
+          </View>
+
           {/* Bottom Controls */}
           <View style={styles.controls}>
             {/* Flip Camera */}
@@ -220,11 +225,6 @@ export default function CameraScreen({ navigation, route }: Props) {
 
             {/* Placeholder for symmetry */}
             <View style={styles.flipButton} />
-          </View>
-
-          {/* Hint */}
-          <View style={styles.hintContainer}>
-            <Text style={styles.hintText}>{bounty.targetHint}</Text>
           </View>
         </SafeAreaView>
       </CameraView>
@@ -295,7 +295,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-around',
     paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xxl + spacing.lg,
   },
   flipButton: {
     width: 60,
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
   },
   hintContainer: {
     alignItems: 'center',
-    paddingBottom: spacing.xl,
+    paddingBottom: spacing.md,
     paddingHorizontal: spacing.xl,
   },
   hintText: {
