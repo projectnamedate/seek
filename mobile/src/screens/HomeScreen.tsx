@@ -174,7 +174,9 @@ export default function HomeScreen({ navigation }: Props) {
           <View style={styles.walletConnected}>
             <View style={styles.walletInfo}>
               <View style={styles.walletDot} />
-              <Text style={styles.walletAddress}>{wallet.address}</Text>
+              <Text style={styles.walletAddress}>
+                {wallet.skrName || wallet.address}
+              </Text>
             </View>
             <View style={styles.balanceContainer}>
               <Text style={styles.balanceLabel}>Balance</Text>

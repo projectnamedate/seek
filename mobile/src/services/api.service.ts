@@ -166,10 +166,40 @@ export async function healthCheck(): Promise<boolean> {
   }
 }
 
+/**
+ * Resolve wallet address to .skr domain name
+ */
+export async function resolveSkrName(
+  address: string
+): Promise<{ success: boolean; skrName?: string | null; error?: string }> {
+  try {
+    const response = await api.get(`/skr/lookup/${address}`);
+
+    if (response.data.success) {
+      return {
+        success: true,
+        skrName: response.data.data.skrName || null,
+      };
+    }
+
+    return {
+      success: false,
+      error: response.data.error || 'Failed to resolve .skr name',
+    };
+  } catch (error: any) {
+    console.error('[API] Resolve .skr error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || 'Failed to resolve .skr name',
+    };
+  }
+}
+
 export default {
   startBounty,
   submitPhoto,
   getBountyStatus,
   getPlayerBounty,
   healthCheck,
+  resolveSkrName,
 };

@@ -3,6 +3,7 @@ import cors from 'cors';
 import { config } from './config';
 import bountyRoutes from './routes/bounty.routes';
 import healthRoutes from './routes/health.routes';
+import skrRoutes from './routes/skr.routes';
 
 // Create Express app
 const app = express();
@@ -35,6 +36,7 @@ if (config.server.isDev) {
 // Routes
 app.use('/api/bounty', bountyRoutes);
 app.use('/api/health', healthRoutes);
+app.use('/api/skr', skrRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -49,6 +51,7 @@ app.get('/', (req, res) => {
       submitPhoto: 'POST /api/bounty/submit',
       getBounty: 'GET /api/bounty/:id',
       getPlayerBounty: 'GET /api/bounty/player/:wallet',
+      resolveSkr: 'GET /api/skr/lookup/:addressOrDomain',
     },
   });
 });
@@ -89,6 +92,7 @@ app.listen(PORT, () => {
   console.log('  POST /api/bounty/start    - Start bounty hunt');
   console.log('  POST /api/bounty/submit   - Submit photo');
   console.log('  GET  /api/bounty/:id      - Get bounty status');
+  console.log('  GET  /api/skr/lookup/:x   - Resolve .skr domain');
   console.log('');
 });
 

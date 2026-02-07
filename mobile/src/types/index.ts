@@ -64,6 +64,7 @@ export interface SubmitPhotoResponse {
 export interface WalletState {
   connected: boolean;
   address: string | null;
+  skrName: string | null;  // .skr domain name (e.g., "player.skr")
   balance: number;         // SKR balance
   isDemo: boolean;
 }

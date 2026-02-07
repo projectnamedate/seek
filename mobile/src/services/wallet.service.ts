@@ -1,4 +1,5 @@
 import { WalletState } from '../types';
+import apiService from './api.service';
 
 // Demo wallet configuration
 const DEMO_WALLET = {
@@ -11,6 +12,7 @@ const DEMO_WALLET = {
 let walletState: WalletState = {
   connected: false,
   address: null,
+  skrName: null,
   balance: 0,
   isDemo: true,
 };
@@ -44,15 +46,28 @@ export async function connectWallet(): Promise<WalletState> {
   // Simulate connection delay
   await new Promise((resolve) => setTimeout(resolve, 800));
 
+  // Fetch .skr name for the wallet
+  let skrName: string | null = null;
+  try {
+    const result = await apiService.resolveSkrName(DEMO_WALLET.fullAddress);
+    if (result.success && result.skrName) {
+      skrName = result.skrName;
+      console.log('[Wallet] Resolved .skr name:', skrName);
+    }
+  } catch (error) {
+    console.log('[Wallet] Could not resolve .skr name:', error);
+  }
+
   walletState = {
     connected: true,
     address: DEMO_WALLET.address,
+    skrName,
     balance: DEMO_WALLET.initialBalance,
     isDemo: true,
   };
 
   notifyListeners();
-  console.log('[Wallet] Demo wallet connected:', walletState.address);
+  console.log('[Wallet] Demo wallet connected:', walletState.address, skrName ? `(${skrName})` : '');
   return walletState;
 }
 
@@ -63,6 +78,7 @@ export async function disconnectWallet(): Promise<void> {
   walletState = {
     connected: false,
     address: null,
+    skrName: null,
     balance: 0,
     isDemo: true,
   };
