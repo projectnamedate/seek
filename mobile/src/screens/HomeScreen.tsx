@@ -207,7 +207,7 @@ export default function HomeScreen({ navigation }: Props) {
       </View>
 
       {/* Jackpot Monitor */}
-      <View style={[styles.jackpotSection, !wallet.connected && styles.dimmed]}>
+      <View style={styles.jackpotSection}>
         <View style={styles.jackpotContainer}>
           <Text style={styles.jackpotLabel}>JACKPOT</Text>
           <Animated.View style={{ transform: [{ scale: jackpotAnim }] }}>

@@ -185,9 +185,10 @@ export default function SplashScreen({ onFinish }: Props) {
         Hunt. Capture. Win.
       </Animated.Text>
 
-      {/* Explanation */}
-      <Animated.View style={[styles.explanationContainer, { opacity: textFadeAnim }]}>
-        <Text style={styles.explanationTitle}>How to Play</Text>
+      {/* Explanation - centered overlay */}
+      <Animated.View style={[styles.explanationOverlay, { opacity: textFadeAnim }]}>
+        <View style={styles.explanationContainer}>
+          <Text style={styles.explanationTitle}>How to Play</Text>
         <View style={styles.stepContainer}>
           <Text style={styles.stepNumber}>1</Text>
           <Text style={styles.stepText}>Choose your bet level</Text>
@@ -203,6 +204,7 @@ export default function SplashScreen({ onFinish }: Props) {
         <View style={styles.stepContainer}>
           <Text style={styles.stepNumber}>4</Text>
           <Text style={styles.stepText}>Win 2x your bet!</Text>
+        </View>
         </View>
       </Animated.View>
 
@@ -225,10 +227,10 @@ const styles = StyleSheet.create({
   },
   scopeContainer: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -60,
-    marginTop: -60,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -325,12 +327,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     letterSpacing: 4,
   },
-  explanationContainer: {
+  explanationOverlay: {
     position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -150,
-    marginTop: -120,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  explanationContainer: {
     backgroundColor: colors.darkAlt,
     borderRadius: 16,
     padding: spacing.lg,

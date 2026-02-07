@@ -49,3 +49,4 @@ coverage/
 *.local
 .cache/
 tmp/
+.mcp.json
