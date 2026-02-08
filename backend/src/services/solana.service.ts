@@ -7,7 +7,7 @@ import {
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import { config } from '../config';
-import { Tier, BET_AMOUNTS } from '../types';
+import { Tier, ENTRY_AMOUNTS } from '../types';
 import bs58 from 'bs58';
 
 // Initialize connection
@@ -143,7 +143,7 @@ export async function checkPlayerBalance(
   // NOTE: Full implementation requires SPL token balance check
   // This is a placeholder
 
-  const required = BET_AMOUNTS[tier];
+  const required = ENTRY_AMOUNTS[tier];
 
   // Mock: assume sufficient for development
   return {

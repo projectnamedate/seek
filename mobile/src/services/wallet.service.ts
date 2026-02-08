@@ -102,9 +102,9 @@ export function getFullAddress(): string | null {
 }
 
 /**
- * Deduct bet amount (demo mode - just updates local state)
+ * Deduct entry amount (demo mode - just updates local state)
  */
-export async function deductBet(amount: number): Promise<boolean> {
+export async function deductEntry(amount: number): Promise<boolean> {
   if (!walletState.connected) {
     console.error('[Wallet] Cannot deduct: wallet not connected');
     return false;
@@ -169,7 +169,7 @@ export default {
   disconnectWallet,
   getWalletState,
   getFullAddress,
-  deductBet,
+  deductEntry,
   addWinnings,
   hasSufficientBalance,
   formatBalance,

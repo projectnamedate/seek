@@ -7,7 +7,7 @@ import {
   StartBountyResponse,
   SubmitPhotoResponse,
   Tier,
-  BET_AMOUNTS,
+  ENTRY_AMOUNTS,
 } from '../types';
 import {
   createBounty,
@@ -44,7 +44,7 @@ const startBountySchema = z.object({
 const startBountyDemoSchema = z.object({
   tier: z.number().int().min(1).max(3) as z.ZodType<Tier>,
   wallet: z.string().optional(),
-  betAmount: z.number().optional(),
+  entryAmount: z.number().optional(),
 });
 
 const submitPhotoSchema = z.object({
@@ -151,8 +151,8 @@ router.post('/demo/start', async (req: Request, res: Response) => {
         startTime: bounty.createdAt.getTime(),
         endTime: bounty.expiresAt.getTime(),
         status: 'hunting',
-        betAmount: Number(BET_AMOUNTS[tier] / 1_000_000_000n),
-        potentialWin: Number((BET_AMOUNTS[tier] * 2n) / 1_000_000_000n),
+        entryAmount: Number(ENTRY_AMOUNTS[tier] / 1_000_000_000n),
+        potentialReward: Number((ENTRY_AMOUNTS[tier] * 2n) / 1_000_000_000n),
       },
     });
   } catch (error) {
@@ -280,7 +280,7 @@ router.post('/submit', upload.single('photo'), async (req: Request, res: Respons
     };
 
     if (success) {
-      response.payout = formatSkr(bounty.betAmount * 2n);
+      response.payout = formatSkr(bounty.entryAmount * 2n);
       response.singularityWon = singularityWon;
 
       if (singularityWon) {
@@ -419,7 +419,7 @@ router.get('/:id', async (req: Request, res: Response) => {
         id: bounty.id,
         status: bounty.status,
         tier: bounty.tier,
-        betAmount: formatSkr(bounty.betAmount),
+        entryAmount: formatSkr(bounty.entryAmount),
         mission: mission ? {
           id: mission.id,
           description: mission.description,

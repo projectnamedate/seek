@@ -72,7 +72,7 @@ export default function CameraScreen({ navigation, route }: Props) {
   const handleTimeExpired = () => {
     Alert.alert(
       'Time Expired!',
-      'You ran out of time. Your bet has been lost.',
+      'You ran out of time. Your entry has been forfeited.',
       [
         {
           text: 'OK',

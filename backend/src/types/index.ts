@@ -1,8 +1,8 @@
 // Bounty tiers
 export type Tier = 1 | 2 | 3;
 
-// Bet amounts in lamports (with 9 decimals)
-export const BET_AMOUNTS: Record<Tier, bigint> = {
+// Entry amounts in lamports (with 9 decimals)
+export const ENTRY_AMOUNTS: Record<Tier, bigint> = {
   1: 1_000_000_000_000n, // 1000 SKR
   2: 2_000_000_000_000n, // 2000 SKR
   3: 3_000_000_000_000n, // 3000 SKR
@@ -33,7 +33,7 @@ export interface ActiveBounty {
   missionId: string;
   playerWallet: string;
   tier: Tier;
-  betAmount: bigint;
+  entryAmount: bigint;
   status: BountyStatus;
   createdAt: Date;
   expiresAt: Date;

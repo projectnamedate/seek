@@ -105,13 +105,13 @@ export default function HomeScreen({ navigation }: Props) {
     const tier = TIERS[selectedTier];
 
     // Check balance
-    if (!walletService.hasSufficientBalance(tier.bet)) {
+    if (!walletService.hasSufficientBalance(tier.entry)) {
       // TODO: Show insufficient balance modal
       return;
     }
 
-    // Deduct bet
-    const success = await walletService.deductBet(tier.bet);
+    // Deduct entry
+    const success = await walletService.deductEntry(tier.entry);
     if (success) {
       navigation.navigate('BountyReveal', { tier: selectedTier });
     }
@@ -120,7 +120,7 @@ export default function HomeScreen({ navigation }: Props) {
   const renderTierButton = (tierNum: TierNumber) => {
     const tier = TIERS[tierNum];
     const isSelected = selectedTier === tierNum;
-    const canAfford = wallet.connected && wallet.balance >= tier.bet;
+    const canAfford = wallet.connected && wallet.balance >= tier.entry;
     const tierColor = TIER_COLORS[tierNum];
 
     return (
@@ -146,8 +146,8 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.tierButtonTime}>{formatTime(tier.timeLimit)}</Text>
             </View>
             <View style={styles.tierButtonRight}>
-              <Text style={styles.tierButtonBet}>{tier.bet} $SKR</Text>
-              <Text style={styles.tierButtonWin}>Reward {tier.bet * 2}</Text>
+              <Text style={styles.tierButtonBet}>{tier.entry} $SKR</Text>
+              <Text style={styles.tierButtonWin}>Reward {tier.entry * 2}</Text>
             </View>
           </View>
           {isSelected && (
@@ -235,7 +235,7 @@ export default function HomeScreen({ navigation }: Props) {
           </Text>
           {wallet.connected && (
             <Text style={styles.startButtonSubtext}>
-              Entry {TIERS[selectedTier].bet} $SKR → Reward {TIERS[selectedTier].bet * 2}
+              Entry {TIERS[selectedTier].entry} $SKR → Reward {TIERS[selectedTier].entry * 2}
             </Text>
           )}
         </TouchableOpacity>

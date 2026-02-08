@@ -3,15 +3,15 @@ export type TierNumber = 1 | 2 | 3;
 
 export interface Tier {
   number: TierNumber;
-  bet: number;        // SKR amount
+  entry: number;      // SKR amount
   timeLimit: number;  // seconds
   difficulty: 'Easy' | 'Medium' | 'Hard';
 }
 
 export const TIERS: Record<TierNumber, Tier> = {
-  1: { number: 1, bet: 1000, timeLimit: 300, difficulty: 'Easy' },
-  2: { number: 2, bet: 2000, timeLimit: 180, difficulty: 'Medium' },
-  3: { number: 3, bet: 3000, timeLimit: 120, difficulty: 'Hard' },
+  1: { number: 1, entry: 1000, timeLimit: 300, difficulty: 'Easy' },
+  2: { number: 2, entry: 2000, timeLimit: 180, difficulty: 'Medium' },
+  3: { number: 3, entry: 3000, timeLimit: 120, difficulty: 'Hard' },
 };
 
 // Bounty status
@@ -34,8 +34,8 @@ export interface Bounty {
   startTime: number;
   endTime: number;
   status: BountyStatus;
-  betAmount: number;
-  potentialWin: number;
+  entryAmount: number;
+  potentialReward: number;
 }
 
 // Validation result from AI

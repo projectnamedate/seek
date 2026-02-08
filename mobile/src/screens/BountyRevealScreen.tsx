@@ -92,8 +92,8 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         startTime: now,
         endTime: now + tierData.timeLimit * 1000,
         status: 'revealing',
-        betAmount: tierData.bet,
-        potentialWin: tierData.bet * 2,
+        entryAmount: tierData.entry,
+        potentialReward: tierData.entry * 2,
       };
 
       setBounty(demoBounty);
@@ -200,7 +200,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       <View style={styles.header}>
         <Text style={styles.tierLabel}>TIER {tier} BOUNTY</Text>
         <Text style={styles.stakeLabel}>
-          Entry: {tierData.bet} $SKR
+          Entry: {tierData.entry} $SKR
         </Text>
       </View>
 
@@ -252,7 +252,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
             <View style={styles.rewardContainer}>
               <Text style={styles.rewardLabel}>REWARD</Text>
               <Text style={styles.rewardValue}>
-                {bounty.potentialWin} $SKR
+                {bounty.potentialReward} $SKR
               </Text>
             </View>
           </Animated.View>

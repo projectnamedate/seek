@@ -25,7 +25,7 @@ interface AppContextType {
   // Stats
   stats: PlayerStats;
   refreshStats: () => Promise<void>;
-  recordResult: (won: boolean, betAmount: number, winAmount?: number) => Promise<void>;
+  recordResult: (won: boolean, entryAmount: number, rewardAmount?: number) => Promise<void>;
 
   // Loading states
   isLoading: boolean;
@@ -48,8 +48,8 @@ export function AppProvider({ children }: AppProviderProps) {
     totalPlayed: 0,
     totalWon: 0,
     totalLost: 0,
-    totalBet: 0,
-    totalWinnings: 0,
+    totalEntry: 0,
+    totalRewards: 0,
     winStreak: 0,
     bestStreak: 0,
     lastPlayedAt: null,
@@ -124,8 +124,8 @@ export function AppProvider({ children }: AppProviderProps) {
     setStats(savedStats);
   };
 
-  const recordResult = async (won: boolean, betAmount: number, winAmount?: number) => {
-    const updatedStats = await recordGameResult(won, betAmount, winAmount || 0);
+  const recordResult = async (won: boolean, entryAmount: number, rewardAmount?: number) => {
+    const updatedStats = await recordGameResult(won, entryAmount, rewardAmount || 0);
     setStats(updatedStats);
   };
 

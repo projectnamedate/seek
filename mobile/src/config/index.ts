@@ -26,19 +26,19 @@ export const GAME_CONFIG = {
 // Tier Configuration - Solana Mobile colors
 export const TIERS = {
   1: {
-    bet: 1000,
+    entry: 1000,
     timeLimit: 300, // 5 minutes
     difficulty: 'Easy',
     color: '#cfe6e4', // light teal (Easy)
   },
   2: {
-    bet: 2000,
+    entry: 2000,
     timeLimit: 180, // 3 minutes
     difficulty: 'Medium',
     color: '#95d2e6', // sky blue (Medium)
   },
   3: {
-    bet: 3000,
+    entry: 3000,
     timeLimit: 120, // 2 minutes
     difficulty: 'Hard',
     color: '#61afbd', // bright cyan (Hard)

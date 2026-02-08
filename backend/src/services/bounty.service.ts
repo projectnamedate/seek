@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { ActiveBounty, Tier, BountyStatus, BET_AMOUNTS, TIER_DURATIONS } from '../types';
+import { ActiveBounty, Tier, BountyStatus, ENTRY_AMOUNTS, TIER_DURATIONS } from '../types';
 import { getRandomMission, getMissionById } from '../data/missions';
 
 // In-memory store for active bounties (would use Redis/DB in production)
@@ -45,7 +45,7 @@ export function createBounty(
     missionId: mission.id,
     playerWallet,
     tier,
-    betAmount: BET_AMOUNTS[tier],
+    entryAmount: ENTRY_AMOUNTS[tier],
     status: 'pending',
     createdAt: now,
     expiresAt,

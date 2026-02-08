@@ -43,7 +43,7 @@ export default function ResultScreen({ navigation, route }: Props) {
     // Play sound effect
     if (isWin) {
       playWinSound();
-      walletService.addWinnings(bounty.potentialWin);
+      walletService.addWinnings(bounty.potentialReward);
     } else {
       playLoseSound();
     }
@@ -247,7 +247,7 @@ export default function ResultScreen({ navigation, route }: Props) {
               { color: isWin ? colors.success : colors.error },
             ]}
           >
-            {isWin ? '+' : '-'}{isWin ? bounty.potentialWin : bounty.betAmount} $SKR
+            {isWin ? '+' : '-'}{isWin ? bounty.potentialReward : bounty.entryAmount} $SKR
           </Text>
         </View>
 

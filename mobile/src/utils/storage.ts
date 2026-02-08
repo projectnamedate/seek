@@ -18,8 +18,8 @@ export interface PlayerStats {
   totalPlayed: number;
   totalWon: number;
   totalLost: number;
-  totalBet: number;
-  totalWinnings: number;
+  totalEntry: number;
+  totalRewards: number;
   winStreak: number;
   bestStreak: number;
   lastPlayedAt: number | null;
@@ -29,8 +29,8 @@ const DEFAULT_STATS: PlayerStats = {
   totalPlayed: 0,
   totalWon: 0,
   totalLost: 0,
-  totalBet: 0,
-  totalWinnings: 0,
+  totalEntry: 0,
+  totalRewards: 0,
   winStreak: 0,
   bestStreak: 0,
   lastPlayedAt: null,
@@ -89,8 +89,8 @@ export async function updateStats(
  */
 export async function recordGameResult(
   won: boolean,
-  betAmount: number,
-  winAmount: number = 0
+  entryAmount: number,
+  rewardAmount: number = 0
 ): Promise<PlayerStats> {
   const current = await getStats();
 
@@ -99,8 +99,8 @@ export async function recordGameResult(
     totalPlayed: current.totalPlayed + 1,
     totalWon: current.totalWon + (won ? 1 : 0),
     totalLost: current.totalLost + (won ? 0 : 1),
-    totalBet: current.totalBet + betAmount,
-    totalWinnings: current.totalWinnings + (won ? winAmount : -betAmount),
+    totalEntry: current.totalEntry + entryAmount,
+    totalRewards: current.totalRewards + (won ? rewardAmount : -entryAmount),
     winStreak: won ? current.winStreak + 1 : 0,
     bestStreak: won
       ? Math.max(current.bestStreak, current.winStreak + 1)

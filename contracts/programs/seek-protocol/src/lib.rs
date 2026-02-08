@@ -10,9 +10,9 @@ pub const SKR_MINT: Pubkey = pubkey!("SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW
 /// Tier 1: 1000 $SKR = 1_000_000_000_000
 /// Tier 2: 2000 $SKR = 2_000_000_000_000
 /// Tier 3: 3000 $SKR = 3_000_000_000_000
-pub const TIER_1_BET: u64 = 1_000_000_000_000;
-pub const TIER_2_BET: u64 = 2_000_000_000_000;
-pub const TIER_3_BET: u64 = 3_000_000_000_000;
+pub const TIER_1_ENTRY: u64 = 1_000_000_000_000;
+pub const TIER_2_ENTRY: u64 = 2_000_000_000_000;
+pub const TIER_3_ENTRY: u64 = 3_000_000_000_000;
 
 /// Distribution percentages (basis points, 10000 = 100%)
 pub const HOUSE_SHARE_BPS: u64 = 7000;      // 70% stays in house
@@ -29,16 +29,16 @@ pub const TIER_3_DURATION: i64 = 120;  // 2 minutes
 
 /// Trust-minimization constants
 pub const CHALLENGE_PERIOD: i64 = 300;       // 5 minutes to challenge a result
-pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original bet to dispute
+pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original entry to dispute
 pub const DISPUTE_WINDOW: i64 = 600;         // 10 minutes to file dispute after resolution
 
-/// Validate bet amount and return tier
-pub fn validate_bet_amount(bet_amount: u64) -> Result<u8> {
-    match bet_amount {
-        TIER_1_BET => Ok(1),
-        TIER_2_BET => Ok(2),
-        TIER_3_BET => Ok(3),
-        _ => Err(SeekError::InvalidBetAmount.into()),
+/// Validate entry amount and return tier
+pub fn validate_entry_amount(entry_amount: u64) -> Result<u8> {
+    match entry_amount {
+        TIER_1_ENTRY => Ok(1),
+        TIER_2_ENTRY => Ok(2),
+        TIER_3_ENTRY => Ok(3),
+        _ => Err(SeekError::InvalidEntryAmount.into()),
     }
 }
 
@@ -56,7 +56,7 @@ pub fn get_tier_duration(tier: u8) -> i64 {
 #[error_code]
 pub enum SeekError {
     #[msg("Invalid entry amount. Must be 1000, 2000, or 3000 SKR")]
-    InvalidBetAmount,
+    InvalidEntryAmount,
 
     #[msg("Bounty is not in pending state")]
     BountyNotPending,
@@ -193,7 +193,7 @@ pub struct Bounty {
     pub global_state: Pubkey,
 
     /// Entry amount in SKR lamports (1000B, 2000B, or 3000B)
-    pub bet_amount: u64,
+    pub entry_amount: u64,
 
     /// Potential reward (2x entry)
     pub payout_amount: u64,
@@ -263,7 +263,7 @@ impl Bounty {
 pub struct BountyAccepted {
     pub player: Pubkey,
     pub bounty: Pubkey,
-    pub bet_amount: u64,
+    pub entry_amount: u64,
     pub tier: u8,
     pub expires_at: i64,
 }
@@ -283,7 +283,7 @@ pub struct BountyWon {
 pub struct BountyLost {
     pub player: Pubkey,
     pub bounty: Pubkey,
-    pub bet_amount: u64,
+    pub entry_amount: u64,
     pub house_share: u64,
     pub singularity_share: u64,
     pub protocol_share: u64,
@@ -382,17 +382,17 @@ pub mod seek_protocol {
     }
 
     /// Accept a bounty - player submits their entry and starts the hunt
-    /// bet_amount must be exactly 1000, 2000, or 3000 SKR (with 9 decimals)
+    /// entry_amount must be exactly 1000, 2000, or 3000 SKR (with 9 decimals)
     /// mission_commitment is hash(mission_id || salt) for commit-reveal
     /// timestamp must be within 60 seconds of current time (for PDA derivation)
     pub fn accept_bounty(
         ctx: Context<AcceptBounty>,
-        bet_amount: u64,
+        entry_amount: u64,
         timestamp: i64,
         mission_commitment: [u8; 32],
     ) -> Result<()> {
-        // Validate bet amount and get tier
-        let tier = validate_bet_amount(bet_amount)?;
+        // Validate entry amount and get tier
+        let tier = validate_entry_amount(entry_amount)?;
 
         // Get current timestamp and validate provided timestamp is recent
         let clock = Clock::get()?;
@@ -411,7 +411,7 @@ pub mod seek_protocol {
             .ok_or(SeekError::MathOverflow)?;
 
         // Calculate 2x payout
-        let payout_amount = bet_amount
+        let payout_amount = entry_amount
             .checked_mul(2)
             .ok_or(SeekError::MathOverflow)?;
 
@@ -419,7 +419,7 @@ pub mod seek_protocol {
         let bounty = &mut ctx.accounts.bounty;
         bounty.player = ctx.accounts.player.key();
         bounty.global_state = ctx.accounts.global_state.key();
-        bounty.bet_amount = bet_amount;
+        bounty.entry_amount = entry_amount;
         bounty.payout_amount = payout_amount;
         bounty.created_at = current_time;
         bounty.expires_at = expires_at;
@@ -443,7 +443,7 @@ pub mod seek_protocol {
         bounty.dispute_stake = 0;
         bounty.disputed_at = 0;
 
-        // Transfer bet from player to house vault
+        // Transfer entry from player to house vault
         let transfer_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
             Transfer {
@@ -452,13 +452,13 @@ pub mod seek_protocol {
                 authority: ctx.accounts.player.to_account_info(),
             },
         );
-        token::transfer(transfer_ctx, bet_amount)?;
+        token::transfer(transfer_ctx, entry_amount)?;
 
         // Update global state
         let global_state = &mut ctx.accounts.global_state;
         global_state.house_fund_balance = global_state
             .house_fund_balance
-            .checked_add(bet_amount)
+            .checked_add(entry_amount)
             .ok_or(SeekError::MathOverflow)?;
         global_state.total_bounties_created = global_state
             .total_bounties_created
@@ -469,14 +469,14 @@ pub mod seek_protocol {
         emit!(BountyAccepted {
             player: bounty.player,
             bounty: bounty.key(),
-            bet_amount,
+            entry_amount,
             tier,
             expires_at,
         });
 
         msg!("Bounty accepted!");
         msg!("Player: {}", bounty.player);
-        msg!("Bet: {} SKR (Tier {})", bet_amount / 1_000_000_000, tier);
+        msg!("Bet: {} SKR (Tier {})", entry_amount / 1_000_000_000, tier);
         msg!("Expires at: {}", expires_at);
 
         Ok(())
@@ -617,7 +617,7 @@ pub mod seek_protocol {
                 SeekError::InsufficientHouseFunds
             );
 
-            // Transfer 2x bet to player
+            // Transfer 2x entry to player
             let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
             let signer_seeds = &[&seeds[..]];
 
@@ -692,23 +692,23 @@ pub mod seek_protocol {
             msg!("Bounty WON! Payout: {} SKR", bounty.payout_amount / 1_000_000_000);
         } else {
             // === LOSS PATH ===
-            // Distribute bet: 70% house, 20% singularity, 10% protocol
-            let bet = bounty.bet_amount;
+            // Distribute entry: 70% house, 20% singularity, 10% protocol
+            let entry = bounty.entry_amount;
 
             // Calculate shares (using basis points for precision)
-            let house_share = bet
+            let house_share = entry
                 .checked_mul(HOUSE_SHARE_BPS)
                 .ok_or(SeekError::MathOverflow)?
                 .checked_div(10000)
                 .ok_or(SeekError::MathOverflow)?;
 
-            let singularity_share = bet
+            let singularity_share = entry
                 .checked_mul(SINGULARITY_SHARE_BPS)
                 .ok_or(SeekError::MathOverflow)?
                 .checked_div(10000)
                 .ok_or(SeekError::MathOverflow)?;
 
-            let protocol_share = bet
+            let protocol_share = entry
                 .checked_mul(PROTOCOL_SHARE_BPS)
                 .ok_or(SeekError::MathOverflow)?
                 .checked_div(10000)
@@ -719,10 +719,10 @@ pub mod seek_protocol {
 
             // 70% stays in house vault (already there from accept_bounty)
             // Just update the tracked balance
-            // We need to subtract the full bet first, then add back the house share
+            // We need to subtract the full entry first, then add back the house share
             global_state.house_fund_balance = global_state
                 .house_fund_balance
-                .checked_sub(bet)
+                .checked_sub(entry)
                 .ok_or(SeekError::MathOverflow)?
                 .checked_add(house_share)
                 .ok_or(SeekError::MathOverflow)?;
@@ -766,7 +766,7 @@ pub mod seek_protocol {
             emit!(BountyLost {
                 player: bounty.player,
                 bounty: bounty.key(),
-                bet_amount: bet,
+                entry_amount: entry,
                 house_share,
                 singularity_share,
                 protocol_share,
@@ -843,8 +843,8 @@ pub mod seek_protocol {
         // Cannot dispute twice
         require!(!bounty.is_disputed, SeekError::AlreadyDisputed);
 
-        // Calculate dispute stake (50% of original bet)
-        let dispute_stake = bounty.bet_amount
+        // Calculate dispute stake (50% of original entry)
+        let dispute_stake = bounty.entry_amount
             .checked_mul(DISPUTE_STAKE_BPS)
             .ok_or(SeekError::MathOverflow)?
             .checked_div(10000)
@@ -879,7 +879,7 @@ pub mod seek_protocol {
     }
 
     /// Resolve a dispute - authority reviews and decides
-    /// player_wins = true: player gets original bet back + dispute stake
+    /// player_wins = true: player gets original entry back + dispute stake
     /// player_wins = false: dispute stake forfeited, loss stands
     pub fn resolve_dispute(ctx: Context<ResolveDispute>, player_wins: bool) -> Result<()> {
         let bounty = &mut ctx.accounts.bounty;
@@ -895,11 +895,11 @@ pub mod seek_protocol {
         let signer_seeds = &[&seeds[..]];
 
         if player_wins {
-            // Player wins dispute: refund bet + dispute stake + payout
-            let total_refund = bounty.bet_amount
+            // Player wins dispute: refund entry + dispute stake + payout
+            let total_refund = bounty.entry_amount
                 .checked_add(bounty.dispute_stake)
                 .ok_or(SeekError::MathOverflow)?
-                .checked_add(bounty.bet_amount) // Extra bet as compensation
+                .checked_add(bounty.entry_amount) // Extra entry as compensation
                 .ok_or(SeekError::MathOverflow)?;
 
             let transfer_ctx = CpiContext::new_with_signer(
@@ -1051,7 +1051,7 @@ pub struct Initialize<'info> {
 }
 
 #[derive(Accounts)]
-#[instruction(bet_amount: u64, timestamp: i64)]
+#[instruction(entry_amount: u64, timestamp: i64)]
 pub struct AcceptBounty<'info> {
     /// Player accepting the bounty
     #[account(mut)]
@@ -1083,7 +1083,7 @@ pub struct AcceptBounty<'info> {
     )]
     pub player_token_account: Account<'info, TokenAccount>,
 
-    /// House vault to receive bet
+    /// House vault to receive entry
     #[account(
         mut,
         seeds = [b"house_vault"],
