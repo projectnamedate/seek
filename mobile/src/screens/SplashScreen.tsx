@@ -191,7 +191,7 @@ export default function SplashScreen({ onFinish }: Props) {
           <Text style={styles.explanationTitle}>How to Play</Text>
         <View style={styles.stepContainer}>
           <Text style={styles.stepNumber}>1</Text>
-          <Text style={styles.stepText}>Choose your bet level</Text>
+          <Text style={styles.stepText}>Choose your challenge level</Text>
         </View>
         <View style={styles.stepContainer}>
           <Text style={styles.stepNumber}>2</Text>
@@ -203,7 +203,7 @@ export default function SplashScreen({ onFinish }: Props) {
         </View>
         <View style={styles.stepContainer}>
           <Text style={styles.stepNumber}>4</Text>
-          <Text style={styles.stepText}>Win 2x your bet!</Text>
+          <Text style={styles.stepText}>Earn 2x your entry!</Text>
         </View>
         </View>
       </Animated.View>

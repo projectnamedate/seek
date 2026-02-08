@@ -200,7 +200,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       <View style={styles.header}>
         <Text style={styles.tierLabel}>TIER {tier} BOUNTY</Text>
         <Text style={styles.stakeLabel}>
-          {tierData.bet} $SKR at stake
+          Entry: {tierData.bet} $SKR
         </Text>
       </View>
 

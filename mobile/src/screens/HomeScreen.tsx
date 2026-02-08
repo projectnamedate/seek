@@ -147,7 +147,7 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
             <View style={styles.tierButtonRight}>
               <Text style={styles.tierButtonBet}>{tier.bet} $SKR</Text>
-              <Text style={styles.tierButtonWin}>Win {tier.bet * 2}</Text>
+              <Text style={styles.tierButtonWin}>Reward {tier.bet * 2}</Text>
             </View>
           </View>
           {isSelected && (
@@ -200,7 +200,7 @@ export default function HomeScreen({ navigation }: Props) {
 
       {/* Tier Selection */}
       <View style={[styles.tiersSection, !wallet.connected && styles.dimmed]} pointerEvents={wallet.connected ? 'auto' : 'none'}>
-        <Text style={styles.sectionTitle}>Select Your Risk</Text>
+        <Text style={styles.sectionTitle}>Select Your Challenge</Text>
         <View style={styles.tiersStack}>
           {([1, 2, 3] as TierNumber[]).map(renderTierButton)}
         </View>
@@ -235,7 +235,7 @@ export default function HomeScreen({ navigation }: Props) {
           </Text>
           {wallet.connected && (
             <Text style={styles.startButtonSubtext}>
-              Bet {TIERS[selectedTier].bet} $SKR to win {TIERS[selectedTier].bet * 2}
+              Entry {TIERS[selectedTier].bet} $SKR → Reward {TIERS[selectedTier].bet * 2}
             </Text>
           )}
         </TouchableOpacity>

@@ -6,7 +6,7 @@ declare_id!("Seek111111111111111111111111111111111111111");
 /// The $SKR token mint address
 pub const SKR_MINT: Pubkey = pubkey!("SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3");
 
-/// Bet amounts in lamports (with 9 decimals)
+/// Entry amounts in lamports (with 9 decimals)
 /// Tier 1: 1000 $SKR = 1_000_000_000_000
 /// Tier 2: 2000 $SKR = 2_000_000_000_000
 /// Tier 3: 3000 $SKR = 3_000_000_000_000
@@ -55,7 +55,7 @@ pub fn get_tier_duration(tier: u8) -> i64 {
 /// Custom error codes for the Seek protocol
 #[error_code]
 pub enum SeekError {
-    #[msg("Invalid bet amount. Must be 1000, 2000, or 3000 SKR")]
+    #[msg("Invalid entry amount. Must be 1000, 2000, or 3000 SKR")]
     InvalidBetAmount,
 
     #[msg("Bounty is not in pending state")]
@@ -192,10 +192,10 @@ pub struct Bounty {
     /// Global state this bounty belongs to
     pub global_state: Pubkey,
 
-    /// Bet amount in SKR lamports (1000B, 2000B, or 3000B)
+    /// Entry amount in SKR lamports (1000B, 2000B, or 3000B)
     pub bet_amount: u64,
 
-    /// Potential payout (2x bet)
+    /// Potential reward (2x entry)
     pub payout_amount: u64,
 
     /// Unix timestamp when bounty was accepted
@@ -381,7 +381,7 @@ pub mod seek_protocol {
         Ok(())
     }
 
-    /// Accept a bounty - player places their bet and starts the hunt
+    /// Accept a bounty - player submits their entry and starts the hunt
     /// bet_amount must be exactly 1000, 2000, or 3000 SKR (with 9 decimals)
     /// mission_commitment is hash(mission_id || salt) for commit-reveal
     /// timestamp must be within 60 seconds of current time (for PDA derivation)

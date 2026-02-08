@@ -1,35 +1,34 @@
 # Seek
 
-Pokemon GO for crypto. Bet $SKR, find real-world objects, win 2x your bet. Built for the Solana Seeker phone.
+Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 2x your entry. Built for the Solana Seeker phone.
 
 ## How It Works
 
-1. **Select Tier** - Choose your risk level (100/200/300 $SKR)
-2. **Accept Bounty** - Wallet approves bet, you get a random target
+1. **Select Tier** - Choose your challenge level (1000/2000/3000 $SKR)
+2. **Accept Bounty** - Wallet approves entry, you get a random target
 3. **Hunt** - Find the object in the real world before time runs out
 4. **Capture** - Take a photo with your camera
 5. **Validate** - AI verifies your photo is legit
-6. **Win/Lose** - Get 2x payout or lose your bet
+6. **Complete/Fail** - Earn 2x reward or entry forfeited
 
 ## The Three Tiers
 
-| Tier | Bet | Time | Difficulty | Example Bounties |
-|------|-----|------|------------|------------------|
-| 1 | 100 $SKR | 10 min | Easy | Fire hydrant, blue car, dog |
-| 2 | 200 $SKR | 5 min | Medium | Starbucks cup, golden retriever |
-| 3 | 300 $SKR | 2 min | Hard | Dog jumping, person on bicycle |
+| Tier | Entry | Time | Difficulty | Example Bounties |
+|------|-------|------|------------|------------------|
+| 1 | 1000 $SKR | 5 min | Easy | Fire hydrant, blue car, dog |
+| 2 | 2000 $SKR | 3 min | Medium | Starbucks cup, golden retriever |
+| 3 | 3000 $SKR | 2 min | Hard | Dog jumping, person on bicycle |
 
 ## Economics
 
-**Win (40% target rate):**
-- Get 2x your bet back
+**Bounty Completed (~40% success rate):**
+- Get 2x your entry back as reward
 - 1-in-500 chance to win the Singularity jackpot
 
-**Lose:**
-- 70% stays in house vault (funds future payouts)
-- 15% goes to Singularity jackpot pool
-- 10% burned forever (deflationary)
-- 5% protocol treasury
+**Bounty Failed:**
+- 70% stays in house vault (funds future rewards)
+- 20% goes to Singularity jackpot pool
+- 10% protocol treasury
 
 ## Tech Stack
 
@@ -77,10 +76,10 @@ seek/
 
 ## Smart Contract Features
 
-- Variable bet validation (100/200/300 SKR only)
-- 2x payout on success
-- Automatic 70/15/10/5 distribution on failure
-- Singularity jackpot (1-in-500 on every win)
+- Variable entry validation (1000/2000/3000 SKR only)
+- 2x reward on success
+- Automatic 70/20/10 distribution on failure
+- Singularity jackpot (1-in-500 on every completion)
 - PDA-based account management
 - Event emission for real-time tracking
 
