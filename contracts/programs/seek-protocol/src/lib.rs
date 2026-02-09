@@ -476,7 +476,7 @@ pub mod seek_protocol {
 
         msg!("Bounty accepted!");
         msg!("Player: {}", bounty.player);
-        msg!("Bet: {} SKR (Tier {})", entry_amount / 1_000_000_000, tier);
+        msg!("Entry: {} SKR (Tier {})", entry_amount / 1_000_000_000, tier);
         msg!("Expires at: {}", expires_at);
 
         Ok(())

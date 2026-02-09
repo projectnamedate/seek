@@ -150,7 +150,7 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.tierButtonTime}>{formatTime(tier.timeLimit)}</Text>
             </View>
             <View style={styles.tierButtonRight}>
-              <Text style={styles.tierButtonBet}>{tier.entry} $SKR</Text>
+              <Text style={styles.tierButtonEntry}>{tier.entry} $SKR</Text>
               <Text style={styles.tierButtonWin}>Reward {tier.entry * 2}</Text>
             </View>
           </View>
@@ -467,7 +467,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     marginTop: 2,
   },
-  tierButtonBet: {
+  tierButtonEntry: {
     color: colors.dark,
     fontSize: fontSize.xl,
     fontWeight: '800',

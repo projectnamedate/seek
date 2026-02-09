@@ -286,7 +286,7 @@ export default function ResultScreen({ navigation, route }: Props) {
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
               <Text style={styles.statLabel}>Jackpot?</Text>
-              <Text style={styles.statValue}>Better luck next time!</Text>
+              <Text style={styles.statValue}>Keep hunting!</Text>
             </View>
           </View>
         )}

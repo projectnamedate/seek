@@ -9,6 +9,8 @@ import {
   Animated,
 } from 'react-native';
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
+import * as FileSystem from 'expo-file-system';
+import { Asset } from 'expo-asset';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
@@ -122,6 +124,29 @@ export default function CameraScreen({ navigation, route }: Props) {
     }
   };
 
+  // Test mode: use a sample image (for emulator testing)
+  const handleTestCapture = async () => {
+    if (isCapturing) return;
+    setIsCapturing(true);
+
+    try {
+      // Use the app icon as a test image
+      const asset = Asset.fromModule(require('../../assets/icon.png'));
+      await asset.downloadAsync();
+
+      if (asset.localUri) {
+        navigation.replace('Validating', {
+          bounty,
+          photoUri: asset.localUri,
+        });
+      }
+    } catch (error) {
+      console.error('[Camera] Test capture error:', error);
+      Alert.alert('Error', 'Failed to use test image.');
+      setIsCapturing(false);
+    }
+  };
+
   // Request permission
   if (!permission) {
     return (
@@ -223,8 +248,14 @@ export default function CameraScreen({ navigation, route }: Props) {
               </Animated.View>
             </TouchableOpacity>
 
-            {/* Placeholder for symmetry */}
-            <View style={styles.flipButton} />
+            {/* Test Mode Button (for emulator) */}
+            <TouchableOpacity
+              style={[styles.flipButton, styles.testButton]}
+              onPress={handleTestCapture}
+              disabled={isCapturing}
+            >
+              <Text style={styles.flipButtonText}>TEST</Text>
+            </TouchableOpacity>
           </View>
         </SafeAreaView>
       </CameraView>
@@ -304,6 +335,11 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  testButton: {
+    backgroundColor: 'rgba(139, 92, 246, 0.8)',
+    borderWidth: 1,
+    borderColor: colors.cyan,
   },
   flipButtonText: {
     color: colors.textPrimary,

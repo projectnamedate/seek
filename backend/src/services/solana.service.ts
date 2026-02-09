@@ -134,7 +134,7 @@ export async function resolveBountyOnChain(
 }
 
 /**
- * Check if player has sufficient SKR balance for bet
+ * Check if player has sufficient SKR balance for entry
  */
 export async function checkPlayerBalance(
   playerWallet: string,

@@ -75,8 +75,9 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
 
 // Start server
 const PORT = config.server.port;
+const HOST = '0.0.0.0'; // Listen on all interfaces for emulator access
 
-app.listen(PORT, () => {
+app.listen(PORT, HOST, () => {
   console.log('');
   console.log('╔═══════════════════════════════════════════╗');
   console.log('║         SEEK PROTOCOL API SERVER          ║');

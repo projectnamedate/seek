@@ -93,14 +93,14 @@ describe("seek-protocol", () => {
   // 4. Run full transaction tests
 
   describe("Token Economics", () => {
-    it("Should verify tier bet amounts", () => {
-      const TIER_1_BET = 100_000_000_000; // 100 SKR (9 decimals)
-      const TIER_2_BET = 200_000_000_000; // 200 SKR
-      const TIER_3_BET = 300_000_000_000; // 300 SKR
+    it("Should verify tier entry amounts", () => {
+      const TIER_1_ENTRY = 100_000_000_000; // 100 SKR (9 decimals)
+      const TIER_2_ENTRY = 200_000_000_000; // 200 SKR
+      const TIER_3_ENTRY = 300_000_000_000; // 300 SKR
 
-      assert.equal(TIER_1_BET, 100 * 10 ** 9);
-      assert.equal(TIER_2_BET, 200 * 10 ** 9);
-      assert.equal(TIER_3_BET, 300 * 10 ** 9);
+      assert.equal(TIER_1_ENTRY, 100 * 10 ** 9);
+      assert.equal(TIER_2_ENTRY, 200 * 10 ** 9);
+      assert.equal(TIER_3_ENTRY, 300 * 10 ** 9);
     });
 
     it("Should verify loss distribution percentages", () => {
