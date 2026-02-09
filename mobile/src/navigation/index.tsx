@@ -7,7 +7,10 @@ import { RootStackParamList } from '../types';
 import { colors } from '../theme';
 
 // Screens
+import AgeGateScreen from '../screens/AgeGateScreen';
 import HomeScreen from '../screens/HomeScreen';
+import TermsOfServiceScreen from '../screens/TermsOfServiceScreen';
+import PrivacyPolicyScreen from '../screens/PrivacyPolicyScreen';
 import BountyRevealScreen from '../screens/BountyRevealScreen';
 import CameraScreen from '../screens/CameraScreen';
 import ValidatingScreen from '../screens/ValidatingScreen';
@@ -20,14 +23,29 @@ export default function Navigation() {
     <NavigationContainer>
       <StatusBar barStyle="light-content" backgroundColor={colors.dark} />
       <Stack.Navigator
-        initialRouteName="Home"
+        initialRouteName="AgeGate"
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: colors.dark },
           animation: 'slide_from_right',
         }}
       >
+        <Stack.Screen
+          name="AgeGate"
+          component={AgeGateScreen}
+          options={{ animation: 'none', gestureEnabled: false }}
+        />
         <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen
+          name="TermsOfService"
+          component={TermsOfServiceScreen}
+          options={{ animation: 'slide_from_bottom' }}
+        />
+        <Stack.Screen
+          name="PrivacyPolicy"
+          component={PrivacyPolicyScreen}
+          options={{ animation: 'slide_from_bottom' }}
+        />
         <Stack.Screen
           name="BountyReveal"
           component={BountyRevealScreen}

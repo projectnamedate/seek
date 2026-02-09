@@ -71,7 +71,10 @@ export interface WalletState {
 
 // Navigation types
 export type RootStackParamList = {
+  AgeGate: undefined;
   Home: undefined;
+  TermsOfService: undefined;
+  PrivacyPolicy: undefined;
   BountyReveal: { tier: TierNumber };
   Camera: { bounty: Bounty };
   Validating: { bounty: Bounty; photoUri: string };
