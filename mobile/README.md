@@ -36,7 +36,10 @@ src/
 ├── hooks/          # Custom hooks (useWallet, useTimer)
 ├── navigation/     # React Navigation stack navigator
 ├── screens/        # Main app screens
+│   ├── AgeGateScreen.tsx     # 18+ verification (first screen)
 │   ├── HomeScreen.tsx        # Tier selection & wallet
+│   ├── TermsOfServiceScreen.tsx  # Legal terms
+│   ├── PrivacyPolicyScreen.tsx   # Privacy policy
 │   ├── BountyRevealScreen.tsx # Target reveal animation
 │   ├── CameraScreen.tsx       # Photo capture with timer
 │   ├── ValidatingScreen.tsx   # AI validation progress
@@ -58,22 +61,40 @@ The app includes demo mode for hackathon presentations:
 
 ## Screens
 
-1. **Home** - Connect wallet, view balance, select tier
-2. **Bounty Reveal** - Animated card flip revealing target
-3. **Camera** - Capture photo with countdown timer
-4. **Validating** - Progress through AI validation stages
-5. **Result** - Win/lose with confetti and stats
+1. **Age Gate** - 18+ verification (first screen, persisted in AsyncStorage)
+2. **Home** - Connect wallet, view balance, select tier, settings menu
+3. **Terms of Service** - Legal terms for skill-based competition
+4. **Privacy Policy** - Data collection and usage policies
+5. **Bounty Reveal** - Animated card flip revealing target
+6. **Camera** - Capture photo with countdown timer
+7. **Validating** - Progress through AI validation stages
+8. **Result** - Win/lose with confetti and stats
 
-## Theme
+## Compliance Features
+
+The app includes dApp Store compliance features:
+
+- **Age Gate**: Users must confirm 18+ before accessing the app
+- **Terms of Service**: Skill-based competition terms, accessible from settings
+- **Privacy Policy**: Data collection details (GPS, photos, wallet), accessible from settings
+- **Disclaimers**:
+  - HomeScreen: "18+ only. Skill-based competition."
+  - BountyRevealScreen: "Success depends on your ability to find and photograph objects"
+  - ResultScreen (win): "Reward based on successful completion of skill challenge"
+- **Settings Menu**: Top-right corner of HomeScreen with links to legal pages
+
+## Theme (Solana Mobile)
 
 | Color | Hex | Usage |
 |-------|-----|-------|
-| Gold | #FFB800 | Primary, wins, rewards |
-| Purple | #8B5CF6 | Secondary, Solana brand |
-| Cyan | #06B6D4 | Info, timers |
-| Success | #10B981 | Wins, verification |
+| Cyan | #61afbd | Primary accent |
+| Cyan Light | #95d2e6 | Secondary accent |
+| Gold/Teal | #cfe6e4 | Rewards, highlights |
+| Teal | #10282c | Deep accent |
+| Success | #61afbd | Wins, verification |
 | Error | #EF4444 | Losses, warnings |
-| Dark | #0F172A | Background |
+| Dark | #010101 | Primary background |
+| Dark Alt | #101618 | Cards, surfaces |
 
 ## License
 
