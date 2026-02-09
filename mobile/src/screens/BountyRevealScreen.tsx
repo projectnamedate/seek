@@ -267,6 +267,13 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
           </Text>
         </Animated.View>
       )}
+
+      {/* Compliance Disclaimer */}
+      <View style={styles.disclaimerContainer}>
+        <Text style={styles.disclaimerText}>
+          Success depends on your ability to find and photograph objects
+        </Text>
+      </View>
     </SafeAreaView>
   );
 }
@@ -420,5 +427,18 @@ const styles = StyleSheet.create({
   instructionText: {
     color: colors.textSecondary,
     fontSize: fontSize.md,
+  },
+  disclaimerContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  disclaimerText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
   },
 });

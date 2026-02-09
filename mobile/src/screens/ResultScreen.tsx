@@ -306,6 +306,13 @@ export default function ResultScreen({ navigation, route }: Props) {
             {isWin ? 'HUNT AGAIN' : 'TRY AGAIN'}
           </Text>
         </TouchableOpacity>
+
+        {/* Compliance Disclaimer */}
+        {isWin && (
+          <Text style={styles.disclaimerText}>
+            Reward based on successful completion of skill challenge
+          </Text>
+        )}
       </Animated.View>
     </SafeAreaView>
   );
@@ -473,5 +480,11 @@ const styles = StyleSheet.create({
     fontSize: fontSize.lg,
     fontWeight: '800',
     letterSpacing: 2,
+  },
+  disclaimerText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+    marginTop: spacing.md,
   },
 });
