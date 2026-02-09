@@ -7,11 +7,14 @@ import {
   SafeAreaView,
   Animated,
   Easing,
+  Modal,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TierNumber, TIERS, WalletState } from '../types';
 import walletService from '../services/wallet.service';
+
+const APP_VERSION = '1.0.0';
 
 // Tier colors - Solana Mobile inspired
 const TIER_COLORS = {
@@ -29,6 +32,7 @@ export default function HomeScreen({ navigation }: Props) {
   const [selectedTier, setSelectedTier] = useState<TierNumber>(1);
   const [isConnecting, setIsConnecting] = useState(false);
   const [jackpot, setJackpot] = useState(128470); // Starting jackpot amount
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const jackpotAnim = useRef(new Animated.Value(1)).current;
 
   // Individual pulse animations for each tier button
@@ -162,6 +166,15 @@ export default function HomeScreen({ navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* Settings Button */}
+      <TouchableOpacity
+        style={styles.settingsButton}
+        onPress={() => setSettingsVisible(true)}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.settingsIcon}>...</Text>
+      </TouchableOpacity>
+
       {/* Header */}
       <View style={[styles.header, !wallet.connected && styles.dimmed]}>
         <Text style={styles.logo}>SEEK</Text>
@@ -247,6 +260,73 @@ export default function HomeScreen({ navigation }: Props) {
           <Text style={styles.demoBadgeText}>DEMO MODE</Text>
         </View>
       )}
+
+      {/* Compliance Disclaimer */}
+      <View style={styles.disclaimerContainer}>
+        <Text style={styles.disclaimerText}>
+          18+ only. Skill-based competition.
+        </Text>
+      </View>
+
+      {/* Settings Modal */}
+      <Modal
+        visible={settingsVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSettingsVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setSettingsVisible(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Settings</Text>
+
+            <TouchableOpacity
+              style={styles.modalItem}
+              onPress={() => {
+                setSettingsVisible(false);
+                navigation.navigate('TermsOfService');
+              }}
+            >
+              <Text style={styles.modalItemText}>Terms of Service</Text>
+              <Text style={styles.modalItemArrow}>{'>'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.modalItem}
+              onPress={() => {
+                setSettingsVisible(false);
+                navigation.navigate('PrivacyPolicy');
+              }}
+            >
+              <Text style={styles.modalItemText}>Privacy Policy</Text>
+              <Text style={styles.modalItemArrow}>{'>'}</Text>
+            </TouchableOpacity>
+
+            <View style={styles.modalDivider} />
+
+            <View style={styles.modalAbout}>
+              <Text style={styles.modalAboutTitle}>About Seek</Text>
+              <Text style={styles.modalAboutText}>
+                Skill-based scavenger hunt protocol on Solana
+              </Text>
+            </View>
+
+            <View style={styles.modalVersion}>
+              <Text style={styles.modalVersionText}>Version {APP_VERSION}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.modalClose}
+              onPress={() => setSettingsVisible(false)}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -483,5 +563,107 @@ const styles = StyleSheet.create({
   },
   dimmed: {
     opacity: 0.3,
+  },
+  settingsButton: {
+    position: 'absolute',
+    top: spacing.xl + 8,
+    right: spacing.lg,
+    zIndex: 10,
+    padding: spacing.sm,
+  },
+  settingsIcon: {
+    color: colors.textSecondary,
+    fontSize: fontSize.xl,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  disclaimerContainer: {
+    position: 'absolute',
+    bottom: spacing.md,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  disclaimerText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: colors.darkAlt,
+    borderRadius: borderRadius.xl,
+    padding: spacing.xl,
+    width: '85%',
+    maxWidth: 340,
+    borderWidth: 1,
+    borderColor: colors.darkLight,
+  },
+  modalTitle: {
+    color: colors.textPrimary,
+    fontSize: fontSize.xl,
+    fontWeight: '700',
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.darkLight,
+  },
+  modalItemText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+  },
+  modalItemArrow: {
+    color: colors.textMuted,
+    fontSize: fontSize.md,
+  },
+  modalDivider: {
+    height: 1,
+    backgroundColor: colors.darkLight,
+    marginVertical: spacing.md,
+  },
+  modalAbout: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  modalAboutTitle: {
+    color: colors.cyan,
+    fontSize: fontSize.sm,
+    fontWeight: '600',
+    marginBottom: spacing.xs,
+  },
+  modalAboutText: {
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
+    textAlign: 'center',
+  },
+  modalVersion: {
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalVersionText: {
+    color: colors.textMuted,
+    fontSize: fontSize.xs,
+  },
+  modalClose: {
+    backgroundColor: colors.darkLight,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.md,
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    color: colors.textPrimary,
+    fontSize: fontSize.md,
+    fontWeight: '600',
   },
 });
