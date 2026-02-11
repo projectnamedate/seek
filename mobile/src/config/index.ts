@@ -9,9 +9,9 @@ export const API_CONFIG = {
   AI_VALIDATION_TIMEOUT: 60000,
 };
 
-// Demo Mode
+// Demo Mode - automatically disabled in production builds
 export const DEMO_MODE = {
-  ENABLED: true, // Set to false for production
+  ENABLED: __DEV__ ?? false, // Tied to __DEV__: true in dev, false in production
   WALLET_ADDRESS: 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker',
   INITIAL_BALANCE: 10000,
 };

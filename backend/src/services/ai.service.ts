@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 import { config } from '../config';
-import { Mission, ValidationResult, PhotoMetadata } from '../types';
+import { Mission, ValidationResult, PhotoMetadata, Tier, TIER_CONFIDENCE_THRESHOLDS } from '../types';
 import { isLikelyScreenshot, isPhotoRecent } from './exif.service';
 
 // Initialize Anthropic client
@@ -8,14 +9,30 @@ const anthropic = new Anthropic({
   apiKey: config.anthropic.apiKey,
 });
 
+// Zod schema to validate Claude's JSON response
+const aiResponseSchema = z.object({
+  isValid: z.boolean(),
+  confidence: z.number().min(0).max(1),
+  reasoning: z.string(),
+  detectedObjects: z.array(z.string()),
+  isScreenshot: z.boolean(),
+  matchesTarget: z.boolean(),
+});
+
 /**
- * Build the validation prompt for Claude
+ * Build the validation prompt for Claude.
+ * Mission data is from our hardcoded missions — not user input — but
+ * we still sanitize to defend against future changes.
  */
 function buildValidationPrompt(mission: Mission): string {
+  // Sanitize mission fields to prevent prompt manipulation
+  const safeDescription = mission.description.replace(/[\n\r]/g, ' ').slice(0, 200);
+  const safeKeywords = mission.keywords.map(k => k.replace(/[\n\r]/g, '').slice(0, 50)).join(', ');
+
   return `You are a strict photo validator for a scavenger hunt game. Your job is to determine if a photo genuinely shows the target object.
 
-TARGET: "${mission.description}"
-KEYWORDS TO LOOK FOR: ${mission.keywords.join(', ')}
+TARGET: "${safeDescription}"
+KEYWORDS TO LOOK FOR: ${safeKeywords}
 
 VALIDATION RULES:
 1. The photo must show a REAL physical object, not a screen, monitor, TV, or printed image
@@ -24,7 +41,7 @@ VALIDATION RULES:
 4. Look for signs of screenshots: UI elements, status bars, bezels, screen glare
 5. Look for signs of photos of screens: moire patterns, pixel grids, screen edges
 
-RESPOND IN THIS EXACT JSON FORMAT:
+RESPOND IN THIS EXACT JSON FORMAT (no markdown, no code blocks, just raw JSON):
 {
   "isValid": boolean,
   "confidence": number between 0 and 1,
@@ -46,8 +63,58 @@ function getMediaType(mimeType: string): 'image/jpeg' | 'image/png' | 'image/gif
   if (type === 'image/png') return 'image/png';
   if (type === 'image/gif') return 'image/gif';
   if (type === 'image/webp') return 'image/webp';
-  // Default to jpeg for unknown types (like HEIC)
   return 'image/jpeg';
+}
+
+/**
+ * Parse and validate Claude's JSON response safely
+ */
+function parseAiResponse(responseText: string): ValidationResult {
+  // Try to extract JSON from response, handling markdown code blocks
+  let jsonStr: string | null = null;
+
+  // 1. Try to extract from ```json ... ``` blocks
+  const codeBlockMatch = responseText.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  }
+
+  // 2. Fall back to finding the first complete JSON object
+  if (!jsonStr) {
+    // Find first { and its matching } by counting braces
+    const start = responseText.indexOf('{');
+    if (start !== -1) {
+      let depth = 0;
+      for (let i = start; i < responseText.length; i++) {
+        if (responseText[i] === '{') depth++;
+        if (responseText[i] === '}') depth--;
+        if (depth === 0) {
+          jsonStr = responseText.slice(start, i + 1);
+          break;
+        }
+      }
+    }
+  }
+
+  if (!jsonStr) {
+    throw new Error('No JSON found in AI response');
+  }
+
+  // Parse JSON safely
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (e) {
+    throw new Error(`Failed to parse AI response JSON: ${e instanceof Error ? e.message : 'unknown'}`);
+  }
+
+  // Validate against schema
+  const validated = aiResponseSchema.safeParse(parsed);
+  if (!validated.success) {
+    throw new Error(`AI response schema mismatch: ${validated.error.issues.map(i => i.message).join(', ')}`);
+  }
+
+  return validated.data;
 }
 
 /**
@@ -57,11 +124,13 @@ export async function validatePhoto(
   imageBuffer: Buffer,
   mimeType: string,
   mission: Mission,
-  metadata: PhotoMetadata
+  metadata: PhotoMetadata,
+  tier?: Tier,
+  bountyStartTime?: Date
 ): Promise<ValidationResult> {
   // Skip strict pre-checks in development mode (emulator photos lack GPS/device info)
   if (!config.server.isDev) {
-    const preCheckResult = performPreChecks(metadata);
+    const preCheckResult = performPreChecks(metadata, bountyStartTime);
     if (!preCheckResult.passed) {
       return preCheckResult.result;
     }
@@ -70,13 +139,11 @@ export async function validatePhoto(
   }
 
   try {
-    // Convert image to base64
     const base64Image = imageBuffer.toString('base64');
     const mediaType = getMediaType(mimeType);
 
     console.log(`[AI] Validating photo for target: "${mission.description}"`);
 
-    // Call Claude for validation
     const response = await anthropic.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 500,
@@ -94,34 +161,27 @@ export async function validatePhoto(
             },
             {
               type: 'text',
-              text: `${buildValidationPrompt(mission)}\n\nValidate this photo for the target: "${mission.description}"`,
+              text: buildValidationPrompt(mission),
             },
           ],
         },
       ],
     });
 
-    // Extract text from response
     const content = response.content[0];
     if (content.type !== 'text') {
       throw new Error('Unexpected response type from Claude');
     }
 
-    const responseText = content.text;
-    console.log(`[AI] Raw response: ${responseText.substring(0, 200)}...`);
+    const result = parseAiResponse(content.text);
 
-    // Extract JSON from response (handle markdown code blocks)
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON found in response');
-    }
-
-    const result = JSON.parse(jsonMatch[0]) as ValidationResult;
-
-    // Apply confidence threshold
-    if (result.confidence < config.validation.minConfidenceScore) {
+    // Apply per-tier confidence threshold (falls back to global config)
+    const threshold = tier
+      ? TIER_CONFIDENCE_THRESHOLDS[tier]
+      : config.validation.minConfidenceScore;
+    if (result.confidence < threshold) {
       result.isValid = false;
-      result.reasoning += ` (Confidence ${result.confidence} below threshold ${config.validation.minConfidenceScore})`;
+      result.reasoning += ` (Confidence ${(result.confidence * 100).toFixed(0)}% below tier threshold ${(threshold * 100).toFixed(0)}%)`;
     }
 
     // Double-check screenshot detection
@@ -129,17 +189,16 @@ export async function validatePhoto(
       result.isValid = false;
     }
 
-    console.log(`[AI] Validation result: ${result.isValid ? 'PASS' : 'FAIL'} (${Math.round(result.confidence * 100)}%)`);
+    console.log(`[AI] Validation: ${result.isValid ? 'PASS' : 'FAIL'} (${Math.round(result.confidence * 100)}%)`);
 
     return result;
   } catch (error) {
-    console.error('[AI] Validation error:', error);
+    console.error('[AI] Validation error:', config.server.isDev ? error : (error instanceof Error ? error.message : 'unknown'));
 
-    // Return failed validation on error
     return {
       isValid: false,
       confidence: 0,
-      reasoning: `Validation error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      reasoning: 'Validation system error — please try again',
       detectedObjects: [],
       isScreenshot: false,
       matchesTarget: false,
@@ -150,11 +209,10 @@ export async function validatePhoto(
 /**
  * Pre-validation checks before sending to AI
  */
-function performPreChecks(metadata: PhotoMetadata): {
+function performPreChecks(metadata: PhotoMetadata, bountyStartTime?: Date): {
   passed: boolean;
   result: ValidationResult;
 } {
-  // Check for screenshot indicators in EXIF
   if (isLikelyScreenshot(metadata)) {
     return {
       passed: false,
@@ -169,7 +227,6 @@ function performPreChecks(metadata: PhotoMetadata): {
     };
   }
 
-  // Check photo timestamp
   if (!isPhotoRecent(metadata, config.validation.maxPhotoAgeSeconds)) {
     return {
       passed: false,
@@ -184,7 +241,25 @@ function performPreChecks(metadata: PhotoMetadata): {
     };
   }
 
-  // All pre-checks passed
+  // Cross-reference: photo must be taken AFTER the bounty started
+  if (bountyStartTime && metadata.timestamp) {
+    const photoTime = metadata.timestamp.getTime();
+    const bountyStart = bountyStartTime.getTime();
+    if (photoTime < bountyStart - 5000) {
+      return {
+        passed: false,
+        result: {
+          isValid: false,
+          confidence: 0.95,
+          reasoning: 'Photo was taken before the bounty started — possible pre-captured image',
+          detectedObjects: [],
+          isScreenshot: false,
+          matchesTarget: false,
+        },
+      };
+    }
+  }
+
   return {
     passed: true,
     result: {
@@ -207,21 +282,21 @@ export function isValidImageFormat(mimeType: string): boolean {
 }
 
 /**
- * Estimate image quality/size for validation
+ * Validate image size (aligned with multer 10MB limit)
  */
 export function checkImageSize(buffer: Buffer): {
   valid: boolean;
   reason?: string;
 } {
   const minSize = 10 * 1024; // 10KB minimum
-  const maxSize = 20 * 1024 * 1024; // 20MB maximum
+  const maxSize = 10 * 1024 * 1024; // 10MB maximum (matches multer limit)
 
   if (buffer.length < minSize) {
     return { valid: false, reason: 'Image too small (minimum 10KB)' };
   }
 
   if (buffer.length > maxSize) {
-    return { valid: false, reason: 'Image too large (maximum 20MB)' };
+    return { valid: false, reason: 'Image too large (maximum 10MB)' };
   }
 
   return { valid: true };

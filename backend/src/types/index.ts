@@ -15,6 +15,13 @@ export const TIER_DURATIONS: Record<Tier, number> = {
   3: 120, // 2 minutes
 };
 
+// Per-tier AI confidence thresholds (higher stakes = higher bar)
+export const TIER_CONFIDENCE_THRESHOLDS: Record<Tier, number> = {
+  1: 0.80, // 80% for tier 1
+  2: 0.85, // 85% for tier 2
+  3: 0.90, // 90% for tier 3
+};
+
 // Bounty status
 export type BountyStatus = 'pending' | 'validating' | 'won' | 'lost' | 'expired';
 

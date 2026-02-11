@@ -248,14 +248,16 @@ export default function CameraScreen({ navigation, route }: Props) {
               </Animated.View>
             </TouchableOpacity>
 
-            {/* Test Mode Button (for emulator) */}
-            <TouchableOpacity
-              style={[styles.flipButton, styles.testButton]}
-              onPress={handleTestCapture}
-              disabled={isCapturing}
-            >
-              <Text style={styles.flipButtonText}>TEST</Text>
-            </TouchableOpacity>
+            {/* Test Mode Button (for emulator) - only visible in dev */}
+            {__DEV__ && (
+              <TouchableOpacity
+                style={[styles.flipButton, styles.testButton]}
+                onPress={handleTestCapture}
+                disabled={isCapturing}
+              >
+                <Text style={styles.flipButtonText}>TEST</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </SafeAreaView>
       </CameraView>

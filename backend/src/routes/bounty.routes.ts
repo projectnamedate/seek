@@ -21,6 +21,10 @@ import {
 import { extractExifMetadata, formatMetadata } from '../services/exif.service';
 import { validatePhoto, isValidImageFormat, checkImageSize } from '../services/ai.service';
 import { resolveBountyOnChain, formatSkr } from '../services/solana.service';
+import { requireWalletAuth } from '../middleware/auth.middleware';
+import { validate } from '../middleware/validate.middleware';
+import { bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
+import { config } from '../config';
 
 const router = Router();
 
@@ -28,45 +32,39 @@ const router = Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 20 * 1024 * 1024, // 20MB max
+    fileSize: 10 * 1024 * 1024, // 10MB max
   },
 });
+
+// Base58 pattern for Solana addresses
+const base58Pattern = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
 
 // Request validation schemas
 const startBountySchema = z.object({
   tier: z.number().int().min(1).max(3) as z.ZodType<Tier>,
-  playerWallet: z.string().min(32).max(44),
-  bountyPda: z.string().min(32).max(44),
+  playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address (base58, 32-44 chars)'),
+  bountyPda: z.string().regex(base58Pattern, 'Invalid PDA address (base58, 32-44 chars)'),
   transactionSignature: z.string().optional(),
 });
 
-// Demo mode schema (simplified for hackathon demo)
+const submitPhotoSchema = z.object({
+  bountyId: z.string().uuid('Invalid bounty ID format'),
+});
+
+// Demo mode schemas
 const startBountyDemoSchema = z.object({
   tier: z.number().int().min(1).max(3) as z.ZodType<Tier>,
   wallet: z.string().optional(),
   entryAmount: z.number().optional(),
 });
 
-const submitPhotoSchema = z.object({
-  bountyId: z.string().uuid(),
-});
-
 /**
  * POST /api/bounty/start
  * Start a new bounty hunt
  */
-router.post('/start', async (req: Request, res: Response) => {
+router.post('/start', requireWalletAuth, bountyStartLimiter, validate(startBountySchema), async (req: Request, res: Response) => {
   try {
-    // Validate request
-    const parsed = startBountySchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request: ' + parsed.error.message,
-      } as ApiResponse<never>);
-    }
-
-    const { tier, playerWallet, bountyPda, transactionSignature } = parsed.data;
+    const { tier, playerWallet, bountyPda, transactionSignature } = req.body;
 
     // Check for existing active bounty
     const existing = getPlayerActiveBounty(playerWallet);
@@ -106,60 +104,7 @@ router.post('/start', async (req: Request, res: Response) => {
     console.error('[API] Start bounty error:', error);
     return res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
-    } as ApiResponse<never>);
-  }
-});
-
-/**
- * POST /api/bounty/demo/start
- * Start a bounty in demo mode (no blockchain required)
- * For hackathon demo purposes
- */
-router.post('/demo/start', async (req: Request, res: Response) => {
-  try {
-    const parsed = startBountyDemoSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid request: ' + parsed.error.message,
-      } as ApiResponse<never>);
-    }
-
-    const { tier, wallet } = parsed.data;
-    const demoWallet = wallet || 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker';
-    const demoPda = `demo-pda-${Date.now()}`;
-
-    // Create bounty without blockchain
-    const { bounty, missionDescription } = createBounty(
-      demoWallet,
-      tier,
-      demoPda,
-      undefined // no transaction signature
-    );
-
-    console.log(`[DEMO] Bounty started: ${bounty.id} | Tier ${tier} | ${missionDescription}`);
-
-    // Return simplified response for mobile app
-    return res.status(201).json({
-      success: true,
-      bounty: {
-        id: bounty.id,
-        tier: tier,
-        target: missionDescription.split(': ')[0] || missionDescription,
-        targetHint: missionDescription.split(': ')[1] || 'Find this object',
-        startTime: bounty.createdAt.getTime(),
-        endTime: bounty.expiresAt.getTime(),
-        status: 'hunting',
-        entryAmount: Number(ENTRY_AMOUNTS[tier] / 1_000_000_000n),
-        potentialReward: Number((ENTRY_AMOUNTS[tier] * 2n) / 1_000_000_000n),
-      },
-    });
-  } catch (error) {
-    console.error('[DEMO] Start bounty error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: 'Internal server error',
     } as ApiResponse<never>);
   }
 });
@@ -168,7 +113,7 @@ router.post('/demo/start', async (req: Request, res: Response) => {
  * POST /api/bounty/submit
  * Submit a photo for validation
  */
-router.post('/submit', upload.single('photo'), async (req: Request, res: Response) => {
+router.post('/submit', requireWalletAuth, bountySubmitLimiter, upload.single('photo'), async (req: Request, res: Response) => {
   try {
     // Validate bounty ID
     const parsed = submitPhotoSchema.safeParse(req.body);
@@ -250,12 +195,14 @@ router.post('/submit', upload.single('photo'), async (req: Request, res: Respons
     const metadata = await extractExifMetadata(req.file.buffer);
     console.log(`[API] EXIF: ${formatMetadata(metadata)}`);
 
-    // Validate with AI
+    // Validate with AI (pass tier + bounty start time for stricter checks)
     const validation = await validatePhoto(
       req.file.buffer,
       req.file.mimetype,
       mission,
-      metadata
+      metadata,
+      bounty.tier,
+      bounty.createdAt
     );
 
     console.log(`[API] Validation result: ${validation.isValid ? 'PASS' : 'FAIL'} (${validation.confidence})`);
@@ -298,104 +245,143 @@ router.post('/submit', upload.single('photo'), async (req: Request, res: Respons
     console.error('[API] Submit photo error:', error);
     return res.status(500).json({
       success: false,
-      error: error instanceof Error ? error.message : 'Internal server error',
+      error: 'Internal server error',
     } as ApiResponse<never>);
   }
 });
 
-/**
- * POST /api/bounty/demo/submit
- * Submit a photo for validation in demo mode (no blockchain required)
- * Uses REAL AI validation for hackathon demo
- */
-router.post('/demo/submit', upload.single('photo'), async (req: Request, res: Response) => {
-  try {
-    const { bountyId } = req.body;
+// === Demo routes: only register in development ===
+if (config.server.isDev) {
+  /**
+   * POST /api/bounty/demo/start
+   * Start a bounty in demo mode (no blockchain required)
+   */
+  router.post('/demo/start', validate(startBountyDemoSchema), async (req: Request, res: Response) => {
+    try {
+      const { tier, wallet } = req.body as { tier: Tier; wallet?: string };
+      const demoWallet = wallet || 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker';
+      const demoPda = `demo-pda-${Date.now()}`;
 
-    if (!bountyId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Bounty ID required',
+      // Create bounty without blockchain
+      const { bounty, missionDescription } = createBounty(
+        demoWallet,
+        tier,
+        demoPda,
+        undefined
+      );
+
+      console.log(`[DEMO] Bounty started: ${bounty.id} | Tier ${tier} | ${missionDescription}`);
+
+      return res.status(201).json({
+        success: true,
+        bounty: {
+          id: bounty.id,
+          tier: tier,
+          target: missionDescription.split(': ')[0] || missionDescription,
+          targetHint: missionDescription.split(': ')[1] || 'Find this object',
+          startTime: bounty.createdAt.getTime(),
+          endTime: bounty.expiresAt.getTime(),
+          status: 'hunting',
+          entryAmount: Number(ENTRY_AMOUNTS[tier] / 1_000_000_000n),
+          potentialReward: Number((ENTRY_AMOUNTS[tier] * 2n) / 1_000_000_000n),
+        },
       });
-    }
-
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        error: 'No photo uploaded',
-      });
-    }
-
-    // Validate image format
-    if (!isValidImageFormat(req.file.mimetype)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid image format. Supported: JPEG, PNG, WebP, HEIC',
-      });
-    }
-
-    // Get bounty
-    const bounty = getBounty(bountyId);
-    if (!bounty) {
-      return res.status(404).json({
-        success: false,
-        error: 'Bounty not found',
-      });
-    }
-
-    // Get mission
-    const mission = getBountyMission(bountyId);
-    if (!mission) {
+    } catch (error) {
+      console.error('[DEMO] Start bounty error:', error);
       return res.status(500).json({
         success: false,
-        error: 'Mission not found for bounty',
+        error: 'Internal server error',
+      } as ApiResponse<never>);
+    }
+  });
+
+  /**
+   * POST /api/bounty/demo/submit
+   * Submit a photo for validation in demo mode (no blockchain required)
+   */
+  router.post('/demo/submit', upload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      const { bountyId } = req.body;
+
+      if (!bountyId) {
+        return res.status(400).json({
+          success: false,
+          error: 'Bounty ID required',
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          success: false,
+          error: 'No photo uploaded',
+        });
+      }
+
+      if (!isValidImageFormat(req.file.mimetype)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid image format. Supported: JPEG, PNG, WebP, HEIC',
+        });
+      }
+
+      const bounty = getBounty(bountyId);
+      if (!bounty) {
+        return res.status(404).json({
+          success: false,
+          error: 'Bounty not found',
+        });
+      }
+
+      const mission = getBountyMission(bountyId);
+      if (!mission) {
+        return res.status(500).json({
+          success: false,
+          error: 'Mission not found for bounty',
+        });
+      }
+
+      markBountyValidating(bountyId);
+
+      console.log(`[DEMO] Validating photo for bounty: ${bountyId}`);
+      console.log(`[DEMO] Mission: ${mission.description}`);
+
+      const metadata = await extractExifMetadata(req.file.buffer);
+      console.log(`[DEMO] EXIF: ${formatMetadata(metadata)}`);
+
+      const validation = await validatePhoto(
+        req.file.buffer,
+        req.file.mimetype,
+        mission,
+        metadata,
+        bounty.tier,
+        bounty.createdAt
+      );
+
+      const success = validation.isValid;
+
+      console.log(`[DEMO] AI Result: ${success ? 'PASS' : 'FAIL'} | Confidence: ${Math.round(validation.confidence * 100)}%`);
+      console.log(`[DEMO] Reasoning: ${validation.reasoning}`);
+
+      updateBountyStatus(bountyId, success ? 'won' : 'lost');
+
+      return res.status(200).json({
+        success: true,
+        validation: {
+          isValid: validation.isValid,
+          confidence: validation.confidence,
+          reasoning: validation.reasoning,
+          timestamp: Date.now(),
+        },
+      });
+    } catch (error) {
+      console.error('[DEMO] Submit photo error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'AI validation failed',
       });
     }
-
-    // Mark as validating
-    markBountyValidating(bountyId);
-
-    console.log(`[DEMO] Validating photo for bounty: ${bountyId}`);
-    console.log(`[DEMO] Mission: ${mission.description}`);
-
-    // Extract EXIF metadata (optional for demo)
-    const metadata = await extractExifMetadata(req.file.buffer);
-    console.log(`[DEMO] EXIF: ${formatMetadata(metadata)}`);
-
-    // REAL AI VALIDATION - This is the key demo feature!
-    const validation = await validatePhoto(
-      req.file.buffer,
-      req.file.mimetype,
-      mission,
-      metadata
-    );
-
-    const success = validation.isValid;
-
-    console.log(`[DEMO] AI Result: ${success ? 'PASS' : 'FAIL'} | Confidence: ${Math.round(validation.confidence * 100)}%`);
-    console.log(`[DEMO] Reasoning: ${validation.reasoning}`);
-
-    // Update bounty status (in memory)
-    updateBountyStatus(bountyId, success ? 'won' : 'lost');
-
-    // Return result for mobile app
-    return res.status(200).json({
-      success: true,
-      validation: {
-        isValid: validation.isValid,
-        confidence: validation.confidence,
-        reasoning: validation.reasoning,
-        timestamp: Date.now(),
-      },
-    });
-  } catch (error) {
-    console.error('[DEMO] Submit photo error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'AI validation failed',
-    });
-  }
-});
+  });
+}
 
 /**
  * GET /api/bounty/:id

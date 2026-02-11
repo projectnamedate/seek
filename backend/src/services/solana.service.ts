@@ -13,6 +13,9 @@ import bs58 from 'bs58';
 // Initialize connection
 let connection: Connection;
 
+// Cache authority keypair (decode once, not on every call)
+let cachedAuthority: Keypair | null = null;
+
 /**
  * Get or create Solana connection
  */
@@ -24,11 +27,14 @@ export function getConnection(): Connection {
 }
 
 /**
- * Get authority keypair from private key
+ * Get authority keypair from private key (cached)
  */
 export function getAuthorityKeypair(): Keypair {
-  const privateKey = bs58.decode(config.solana.authorityPrivateKey);
-  return Keypair.fromSecretKey(privateKey);
+  if (!cachedAuthority) {
+    const privateKey = bs58.decode(config.solana.authorityPrivateKey);
+    cachedAuthority = Keypair.fromSecretKey(privateKey);
+  }
+  return cachedAuthority;
 }
 
 /**
@@ -99,79 +105,77 @@ export async function getCurrentSlotAndTimestamp(): Promise<{
 }
 
 /**
+ * Guard: throw in production if mocked functions are called.
+ * Prevents silent failures on mainnet.
+ */
+function assertDevMode(fnName: string): void {
+  if (config.server.isProd) {
+    throw new Error(
+      `[Solana] ${fnName}() is not implemented for production. ` +
+      `Deploy the Anchor client integration before going to mainnet.`
+    );
+  }
+}
+
+/**
  * Resolve bounty on-chain (called after AI validation)
- * This is a placeholder - actual implementation requires Anchor client
+ *
+ * TODO: Full implementation requires Anchor client:
+ *   1. reveal_mission(mission_id, salt) — reveal the committed mission
+ *   2. propose_resolution(success) — propose win/loss
+ *   3. finalize_bounty() — execute payout after challenge period
  */
 export async function resolveBountyOnChain(
   bountyPda: string,
   playerWallet: string,
   success: boolean
 ): Promise<{ signature: string; singularityWon?: boolean }> {
-  // NOTE: Full implementation requires @coral-xyz/anchor client
-  // This is a mock for development
+  assertDevMode('resolveBountyOnChain');
 
-  console.log(`[Solana] Resolving bounty on-chain:`);
-  console.log(`  Bounty PDA: ${bountyPda}`);
-  console.log(`  Player: ${playerWallet}`);
-  console.log(`  Success: ${success}`);
+  console.log(`[Solana] [MOCK] Resolving bounty: PDA=${bountyPda.slice(0, 8)}... Player=${playerWallet.slice(0, 8)}... Success=${success}`);
 
-  // In production, this would:
-  // 1. Build resolve_bounty instruction
-  // 2. Sign with authority keypair
-  // 3. Send transaction
-  // 4. Return signature
-
-  // Mock response for development
   const mockSignature = `mock_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-  // Simulate 1/500 singularity win on success
   const singularityWon = success && Math.random() < 0.002;
 
-  return {
-    signature: mockSignature,
-    singularityWon,
-  };
+  return { signature: mockSignature, singularityWon };
 }
 
 /**
  * Check if player has sufficient SKR balance for entry
+ *
+ * TODO: Query actual SPL token account balance
  */
 export async function checkPlayerBalance(
   playerWallet: string,
   tier: Tier
 ): Promise<{ sufficient: boolean; balance: bigint; required: bigint }> {
-  // NOTE: Full implementation requires SPL token balance check
-  // This is a placeholder
+  assertDevMode('checkPlayerBalance');
 
   const required = ENTRY_AMOUNTS[tier];
-
-  // Mock: assume sufficient for development
   return {
     sufficient: true,
-    balance: required * 10n, // Mock 10x the required amount
+    balance: required * 10n,
     required,
   };
 }
 
 /**
  * Get house vault balance
+ *
+ * TODO: Query actual SPL token account
  */
 export async function getHouseVaultBalance(): Promise<bigint> {
-  // NOTE: Full implementation requires SPL token account read
-  // This is a placeholder
-
-  // Mock: return 1M SKR
+  assertDevMode('getHouseVaultBalance');
   return 1_000_000_000_000_000n;
 }
 
 /**
  * Get singularity vault balance (jackpot pool)
+ *
+ * TODO: Query actual SPL token account
  */
 export async function getSingularityVaultBalance(): Promise<bigint> {
-  // NOTE: Full implementation requires SPL token account read
-  // This is a placeholder
-
-  // Mock: return 50K SKR
+  assertDevMode('getSingularityVaultBalance');
   return 50_000_000_000_000n;
 }
 

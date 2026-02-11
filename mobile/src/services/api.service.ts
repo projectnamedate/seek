@@ -1,5 +1,10 @@
 import axios from 'axios';
+import * as FileSystem from 'expo-file-system';
 import { Bounty, TierNumber, ValidationResult } from '../types';
+
+// Dev-only logging - stripped from production builds
+const log = (...args: any[]) => __DEV__ && console.log(...args);
+const logError = (...args: any[]) => __DEV__ && console.error(...args);
 
 // API configuration
 // For demo, use your local network IP or ngrok tunnel
@@ -9,6 +14,9 @@ const API_BASE_URL = __DEV__
 
 // Demo mode - uses simplified endpoints without blockchain
 const DEMO_MODE = true;
+
+// Max photo upload size (10MB) - matches backend multer limit
+const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -46,7 +54,7 @@ export async function startBounty(
       error: response.data.error || 'Failed to start bounty',
     };
   } catch (error: any) {
-    console.error('[API] Start bounty error:', error);
+    logError('[API] Start bounty error:', error);
     return {
       success: false,
       error: error.response?.data?.error || 'Failed to start bounty',
@@ -65,6 +73,18 @@ export async function submitPhoto(
   try {
     const endpoint = DEMO_MODE ? '/bounty/demo/submit' : '/bounty/submit';
 
+    // Validate file size before uploading (backend enforces 10MB limit via multer)
+    const fileInfo = await FileSystem.getInfoAsync(photoUri, { size: true });
+    if (!fileInfo.exists) {
+      return { success: false, error: 'Photo file not found' };
+    }
+    if (fileInfo.size && fileInfo.size > MAX_PHOTO_SIZE_BYTES) {
+      return {
+        success: false,
+        error: `Photo too large (${(fileInfo.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 10MB.`,
+      };
+    }
+
     // Create form data with photo
     const formData = new FormData();
     formData.append('bountyId', bountyId);
@@ -74,7 +94,7 @@ export async function submitPhoto(
       name: 'capture.jpg',
     } as any);
 
-    console.log(`[API] Submitting photo for bounty: ${bountyId}`);
+    log(`[API] Submitting photo for bounty: ${bountyId}`);
 
     const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
       headers: {
@@ -83,7 +103,7 @@ export async function submitPhoto(
       timeout: 60000, // AI validation can take time
     });
 
-    console.log('[API] Validation response:', response.data);
+    log('[API] Validation response:', response.data);
 
     if (response.data.success && response.data.validation) {
       return {
@@ -97,7 +117,7 @@ export async function submitPhoto(
       error: response.data.error || 'Validation failed',
     };
   } catch (error: any) {
-    console.error('[API] Submit photo error:', error);
+    logError('[API] Submit photo error:', error);
     return {
       success: false,
       error: error.response?.data?.error || 'Failed to validate photo',
@@ -118,7 +138,7 @@ export async function getBountyStatus(
       bounty: response.data.data,
     };
   } catch (error: any) {
-    console.error('[API] Get bounty error:', error);
+    logError('[API] Get bounty error:', error);
     return {
       success: false,
       error: error.response?.data?.error || 'Failed to get bounty',
@@ -146,7 +166,7 @@ export async function getPlayerBounty(
         bounty: null,
       };
     }
-    console.error('[API] Get player bounty error:', error);
+    logError('[API] Get player bounty error:', error);
     return {
       success: false,
       error: error.response?.data?.error || 'Failed to get player bounty',
@@ -187,7 +207,7 @@ export async function resolveSkrName(
       error: response.data.error || 'Failed to resolve .skr name',
     };
   } catch (error: any) {
-    console.error('[API] Resolve .skr error:', error);
+    logError('[API] Resolve .skr error:', error);
     return {
       success: false,
       error: error.response?.data?.error || 'Failed to resolve .skr name',

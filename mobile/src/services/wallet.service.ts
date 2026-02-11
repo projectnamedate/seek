@@ -1,6 +1,10 @@
 import { WalletState } from '../types';
 import apiService from './api.service';
 
+// Dev-only logging - stripped from production builds
+const log = (...args: any[]) => __DEV__ && console.log(...args);
+const logError = (...args: any[]) => __DEV__ && console.error(...args);
+
 // Demo wallet configuration
 const DEMO_WALLET = {
   address: 'Demo7...seeker',
@@ -52,10 +56,10 @@ export async function connectWallet(): Promise<WalletState> {
     const result = await apiService.resolveSkrName(DEMO_WALLET.fullAddress);
     if (result.success && result.skrName) {
       skrName = result.skrName;
-      console.log('[Wallet] Resolved .skr name:', skrName);
+      log('[Wallet] Resolved .skr name:', skrName);
     }
   } catch (error) {
-    console.log('[Wallet] Could not resolve .skr name:', error);
+    log('[Wallet] Could not resolve .skr name:', error);
   }
 
   walletState = {
@@ -67,7 +71,7 @@ export async function connectWallet(): Promise<WalletState> {
   };
 
   notifyListeners();
-  console.log('[Wallet] Demo wallet connected:', walletState.address, skrName ? `(${skrName})` : '');
+  log('[Wallet] Demo wallet connected:', walletState.address, skrName ? `(${skrName})` : '');
   return walletState;
 }
 
@@ -84,7 +88,7 @@ export async function disconnectWallet(): Promise<void> {
   };
 
   notifyListeners();
-  console.log('[Wallet] Wallet disconnected');
+  log('[Wallet] Wallet disconnected');
 }
 
 /**
@@ -106,12 +110,12 @@ export function getFullAddress(): string | null {
  */
 export async function deductEntry(amount: number): Promise<boolean> {
   if (!walletState.connected) {
-    console.error('[Wallet] Cannot deduct: wallet not connected');
+    logError('[Wallet] Cannot deduct: wallet not connected');
     return false;
   }
 
   if (walletState.balance < amount) {
-    console.error('[Wallet] Insufficient balance');
+    logError('[Wallet] Insufficient balance');
     return false;
   }
 
@@ -124,7 +128,7 @@ export async function deductEntry(amount: number): Promise<boolean> {
   };
 
   notifyListeners();
-  console.log(`[Wallet] Deducted ${amount} SKR. New balance: ${walletState.balance}`);
+  log(`[Wallet] Deducted ${amount} SKR. New balance: ${walletState.balance}`);
   return true;
 }
 
@@ -133,7 +137,7 @@ export async function deductEntry(amount: number): Promise<boolean> {
  */
 export async function addWinnings(amount: number): Promise<void> {
   if (!walletState.connected) {
-    console.error('[Wallet] Cannot add: wallet not connected');
+    logError('[Wallet] Cannot add: wallet not connected');
     return;
   }
 
@@ -146,7 +150,7 @@ export async function addWinnings(amount: number): Promise<void> {
   };
 
   notifyListeners();
-  console.log(`[Wallet] Added ${amount} SKR. New balance: ${walletState.balance}`);
+  log(`[Wallet] Added ${amount} SKR. New balance: ${walletState.balance}`);
 }
 
 /**

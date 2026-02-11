@@ -86,9 +86,16 @@ router.get('/lookup/:input', async (req: Request, res: Response) => {
       });
     }
 
-    // Detect if input is a .skr domain or an address
-    const isSkrDomain = input.toLowerCase().endsWith('.skr') ||
-                        (!input.match(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/));
+    // Validate input format
+    const isValidAddress = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(input);
+    const isSkrDomain = /^[a-z0-9_-]+\.skr$/i.test(input);
+
+    if (!isValidAddress && !isSkrDomain) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid input: must be a Solana address or .skr domain',
+      });
+    }
 
     if (isSkrDomain) {
       const address = await skrService.resolveSkrToAddress(input);
