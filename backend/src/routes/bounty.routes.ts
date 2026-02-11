@@ -17,10 +17,12 @@ import {
   isBountyExpired,
   getBountyMission,
   markBountyValidating,
+  storeMissionSecrets,
+  getMissionSecrets,
 } from '../services/bounty.service';
 import { extractExifMetadata, formatMetadata } from '../services/exif.service';
 import { validatePhoto, isValidImageFormat, checkImageSize } from '../services/ai.service';
-import { resolveBountyOnChain, formatSkr } from '../services/solana.service';
+import { resolveBountyOnChain, generateMissionCommitment, formatSkr } from '../services/solana.service';
 import { requireWalletAuth } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
@@ -82,6 +84,10 @@ router.post('/start', requireWalletAuth, bountyStartLimiter, validate(startBount
       bountyPda,
       transactionSignature
     );
+
+    // Generate and store mission commitment for commit-reveal
+    const { missionIdBytes, salt } = generateMissionCommitment(bounty.missionId);
+    storeMissionSecrets(bounty.id, missionIdBytes, salt);
 
     // Return response
     const response: StartBountyResponse = {
@@ -210,10 +216,13 @@ router.post('/submit', requireWalletAuth, bountySubmitLimiter, upload.single('ph
 
     // Resolve on-chain
     const success = validation.isValid;
+    const secrets = getMissionSecrets(bountyId);
     const { signature, singularityWon } = await resolveBountyOnChain(
       bounty.bountyPda,
       bounty.playerWallet,
-      success
+      success,
+      secrets?.missionIdBytes,
+      secrets?.salt
     );
 
     // Update bounty status

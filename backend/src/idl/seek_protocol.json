@@ -1,0 +1,1928 @@
+{
+  "address": "DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v",
+  "metadata": {
+    "name": "seek_protocol",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "Seek Protocol - Pokemon GO for crypto scavenger hunts on Solana",
+    "repository": "https://github.com/seek-protocol/seek"
+  },
+  "instructions": [
+    {
+      "name": "accept_bounty",
+      "docs": [
+        "Accept a bounty - player submits their entry and starts the hunt",
+        "entry_amount must be exactly 1000, 2000, or 3000 SKR (with 9 decimals)",
+        "mission_commitment is hash(mission_id || salt) for commit-reveal",
+        "timestamp must be within 60 seconds of current time (for PDA derivation)"
+      ],
+      "discriminator": [
+        165,
+        37,
+        99,
+        130,
+        123,
+        244,
+        67,
+        35
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "docs": [
+            "Player accepting the bounty"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "Bounty PDA - unique per player + timestamp"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              },
+              {
+                "kind": "arg",
+                "path": "timestamp"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player_token_account",
+          "docs": [
+            "Player's SKR token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault to receive entry"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "skr_mint",
+          "docs": [
+            "The SKR token mint"
+          ],
+          "address": "u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF"
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System program"
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "entry_amount",
+          "type": "u64"
+        },
+        {
+          "name": "timestamp",
+          "type": "i64"
+        },
+        {
+          "name": "mission_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "dispute_bounty",
+      "docs": [
+        "Dispute a bounty result - player stakes additional SKR to challenge",
+        "Can only dispute LOSS results during challenge period"
+      ],
+      "discriminator": [
+        240,
+        83,
+        213,
+        95,
+        60,
+        48,
+        48,
+        29
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "docs": [
+            "Player disputing the bounty"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "The bounty being disputed"
+          ],
+          "writable": true
+        },
+        {
+          "name": "player_token_account",
+          "docs": [
+            "Player's token account for stake"
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault to receive stake"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "finalize_bounty",
+      "docs": [
+        "Finalize bounty - called after challenge period ends (if no dispute)",
+        "Actually executes the payout or distribution"
+      ],
+      "discriminator": [
+        167,
+        144,
+        19,
+        208,
+        254,
+        194,
+        243,
+        184
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone can finalize after challenge period (permissionless)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "The bounty being finalized"
+          ],
+          "writable": true
+        },
+        {
+          "name": "player_token_account",
+          "docs": [
+            "Player's token account for payout (on win)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "singularity_vault",
+          "docs": [
+            "Singularity vault for jackpot"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  105,
+                  110,
+                  103,
+                  117,
+                  108,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_treasury",
+          "docs": [
+            "Protocol treasury for fees"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "fund_house",
+      "docs": [
+        "Fund the house vault - authority deposits SKR for player payouts"
+      ],
+      "discriminator": [
+        175,
+        231,
+        49,
+        44,
+        144,
+        102,
+        41,
+        69
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority funding the house"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_token_account",
+          "docs": [
+            "Authority's SKR token account"
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault to receive funds"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "initialize",
+      "docs": [
+        "Initialize the Seek protocol - Step 1: Create global state",
+        "Call initialize_vaults after this to set up token vaults"
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority who will manage the protocol"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System program for account creation"
+          ],
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_house_vault",
+      "docs": [
+        "Initialize the Seek protocol - Step 2: Create house vault",
+        "Must be called after initialize()"
+      ],
+      "discriminator": [
+        50,
+        40,
+        138,
+        92,
+        74,
+        81,
+        238,
+        139
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "house_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "skr_mint",
+          "address": "u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize_singularity_vault",
+      "docs": [
+        "Initialize the Seek protocol - Step 3: Create singularity vault + set treasury",
+        "Must be called after initialize_house_vault()"
+      ],
+      "discriminator": [
+        30,
+        183,
+        202,
+        20,
+        212,
+        174,
+        93,
+        119
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "singularity_vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  105,
+                  110,
+                  103,
+                  117,
+                  108,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_treasury",
+          "docs": [
+            "Protocol treasury - existing token account for protocol fees"
+          ]
+        },
+        {
+          "name": "skr_mint",
+          "address": "u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "propose_resolution",
+      "docs": [
+        "Propose bounty resolution (OPTIMISTIC) - starts challenge period",
+        "Result is NOT final until challenge period ends",
+        "success = true: proposes win",
+        "success = false: proposes loss"
+      ],
+      "discriminator": [
+        19,
+        68,
+        181,
+        23,
+        194,
+        146,
+        152,
+        252
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority proposing the resolution"
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "The bounty being resolved"
+          ],
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "success",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "resolve_dispute",
+      "docs": [
+        "Resolve a dispute - authority reviews and decides",
+        "player_wins = true: player gets original entry back + dispute stake",
+        "player_wins = false: dispute stake forfeited, loss stands"
+      ],
+      "discriminator": [
+        231,
+        6,
+        202,
+        6,
+        96,
+        103,
+        12,
+        230
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority resolving the dispute"
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "The disputed bounty"
+          ],
+          "writable": true
+        },
+        {
+          "name": "player_token_account",
+          "docs": [
+            "Player's token account for refund (if player wins)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "player_wins",
+          "type": "bool"
+        }
+      ]
+    },
+    {
+      "name": "reveal_mission",
+      "docs": [
+        "Reveal the mission - backend reveals mission_id and salt after player submits photo",
+        "Verifies hash(mission_id || salt) matches the original commitment"
+      ],
+      "discriminator": [
+        175,
+        7,
+        199,
+        57,
+        166,
+        15,
+        38,
+        60
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority revealing the mission"
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "The bounty to reveal mission for"
+          ],
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "mission_id",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        },
+        {
+          "name": "salt",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "withdraw_treasury",
+      "docs": [
+        "Withdraw from protocol treasury - authority only",
+        "Used to pay for operational costs (API, infra, team)"
+      ],
+      "discriminator": [
+        40,
+        63,
+        122,
+        158,
+        144,
+        216,
+        83,
+        96
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Authority withdrawing funds"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_treasury",
+          "docs": [
+            "Protocol treasury (source)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "authority_token_account",
+          "docs": [
+            "Authority's token account (destination)"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Bounty",
+      "discriminator": [
+        237,
+        16,
+        105,
+        198,
+        19,
+        69,
+        242,
+        234
+      ]
+    },
+    {
+      "name": "GlobalState",
+      "discriminator": [
+        163,
+        46,
+        74,
+        168,
+        216,
+        123,
+        133,
+        98
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "BountyAccepted",
+      "discriminator": [
+        11,
+        210,
+        69,
+        90,
+        108,
+        109,
+        162,
+        234
+      ]
+    },
+    {
+      "name": "BountyDisputed",
+      "discriminator": [
+        115,
+        59,
+        192,
+        219,
+        252,
+        20,
+        243,
+        60
+      ]
+    },
+    {
+      "name": "BountyFinalized",
+      "discriminator": [
+        205,
+        108,
+        172,
+        126,
+        130,
+        11,
+        235,
+        37
+      ]
+    },
+    {
+      "name": "BountyLost",
+      "discriminator": [
+        218,
+        24,
+        246,
+        117,
+        204,
+        80,
+        139,
+        89
+      ]
+    },
+    {
+      "name": "BountyResolutionProposed",
+      "discriminator": [
+        156,
+        175,
+        86,
+        255,
+        118,
+        21,
+        64,
+        52
+      ]
+    },
+    {
+      "name": "BountyWon",
+      "discriminator": [
+        104,
+        181,
+        183,
+        33,
+        196,
+        249,
+        15,
+        165
+      ]
+    },
+    {
+      "name": "DisputeResolved",
+      "discriminator": [
+        121,
+        64,
+        249,
+        153,
+        139,
+        128,
+        236,
+        187
+      ]
+    },
+    {
+      "name": "HouseFunded",
+      "discriminator": [
+        153,
+        127,
+        126,
+        162,
+        239,
+        83,
+        35,
+        120
+      ]
+    },
+    {
+      "name": "MissionRevealed",
+      "discriminator": [
+        229,
+        63,
+        153,
+        65,
+        85,
+        106,
+        191,
+        22
+      ]
+    },
+    {
+      "name": "TreasuryWithdrawn",
+      "discriminator": [
+        143,
+        181,
+        157,
+        169,
+        87,
+        155,
+        170,
+        46
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidEntryAmount",
+      "msg": "Invalid entry amount. Must be 1000, 2000, or 3000 SKR"
+    },
+    {
+      "code": 6001,
+      "name": "BountyNotPending",
+      "msg": "Bounty is not in pending state"
+    },
+    {
+      "code": 6002,
+      "name": "BountyAlreadyResolved",
+      "msg": "Bounty has already been resolved"
+    },
+    {
+      "code": 6003,
+      "name": "BountyExpired",
+      "msg": "Bounty timer has expired"
+    },
+    {
+      "code": 6004,
+      "name": "BountyNotExpired",
+      "msg": "Bounty timer has not expired yet"
+    },
+    {
+      "code": 6005,
+      "name": "InsufficientHouseFunds",
+      "msg": "Insufficient funds in house vault"
+    },
+    {
+      "code": 6006,
+      "name": "MathOverflow",
+      "msg": "Arithmetic overflow occurred"
+    },
+    {
+      "code": 6007,
+      "name": "InvalidMint",
+      "msg": "Invalid token mint. Must be SKR"
+    },
+    {
+      "code": 6008,
+      "name": "Unauthorized",
+      "msg": "Unauthorized access"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidMissionHash",
+      "msg": "Invalid mission commitment hash"
+    },
+    {
+      "code": 6010,
+      "name": "MissionAlreadyRevealed",
+      "msg": "Mission already revealed"
+    },
+    {
+      "code": 6011,
+      "name": "MissionNotRevealed",
+      "msg": "Mission not yet revealed"
+    },
+    {
+      "code": 6012,
+      "name": "ChallengePeriodActive",
+      "msg": "Challenge period has not ended"
+    },
+    {
+      "code": 6013,
+      "name": "ChallengePeriodEnded",
+      "msg": "Challenge period has ended"
+    },
+    {
+      "code": 6014,
+      "name": "DisputeWindowExpired",
+      "msg": "Dispute window has expired"
+    },
+    {
+      "code": 6015,
+      "name": "AlreadyDisputed",
+      "msg": "Bounty already disputed"
+    },
+    {
+      "code": 6016,
+      "name": "InvalidDisputeStake",
+      "msg": "Invalid dispute stake amount"
+    },
+    {
+      "code": 6017,
+      "name": "NotDisputed",
+      "msg": "Bounty not in disputed state"
+    },
+    {
+      "code": 6018,
+      "name": "StillInChallengePeriod",
+      "msg": "Bounty is still in challenge period"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidTimestamp",
+      "msg": "Timestamp is too far from current time"
+    }
+  ],
+  "types": [
+    {
+      "name": "Bounty",
+      "docs": [
+        "Individual bounty PDA - created when player accepts a hunt"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "docs": [
+              "Player who accepted this bounty"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "global_state",
+            "docs": [
+              "Global state this bounty belongs to"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "entry_amount",
+            "docs": [
+              "Entry amount in SKR lamports (1000B, 2000B, or 3000B)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "payout_amount",
+            "docs": [
+              "Potential reward (2x entry)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "created_at",
+            "docs": [
+              "Unix timestamp when bounty was accepted"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "expires_at",
+            "docs": [
+              "Unix timestamp when bounty expires (hunt timer)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current status of the bounty"
+            ],
+            "type": {
+              "defined": {
+                "name": "BountyStatus"
+              }
+            }
+          },
+          {
+            "name": "tier",
+            "docs": [
+              "Bounty tier (1, 2, or 3)"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "singularity_won",
+            "docs": [
+              "Whether this bounty won the singularity jackpot"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation"
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "mission_commitment",
+            "docs": [
+              "Hash of (mission_id || salt) - committed at bounty creation"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mission_id",
+            "docs": [
+              "Revealed mission ID (set when backend reveals)"
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "mission_revealed",
+            "docs": [
+              "Whether mission has been revealed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "resolved_at",
+            "docs": [
+              "Timestamp when resolution was submitted (challenge period starts)"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "challenge_ends_at",
+            "docs": [
+              "Timestamp when challenge period ends"
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "proposed_win",
+            "docs": [
+              "Whether the proposed result was a win"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "is_disputed",
+            "docs": [
+              "Whether this bounty has been disputed"
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "dispute_stake",
+            "docs": [
+              "Dispute stake amount (if disputed)"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "disputed_at",
+            "docs": [
+              "Timestamp when dispute was filed"
+            ],
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyAccepted",
+      "docs": [
+        "Emitted when a player accepts a bounty"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry_amount",
+            "type": "u64"
+          },
+          {
+            "name": "tier",
+            "type": "u8"
+          },
+          {
+            "name": "expires_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyDisputed",
+      "docs": [
+        "Emitted when a bounty is disputed"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "dispute_stake",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyFinalized",
+      "docs": [
+        "Emitted when bounty is finalized after challenge period"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "final_status",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyLost",
+      "docs": [
+        "Emitted when a bounty is lost"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "entry_amount",
+            "type": "u64"
+          },
+          {
+            "name": "house_share",
+            "type": "u64"
+          },
+          {
+            "name": "singularity_share",
+            "type": "u64"
+          },
+          {
+            "name": "protocol_share",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyResolutionProposed",
+      "docs": [
+        "Emitted when bounty enters challenge period (optimistic resolution)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "proposed_win",
+            "type": "bool"
+          },
+          {
+            "name": "challenge_ends_at",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyStatus",
+      "docs": [
+        "Bounty status enum"
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Submitted"
+          },
+          {
+            "name": "ChallengeWon"
+          },
+          {
+            "name": "ChallengeLost"
+          },
+          {
+            "name": "Disputed"
+          },
+          {
+            "name": "Won"
+          },
+          {
+            "name": "Lost"
+          },
+          {
+            "name": "Cancelled"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyWon",
+      "docs": [
+        "Emitted when a bounty is won"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "payout",
+            "type": "u64"
+          },
+          {
+            "name": "singularity_won",
+            "type": "bool"
+          },
+          {
+            "name": "singularity_amount",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "DisputeResolved",
+      "docs": [
+        "Emitted when a dispute is resolved"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "player_won_dispute",
+            "type": "bool"
+          },
+          {
+            "name": "stake_returned",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "GlobalState",
+      "docs": [
+        "Global protocol state - tracks all protocol-wide metrics"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "Authority who can manage the protocol"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "house_vault",
+            "docs": [
+              "House vault token account (PDA-owned)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "singularity_vault",
+            "docs": [
+              "Singularity (jackpot) vault token account (PDA-owned)"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "protocol_treasury",
+            "docs": [
+              "Protocol treasury token account"
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "house_fund_balance",
+            "docs": [
+              "Total SKR currently in house vault"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "singularity_balance",
+            "docs": [
+              "Total SKR in singularity jackpot pool"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_burned",
+            "docs": [
+              "Total SKR burned forever"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_bounties_created",
+            "docs": [
+              "Total bounties created"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_bounties_won",
+            "docs": [
+              "Total bounties won by players"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_bounties_lost",
+            "docs": [
+              "Total bounties lost by players"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_singularity_wins",
+            "docs": [
+              "Total singularity jackpots won"
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Bump seed for PDA derivation"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "HouseFunded",
+      "docs": [
+        "Emitted when house is funded"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "new_balance",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MissionRevealed",
+      "docs": [
+        "Emitted when mission is revealed (commit-reveal)"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "mission_id",
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "commitment_verified",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "TreasuryWithdrawn",
+      "docs": [
+        "Emitted when authority withdraws from treasury"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "destination",
+            "type": "pubkey"
+          }
+        ]
+      }
+    }
+  ]
+}

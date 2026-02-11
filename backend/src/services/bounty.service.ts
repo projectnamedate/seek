@@ -8,6 +8,10 @@ const activeBounties = new Map<string, ActiveBounty>();
 // Index by player wallet for quick lookup
 const bountyByPlayer = new Map<string, string>();
 
+// Store mission commitment secrets for commit-reveal
+// Keyed by bountyId → { missionIdBytes, salt }
+const missionSecrets = new Map<string, { missionIdBytes: Buffer; salt: Buffer }>();
+
 // Logging helper
 function log(message: string, data?: any) {
   const timestamp = new Date().toISOString();
@@ -121,6 +125,26 @@ export function getBountyMission(bountyId: string) {
 }
 
 /**
+ * Store mission commitment secrets for commit-reveal
+ */
+export function storeMissionSecrets(
+  bountyId: string,
+  missionIdBytes: Buffer,
+  salt: Buffer
+): void {
+  missionSecrets.set(bountyId, { missionIdBytes, salt });
+}
+
+/**
+ * Get mission commitment secrets for commit-reveal
+ */
+export function getMissionSecrets(
+  bountyId: string
+): { missionIdBytes: Buffer; salt: Buffer } | undefined {
+  return missionSecrets.get(bountyId);
+}
+
+/**
  * Mark bounty as validating (photo submitted)
  */
 export function markBountyValidating(bountyId: string): boolean {
@@ -193,6 +217,7 @@ export function cleanupOldBounties(maxAgeHours: number = 24): number {
     if (bounty.status !== 'pending' && bounty.status !== 'validating' && bounty.createdAt < cutoff) {
       activeBounties.delete(id);
       bountyByPlayer.delete(bounty.playerWallet);
+      missionSecrets.delete(id);
       removedCount++;
     }
   }

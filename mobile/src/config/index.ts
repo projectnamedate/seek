@@ -49,12 +49,13 @@ export const TIERS = {
 export const TOKEN = {
   NAME: 'Seek',
   SYMBOL: 'SKR',
-  MINT: 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3',
+  // Devnet test token (mainnet: SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3)
+  MINT: 'u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF',
   DECIMALS: 9,
 };
 
 // Program ID
-export const PROGRAM_ID = 'Seek111111111111111111111111111111111111111';
+export const PROGRAM_ID = 'DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v';
 
 // Links
 export const LINKS = {

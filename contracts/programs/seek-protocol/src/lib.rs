@@ -1,10 +1,12 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
-declare_id!("Seek111111111111111111111111111111111111111");
+declare_id!("DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v");
 
 /// The $SKR token mint address
-pub const SKR_MINT: Pubkey = pubkey!("SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3");
+/// Mainnet: SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
+/// Devnet test token (swap back for mainnet deploy):
+pub const SKR_MINT: Pubkey = pubkey!("u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF");
 
 /// Entry amounts in lamports (with 9 decimals)
 /// Tier 1: 1000 $SKR = 1_000_000_000_000
@@ -351,16 +353,13 @@ pub struct TreasuryWithdrawn {
 pub mod seek_protocol {
     use super::*;
 
-    /// Initialize the Seek protocol
-    /// Creates global state and vault accounts
+    /// Initialize the Seek protocol - Step 1: Create global state
+    /// Call initialize_vaults after this to set up token vaults
     pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         let global_state = &mut ctx.accounts.global_state;
 
-        // Set authority and vault addresses
+        // Set authority (vault addresses set in initialize_vaults)
         global_state.authority = ctx.accounts.authority.key();
-        global_state.house_vault = ctx.accounts.house_vault.key();
-        global_state.singularity_vault = ctx.accounts.singularity_vault.key();
-        global_state.protocol_treasury = ctx.accounts.protocol_treasury.key();
 
         // Initialize counters to zero
         global_state.house_fund_balance = 0;
@@ -374,10 +373,31 @@ pub mod seek_protocol {
         // Store bump for future PDA derivations
         global_state.bump = ctx.bumps.global_state;
 
-        msg!("Seek Protocol initialized!");
+        msg!("Seek Protocol global state initialized!");
         msg!("Authority: {}", global_state.authority);
-        msg!("House Vault: {}", global_state.house_vault);
 
+        Ok(())
+    }
+
+    /// Initialize the Seek protocol - Step 2: Create house vault
+    /// Must be called after initialize()
+    pub fn initialize_house_vault(ctx: Context<InitializeHouseVault>) -> Result<()> {
+        let global_state = &mut ctx.accounts.global_state;
+        global_state.house_vault = ctx.accounts.house_vault.key();
+
+        msg!("House vault initialized: {}", global_state.house_vault);
+        Ok(())
+    }
+
+    /// Initialize the Seek protocol - Step 3: Create singularity vault + set treasury
+    /// Must be called after initialize_house_vault()
+    pub fn initialize_singularity_vault(ctx: Context<InitializeSingularityVault>) -> Result<()> {
+        let global_state = &mut ctx.accounts.global_state;
+        global_state.singularity_vault = ctx.accounts.singularity_vault.key();
+        global_state.protocol_treasury = ctx.accounts.protocol_treasury.key();
+
+        msg!("Singularity vault initialized: {}", global_state.singularity_vault);
+        msg!("Protocol treasury set: {}", global_state.protocol_treasury);
         Ok(())
     }
 
@@ -990,6 +1010,7 @@ pub mod seek_protocol {
     }
 }
 
+/// Step 1: Initialize global state only (small stack footprint)
 #[derive(Accounts)]
 pub struct Initialize<'info> {
     /// Authority who will manage the protocol
@@ -1004,9 +1025,26 @@ pub struct Initialize<'info> {
         seeds = [b"global_state"],
         bump
     )]
-    pub global_state: Account<'info, GlobalState>,
+    pub global_state: Box<Account<'info, GlobalState>>,
 
-    /// House vault - holds funds for payouts
+    /// System program for account creation
+    pub system_program: Program<'info, System>,
+}
+
+/// Step 2: Initialize house vault
+#[derive(Accounts)]
+pub struct InitializeHouseVault<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump,
+        constraint = global_state.authority == authority.key() @ SeekError::Unauthorized
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+
     #[account(
         init,
         payer = authority,
@@ -1015,9 +1053,29 @@ pub struct Initialize<'info> {
         seeds = [b"house_vault"],
         bump
     )]
-    pub house_vault: Account<'info, TokenAccount>,
+    pub house_vault: Box<Account<'info, TokenAccount>>,
 
-    /// Singularity vault - accumulates jackpot funds
+    #[account(address = SKR_MINT @ SeekError::InvalidMint)]
+    pub skr_mint: Box<Account<'info, Mint>>,
+
+    pub system_program: Program<'info, System>,
+    pub token_program: Program<'info, Token>,
+}
+
+/// Step 3: Initialize singularity vault + set treasury
+#[derive(Accounts)]
+pub struct InitializeSingularityVault<'info> {
+    #[account(mut)]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump,
+        constraint = global_state.authority == authority.key() @ SeekError::Unauthorized
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+
     #[account(
         init,
         payer = authority,
@@ -1026,28 +1084,19 @@ pub struct Initialize<'info> {
         seeds = [b"singularity_vault"],
         bump
     )]
-    pub singularity_vault: Account<'info, TokenAccount>,
+    pub singularity_vault: Box<Account<'info, TokenAccount>>,
 
-    /// Protocol treasury - receives protocol fees
+    /// Protocol treasury - existing token account for protocol fees
     #[account(
         token::mint = skr_mint,
     )]
-    pub protocol_treasury: Account<'info, TokenAccount>,
+    pub protocol_treasury: Box<Account<'info, TokenAccount>>,
 
-    /// The SKR token mint
-    #[account(
-        address = SKR_MINT @ SeekError::InvalidMint
-    )]
-    pub skr_mint: Account<'info, Mint>,
+    #[account(address = SKR_MINT @ SeekError::InvalidMint)]
+    pub skr_mint: Box<Account<'info, Mint>>,
 
-    /// System program for account creation
     pub system_program: Program<'info, System>,
-
-    /// Token program for SPL operations
     pub token_program: Program<'info, Token>,
-
-    /// Rent sysvar
-    pub rent: Sysvar<'info, Rent>,
 }
 
 #[derive(Accounts)]
@@ -1063,7 +1112,7 @@ pub struct AcceptBounty<'info> {
         seeds = [b"global_state"],
         bump = global_state.bump
     )]
-    pub global_state: Account<'info, GlobalState>,
+    pub global_state: Box<Account<'info, GlobalState>>,
 
     /// Bounty PDA - unique per player + timestamp
     #[account(
@@ -1073,7 +1122,7 @@ pub struct AcceptBounty<'info> {
         seeds = [b"bounty", player.key().as_ref(), &timestamp.to_le_bytes()],
         bump
     )]
-    pub bounty: Account<'info, Bounty>,
+    pub bounty: Box<Account<'info, Bounty>>,
 
     /// Player's SKR token account
     #[account(
@@ -1081,7 +1130,7 @@ pub struct AcceptBounty<'info> {
         constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
         constraint = player_token_account.owner == player.key() @ SeekError::Unauthorized
     )]
-    pub player_token_account: Account<'info, TokenAccount>,
+    pub player_token_account: Box<Account<'info, TokenAccount>>,
 
     /// House vault to receive entry
     #[account(
@@ -1090,13 +1139,13 @@ pub struct AcceptBounty<'info> {
         bump,
         constraint = house_vault.key() == global_state.house_vault
     )]
-    pub house_vault: Account<'info, TokenAccount>,
+    pub house_vault: Box<Account<'info, TokenAccount>>,
 
     /// The SKR token mint
     #[account(
         address = SKR_MINT @ SeekError::InvalidMint
     )]
-    pub skr_mint: Account<'info, Mint>,
+    pub skr_mint: Box<Account<'info, Mint>>,
 
     /// System program
     pub system_program: Program<'info, System>,
@@ -1164,14 +1213,14 @@ pub struct FinalizeBounty<'info> {
         seeds = [b"global_state"],
         bump = global_state.bump
     )]
-    pub global_state: Account<'info, GlobalState>,
+    pub global_state: Box<Account<'info, GlobalState>>,
 
     /// The bounty being finalized
     #[account(
         mut,
         constraint = bounty.global_state == global_state.key()
     )]
-    pub bounty: Account<'info, Bounty>,
+    pub bounty: Box<Account<'info, Bounty>>,
 
     /// Player's token account for payout (on win)
     #[account(
@@ -1179,7 +1228,7 @@ pub struct FinalizeBounty<'info> {
         constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
         constraint = player_token_account.owner == bounty.player @ SeekError::Unauthorized
     )]
-    pub player_token_account: Account<'info, TokenAccount>,
+    pub player_token_account: Box<Account<'info, TokenAccount>>,
 
     /// House vault
     #[account(
@@ -1188,7 +1237,7 @@ pub struct FinalizeBounty<'info> {
         bump,
         constraint = house_vault.key() == global_state.house_vault
     )]
-    pub house_vault: Account<'info, TokenAccount>,
+    pub house_vault: Box<Account<'info, TokenAccount>>,
 
     /// Singularity vault for jackpot
     #[account(
@@ -1197,14 +1246,14 @@ pub struct FinalizeBounty<'info> {
         bump,
         constraint = singularity_vault.key() == global_state.singularity_vault
     )]
-    pub singularity_vault: Account<'info, TokenAccount>,
+    pub singularity_vault: Box<Account<'info, TokenAccount>>,
 
     /// Protocol treasury for fees
     #[account(
         mut,
         constraint = protocol_treasury.key() == global_state.protocol_treasury
     )]
-    pub protocol_treasury: Account<'info, TokenAccount>,
+    pub protocol_treasury: Box<Account<'info, TokenAccount>>,
 
     /// Token program
     pub token_program: Program<'info, Token>,
@@ -1297,14 +1346,14 @@ pub struct DisputeBounty<'info> {
         seeds = [b"global_state"],
         bump = global_state.bump
     )]
-    pub global_state: Account<'info, GlobalState>,
+    pub global_state: Box<Account<'info, GlobalState>>,
 
     /// The bounty being disputed
     #[account(
         mut,
         constraint = bounty.global_state == global_state.key()
     )]
-    pub bounty: Account<'info, Bounty>,
+    pub bounty: Box<Account<'info, Bounty>>,
 
     /// Player's token account for stake
     #[account(
@@ -1312,7 +1361,7 @@ pub struct DisputeBounty<'info> {
         constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
         constraint = player_token_account.owner == player.key() @ SeekError::Unauthorized
     )]
-    pub player_token_account: Account<'info, TokenAccount>,
+    pub player_token_account: Box<Account<'info, TokenAccount>>,
 
     /// House vault to receive stake
     #[account(
@@ -1321,7 +1370,7 @@ pub struct DisputeBounty<'info> {
         bump,
         constraint = house_vault.key() == global_state.house_vault
     )]
-    pub house_vault: Account<'info, TokenAccount>,
+    pub house_vault: Box<Account<'info, TokenAccount>>,
 
     /// Token program
     pub token_program: Program<'info, Token>,
@@ -1341,14 +1390,14 @@ pub struct ResolveDispute<'info> {
         seeds = [b"global_state"],
         bump = global_state.bump
     )]
-    pub global_state: Account<'info, GlobalState>,
+    pub global_state: Box<Account<'info, GlobalState>>,
 
     /// The disputed bounty
     #[account(
         mut,
         constraint = bounty.global_state == global_state.key()
     )]
-    pub bounty: Account<'info, Bounty>,
+    pub bounty: Box<Account<'info, Bounty>>,
 
     /// Player's token account for refund (if player wins)
     #[account(
@@ -1356,7 +1405,7 @@ pub struct ResolveDispute<'info> {
         constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
         constraint = player_token_account.owner == bounty.player @ SeekError::Unauthorized
     )]
-    pub player_token_account: Account<'info, TokenAccount>,
+    pub player_token_account: Box<Account<'info, TokenAccount>>,
 
     /// House vault
     #[account(
@@ -1365,7 +1414,7 @@ pub struct ResolveDispute<'info> {
         bump,
         constraint = house_vault.key() == global_state.house_vault
     )]
-    pub house_vault: Account<'info, TokenAccount>,
+    pub house_vault: Box<Account<'info, TokenAccount>>,
 
     /// Token program
     pub token_program: Program<'info, Token>,

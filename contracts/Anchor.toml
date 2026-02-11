@@ -7,19 +7,19 @@ seeds = false
 skip-lint = false
 
 [programs.localnet]
-seek_protocol = "Seek111111111111111111111111111111111111111"
+seek_protocol = "DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v"
 
 [programs.devnet]
-seek_protocol = "Seek111111111111111111111111111111111111111"
+seek_protocol = "DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v"
 
 [programs.mainnet]
-seek_protocol = "Seek111111111111111111111111111111111111111"
+seek_protocol = "DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "localnet"
+cluster = "devnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
