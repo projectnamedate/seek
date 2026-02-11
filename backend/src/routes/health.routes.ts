@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getBountyStats } from '../services/bounty.service';
 import { getHouseVaultBalance, getSingularityVaultBalance, formatSkr } from '../services/solana.service';
+import { getFinalizerStatus } from '../services/finalizer.service';
 import { config } from '../config';
 
 const router = Router();
@@ -38,6 +39,7 @@ router.get('/stats', async (req: Request, res: Response) => {
         winRate: (bountyStats.won + bountyStats.lost) > 0
           ? ((bountyStats.won / (bountyStats.won + bountyStats.lost)) * 100).toFixed(1) + '%'
           : 'N/A',
+        finalizer: getFinalizerStatus(),
       },
     });
   } catch (error) {

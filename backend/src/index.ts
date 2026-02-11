@@ -6,6 +6,7 @@ import { config } from './config';
 import bountyRoutes from './routes/bounty.routes';
 import healthRoutes from './routes/health.routes';
 import skrRoutes from './routes/skr.routes';
+import { startFinalizationWorker, stopFinalizationWorker } from './services/finalizer.service';
 
 // Create Express app
 const app = express();
@@ -125,11 +126,15 @@ const server = app.listen(PORT, HOST, () => {
     console.log('  GET  /api/health/demo     - Demo stats (dev only)');
   }
   console.log('');
+
+  // Start finalization worker for challenge period processing
+  startFinalizationWorker();
 });
 
 // Graceful shutdown
 function shutdown(signal: string) {
   console.log(`\n[${signal}] Shutting down gracefully...`);
+  stopFinalizationWorker();
   server.close(() => {
     console.log('Server closed.');
     process.exit(0);

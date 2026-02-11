@@ -8,7 +8,8 @@ import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../config';
 import { Tier, ENTRY_AMOUNTS } from '../types';
 import bs58 from 'bs58';
-import { createHash } from 'crypto';
+import { createHash, randomFillSync } from 'crypto';
+import { queueFinalization } from './finalizer.service';
 
 // Load IDL
 import idl from '../idl/seek_protocol.json';
@@ -142,7 +143,7 @@ export function generateMissionCommitment(missionId: string): {
 
   // Generate random 32-byte salt
   const salt = Buffer.alloc(32);
-  require('crypto').randomFillSync(salt);
+  randomFillSync(salt);
 
   // commitment = hash(mission_id || salt)
   const input = Buffer.concat([missionIdBytes, salt]);
@@ -271,29 +272,23 @@ export async function resolveBountyOnChain(
       await revealMissionOnChain(bountyPda, missionIdBytes, salt);
     }
 
-    // Step 2: Propose resolution
-    await proposeResolutionOnChain(bountyPda, success);
+    // Step 2: Propose resolution (starts challenge period)
+    const proposeSig = await proposeResolutionOnChain(bountyPda, success);
 
-    // Step 3: Finalize bounty
-    // In production, this would wait for the challenge period to end.
-    // For devnet, we finalize immediately since challenge period is short.
-    // The on-chain check will enforce the challenge period timing.
-    const result = await finalizeBountyOnChain(bountyPda, playerWallet);
+    // Step 3: Queue finalization for after the challenge period
+    // The on-chain challenge period is 300 seconds (5 minutes).
+    // The finalization worker will pick this up and finalize when ready.
+    const challengeEndsAt = Math.floor(Date.now() / 1000) + 300; // 5 min from now
+    queueFinalization(bountyPda, playerWallet, challengeEndsAt);
 
-    return result;
+    console.log(`[Solana] Resolution proposed, finalization queued for ${new Date(challengeEndsAt * 1000).toISOString()}`);
+
+    return {
+      signature: proposeSig,
+      singularityWon: false, // Will be determined at finalization
+    };
   } catch (error: any) {
     console.error(`[Solana] Resolve bounty error:`, error?.message || error);
-
-    // If finalization fails due to challenge period, return the propose signature
-    // The frontend/cron can retry finalization later
-    if (error?.message?.includes('ChallengePeriodActive')) {
-      console.log('[Solana] Challenge period still active, finalization deferred');
-      return {
-        signature: `pending_finalize_${bountyPda.slice(0, 16)}`,
-        singularityWon: false,
-      };
-    }
-
     throw error;
   }
 }
