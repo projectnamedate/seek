@@ -5,7 +5,8 @@ import rateLimit from 'express-rate-limit';
 export const bountyStartLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 5,
-  keyGenerator: (req) => (req as any).verifiedWallet || req.ip || 'unknown',
+  keyGenerator: (req) => (req as any).verifiedWallet || 'unknown',
+  validate: { xForwardedForHeader: false },
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many bounty start requests, slow down' },
@@ -16,7 +17,8 @@ export const bountyStartLimiter = rateLimit({
 export const bountySubmitLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
-  keyGenerator: (req) => (req as any).verifiedWallet || req.ip || 'unknown',
+  keyGenerator: (req) => (req as any).verifiedWallet || 'unknown',
+  validate: { xForwardedForHeader: false },
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many submission requests, slow down' },

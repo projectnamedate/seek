@@ -103,7 +103,7 @@ async function main() {
   // === Step 1: Initialize Global State ===
   console.log('Step 1/3: Initializing global state...');
   try {
-    const sig = await program.methods
+    const sig = await (program.methods as any)
       .initialize()
       .accounts({
         authority: authority.publicKey,
@@ -150,7 +150,7 @@ async function step2_initHouseVault(
 ) {
   console.log('Step 2/3: Initializing house vault...');
   try {
-    const sig = await program.methods
+    const sig = await (program.methods as any)
       .initializeHouseVault()
       .accounts({
         authority: authority.publicKey,
@@ -181,7 +181,7 @@ async function step3_initSingularityVault(
 ) {
   console.log('Step 3/3: Initializing singularity vault + treasury...');
   try {
-    const sig = await program.methods
+    const sig = await (program.methods as any)
       .initializeSingularityVault()
       .accounts({
         authority: authority.publicKey,
