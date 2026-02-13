@@ -25,6 +25,10 @@ const envSchema = z.object({
   // Validation settings
   MAX_PHOTO_AGE_SECONDS: z.string().default('300'),
   MIN_CONFIDENCE_SCORE: z.string().default('0.7'),
+
+  // SGT Verification (optional)
+  HELIUS_API_KEY: z.string().optional(),
+  SGT_BONUS_CONFIDENCE_REDUCTION: z.string().default('0.05'),
 });
 
 // Parse and validate environment
@@ -59,6 +63,10 @@ function loadConfig() {
     validation: {
       maxPhotoAgeSeconds: parseInt(parsed.data.MAX_PHOTO_AGE_SECONDS, 10),
       minConfidenceScore: parseFloat(parsed.data.MIN_CONFIDENCE_SCORE),
+    },
+    sgt: {
+      heliusApiKey: parsed.data.HELIUS_API_KEY || '',
+      bonusConfidenceReduction: parseFloat(parsed.data.SGT_BONUS_CONFIDENCE_REDUCTION),
     },
   };
 }

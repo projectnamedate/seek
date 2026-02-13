@@ -11,6 +11,7 @@ import {
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
+import { createAttestation } from '../services/attestation.service';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
@@ -111,10 +112,19 @@ export default function CameraScreen({ navigation, route }: Props) {
       });
 
       if (photo?.uri) {
+        // Create attestation payload (hash + device info)
+        let attestation;
+        try {
+          attestation = await createAttestation(photo.uri);
+        } catch (e) {
+          console.log('[Camera] Attestation creation skipped:', e);
+        }
+
         // Navigate to validation screen
         navigation.replace('Validating', {
           bounty,
           photoUri: photo.uri,
+          attestation,
         });
       }
     } catch (error) {

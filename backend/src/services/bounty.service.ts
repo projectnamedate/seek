@@ -25,7 +25,8 @@ export function createBounty(
   playerWallet: string,
   tier: Tier,
   bountyPda: string,
-  transactionSignature?: string
+  transactionSignature?: string,
+  sgtVerified?: boolean
 ): { bounty: ActiveBounty; missionDescription: string } {
   // Check if player already has an active bounty
   const existingBountyId = bountyByPlayer.get(playerWallet);
@@ -55,6 +56,7 @@ export function createBounty(
     expiresAt,
     bountyPda,
     transactionSignature,
+    sgtVerified: sgtVerified || false,
   };
 
   // Store bounty
@@ -182,8 +184,18 @@ export function getBountyStats() {
   let won = 0;
   let lost = 0;
   let expired = 0;
+  let sgtBounties = 0;
+  let sgtWins = 0;
+  let attestedBounties = 0;
 
   for (const bounty of activeBounties.values()) {
+    if (bounty.sgtVerified) {
+      sgtBounties++;
+      if (bounty.status === 'won') sgtWins++;
+    }
+    if (bounty.attestationType && bounty.attestationType !== 'none') {
+      attestedBounties++;
+    }
     switch (bounty.status) {
       case 'pending':
         pending++;
@@ -203,7 +215,11 @@ export function getBountyStats() {
     }
   }
 
-  return { pending, validating, won, lost, expired, total: activeBounties.size };
+  return {
+    pending, validating, won, lost, expired,
+    total: activeBounties.size,
+    sgtBounties, sgtWins, attestedBounties,
+  };
 }
 
 /**

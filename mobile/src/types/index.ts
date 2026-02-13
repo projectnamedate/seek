@@ -67,6 +67,18 @@ export interface WalletState {
   skrName: string | null;  // .skr domain name (e.g., "player.skr")
   balance: number;         // SKR balance
   isDemo: boolean;
+  sgtVerified?: boolean;   // Seeker Genesis Token verified
+}
+
+// Camera attestation payload (sent with photo submission)
+export interface AttestationPayload {
+  type: 'standard' | 'tee';
+  photoHash: string;
+  timestamp: number;
+  deviceModel?: string;
+  teeSignature?: string;
+  teeCertificate?: string;
+  teeNonce?: string;
 }
 
 // Navigation types
@@ -77,7 +89,7 @@ export type RootStackParamList = {
   PrivacyPolicy: undefined;
   BountyReveal: { tier: TierNumber };
   Camera: { bounty: Bounty };
-  Validating: { bounty: Bounty; photoUri: string };
+  Validating: { bounty: Bounty; photoUri: string; attestation?: AttestationPayload };
   Result: { bounty: Bounty; validation: ValidationResult };
 };
 

@@ -1,6 +1,6 @@
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system';
-import { Bounty, TierNumber, ValidationResult } from '../types';
+import { Bounty, TierNumber, ValidationResult, AttestationPayload } from '../types';
 
 // Dev-only logging - stripped from production builds
 const log = (...args: any[]) => __DEV__ && console.log(...args);
@@ -68,13 +68,14 @@ export async function startBounty(
  */
 export async function submitPhoto(
   bountyId: string,
-  photoUri: string
+  photoUri: string,
+  attestation?: AttestationPayload
 ): Promise<{ success: boolean; validation?: ValidationResult; error?: string }> {
   try {
     const endpoint = DEMO_MODE ? '/bounty/demo/submit' : '/bounty/submit';
 
     // Validate file size before uploading (backend enforces 10MB limit via multer)
-    const fileInfo = await FileSystem.getInfoAsync(photoUri, { size: true });
+    const fileInfo = await FileSystem.getInfoAsync(photoUri);
     if (!fileInfo.exists) {
       return { success: false, error: 'Photo file not found' };
     }
@@ -94,7 +95,11 @@ export async function submitPhoto(
       name: 'capture.jpg',
     } as any);
 
-    log(`[API] Submitting photo for bounty: ${bountyId}`);
+    if (attestation) {
+      formData.append('attestation', JSON.stringify(attestation));
+    }
+
+    log(`[API] Submitting photo for bounty: ${bountyId}${attestation ? ` [${attestation.type} attestation]` : ''}`);
 
     const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
       headers: {

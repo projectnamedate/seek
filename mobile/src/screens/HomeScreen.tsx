@@ -13,6 +13,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TierNumber, TIERS, WalletState } from '../types';
 import walletService from '../services/wallet.service';
+import { useApp } from '../context/AppContext';
 
 const APP_VERSION = '1.0.0';
 
@@ -28,6 +29,7 @@ type Props = {
 };
 
 export default function HomeScreen({ navigation }: Props) {
+  const { sgtVerified } = useApp();
   const [wallet, setWallet] = useState<WalletState>(walletService.getWalletState());
   const [selectedTier, setSelectedTier] = useState<TierNumber>(1);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -190,6 +192,11 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.walletAddress}>
                 {wallet.skrName || wallet.address}
               </Text>
+              {sgtVerified && (
+                <View style={styles.sgtBadge}>
+                  <Text style={styles.sgtBadgeText}>VERIFIED SEEKER</Text>
+                </View>
+              )}
             </View>
             <View style={styles.balanceContainer}>
               <Text style={styles.balanceLabel}>Balance</Text>
@@ -665,5 +672,18 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: fontSize.md,
     fontWeight: '600',
+  },
+  sgtBadge: {
+    backgroundColor: '#D4A017',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginLeft: spacing.sm,
+  },
+  sgtBadgeText: {
+    color: '#1a1a2e',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
 });

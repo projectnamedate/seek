@@ -4,6 +4,7 @@ import { WalletState, Bounty } from '../types';
 import walletService from '../services/wallet.service';
 import { getStats, PlayerStats, recordGameResult } from '../utils/storage';
 import { DEMO_MODE } from '../config';
+import sgtService from '../services/sgt.service';
 
 // Get MWA hook return type
 type MobileWalletContext = ReturnType<typeof useMobileWallet>;
@@ -26,6 +27,9 @@ interface AppContextType {
   stats: PlayerStats;
   refreshStats: () => Promise<void>;
   recordResult: (won: boolean, entryAmount: number, rewardAmount?: number) => Promise<void>;
+
+  // SGT verification
+  sgtVerified: boolean;
 
   // Loading states
   isLoading: boolean;
@@ -54,6 +58,7 @@ export function AppProvider({ children }: AppProviderProps) {
     bestStreak: 0,
     lastPlayedAt: null,
   });
+  const [sgtVerified, setSgtVerified] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Initialize
@@ -100,6 +105,30 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, []);
 
+  // Auto-check SGT verification when wallet connects
+  useEffect(() => {
+    const checkSGT = async () => {
+      if (wallet.connected && wallet.address) {
+        if (DEMO_MODE.ENABLED) {
+          // Demo mode: always verified
+          setSgtVerified(true);
+        } else {
+          // Real mode: check backend cache
+          const cached = await sgtService.getCachedVerification();
+          if (cached.verified && cached.walletAddress === wallet.address) {
+            setSgtVerified(true);
+          } else {
+            const status = await sgtService.checkSGTStatus(wallet.address);
+            setSgtVerified(status.verified);
+          }
+        }
+      } else {
+        setSgtVerified(false);
+      }
+    };
+    checkSGT();
+  }, [wallet.connected, wallet.address]);
+
   // Wallet actions
   const connectWallet = useCallback(async () => {
     if (DEMO_MODE.ENABLED) {
@@ -116,6 +145,8 @@ export function AppProvider({ children }: AppProviderProps) {
       await mwa.disconnect();
     }
     setActiveBounty(null);
+    setSgtVerified(false);
+    sgtService.clearVerification();
   }, [mwa]);
 
   // Stats actions
@@ -140,6 +171,7 @@ export function AppProvider({ children }: AppProviderProps) {
     stats,
     refreshStats,
     recordResult,
+    sgtVerified,
     isLoading,
     isDemoMode: DEMO_MODE.ENABLED,
   };

@@ -6,6 +6,7 @@ import { config } from './config';
 import bountyRoutes from './routes/bounty.routes';
 import healthRoutes from './routes/health.routes';
 import skrRoutes from './routes/skr.routes';
+import sgtRoutes from './routes/sgt.routes';
 import { startFinalizationWorker, stopFinalizationWorker } from './services/finalizer.service';
 
 // Create Express app
@@ -60,6 +61,7 @@ if (config.server.isDev) {
 app.use('/api/bounty', bountyRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/skr', skrRoutes);
+app.use('/api/sgt', sgtRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -121,6 +123,7 @@ const server = app.listen(PORT, HOST, () => {
   console.log('  POST /api/bounty/submit   - Submit photo');
   console.log('  GET  /api/bounty/:id      - Get bounty status');
   console.log('  GET  /api/skr/lookup/:x   - Resolve .skr domain');
+  console.log('  POST /api/sgt/verify      - Verify Seeker Genesis Token');
   if (config.server.isDev) {
     console.log('  POST /api/bounty/demo/*   - Demo endpoints (dev only)');
     console.log('  GET  /api/health/demo     - Demo stats (dev only)');

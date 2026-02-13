@@ -46,6 +46,8 @@ export interface ActiveBounty {
   expiresAt: Date;
   bountyPda: string; // On-chain PDA address
   transactionSignature?: string;
+  sgtVerified?: boolean; // Seeker Genesis Token verified
+  attestationType?: 'none' | 'standard' | 'tee'; // Camera attestation type used
 }
 
 // Photo submission for validation

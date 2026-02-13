@@ -28,7 +28,7 @@ const STAGES = [
 ];
 
 export default function ValidatingScreen({ navigation, route }: Props) {
-  const { bounty, photoUri } = route.params;
+  const { bounty, photoUri, attestation } = route.params;
   const [currentStage, setCurrentStage] = useState(0);
   const [validationText, setValidationText] = useState('');
 
@@ -97,7 +97,7 @@ export default function ValidatingScreen({ navigation, route }: Props) {
 
       try {
         // Call the real API for validation
-        const result = await apiService.submitPhoto(bounty.id, photoUri);
+        const result = await apiService.submitPhoto(bounty.id, photoUri, attestation);
 
         if (!isMounted) return;
 

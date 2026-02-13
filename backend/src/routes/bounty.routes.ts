@@ -8,6 +8,7 @@ import {
   SubmitPhotoResponse,
   Tier,
   ENTRY_AMOUNTS,
+  TIER_CONFIDENCE_THRESHOLDS,
 } from '../types';
 import {
   createBounty,
@@ -23,6 +24,8 @@ import {
 import { extractExifMetadata, formatMetadata } from '../services/exif.service';
 import { validatePhoto, isValidImageFormat, checkImageSize } from '../services/ai.service';
 import { resolveBountyOnChain, generateMissionCommitment, formatSkr } from '../services/solana.service';
+import { isWalletSGTVerified } from '../services/sgt.service';
+import { attestationService, AttestationPayload } from '../services/attestation.service';
 import { requireWalletAuth } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
 import { bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
@@ -77,12 +80,17 @@ router.post('/start', requireWalletAuth, bountyStartLimiter, validate(startBount
       } as ApiResponse<never>);
     }
 
+    // Check SGT verification status
+    const sgtResult = isWalletSGTVerified(playerWallet);
+    const sgtVerified = sgtResult?.verified || false;
+
     // Create bounty
     const { bounty, missionDescription } = createBounty(
       playerWallet,
       tier,
       bountyPda,
-      transactionSignature
+      transactionSignature,
+      sgtVerified
     );
 
     // Generate and store mission commitment for commit-reveal
@@ -201,6 +209,42 @@ router.post('/submit', requireWalletAuth, bountySubmitLimiter, upload.single('ph
     const metadata = await extractExifMetadata(req.file.buffer);
     console.log(`[API] EXIF: ${formatMetadata(metadata)}`);
 
+    // Verify camera attestation (if provided)
+    let attestationPayload: AttestationPayload | null = null;
+    if (req.body.attestation) {
+      try {
+        attestationPayload = JSON.parse(req.body.attestation);
+      } catch { /* ignore malformed attestation */ }
+    }
+    const attestationResult = await attestationService.verifyAttestation(attestationPayload, req.file.buffer);
+    if (attestationResult.confidence !== 'none') {
+      console.log(`[API] Attestation: ${attestationResult.type} | Confidence: ${attestationResult.confidence} | Integrity: ${attestationResult.photoIntegrity}`);
+    }
+
+    // Reject if attestation claims Seeker device but photo integrity fails
+    if (attestationPayload && attestationResult.isSeekerDevice && !attestationResult.photoIntegrity) {
+      updateBountyStatus(bountyId, 'lost');
+      return res.status(200).json({
+        success: true,
+        data: {
+          status: 'lost',
+          validation: {
+            isValid: false,
+            confidence: 0,
+            reasoning: 'Photo integrity check failed — image was modified after capture',
+            detectedObjects: [],
+            isScreenshot: false,
+            matchesTarget: false,
+          },
+        },
+      } as ApiResponse<SubmitPhotoResponse>);
+    }
+
+    // Record attestation type on the bounty for analytics
+    if (attestationResult.confidence !== 'none') {
+      bounty.attestationType = attestationResult.type;
+    }
+
     // Validate with AI (pass tier + bounty start time for stricter checks)
     const validation = await validatePhoto(
       req.file.buffer,
@@ -211,7 +255,18 @@ router.post('/submit', requireWalletAuth, bountySubmitLimiter, upload.single('ph
       bounty.createdAt
     );
 
-    console.log(`[API] Validation result: ${validation.isValid ? 'PASS' : 'FAIL'} (${validation.confidence})`);
+    // Apply SGT bonus: lower the confidence threshold for verified Seeker users
+    if (bounty.sgtVerified && !validation.isValid) {
+      const baseThreshold = TIER_CONFIDENCE_THRESHOLDS[bounty.tier];
+      const sgtBonus = config.sgt.bonusConfidenceReduction;
+      const adjustedThreshold = baseThreshold - sgtBonus;
+      if (validation.confidence >= adjustedThreshold) {
+        console.log(`[API] SGT bonus applied: ${validation.confidence} >= ${adjustedThreshold} (base ${baseThreshold} - ${sgtBonus})`);
+        validation.isValid = true;
+      }
+    }
+
+    console.log(`[API] Validation result: ${validation.isValid ? 'PASS' : 'FAIL'} (${validation.confidence})${bounty.sgtVerified ? ' [SGT]' : ''}`);
     console.log(`[API] Reasoning: ${validation.reasoning}`);
 
     // Resolve on-chain
