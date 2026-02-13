@@ -20,6 +20,8 @@ export default function SplashScreen({ onFinish }: Props) {
   const sparkleAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
+  const shutterRotateAnim = useRef(new Animated.Value(0)).current;
+  const shutterScaleAnim = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
     // Play sparkle sound
@@ -46,6 +48,34 @@ export default function SplashScreen({ onFinish }: Props) {
         Animated.timing(glowAnim, {
           toValue: 0,
           duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+
+    // Shutter rotation loop
+    Animated.loop(
+      Animated.timing(shutterRotateAnim, {
+        toValue: 1,
+        duration: 8000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+
+    // Shutter scale pulse
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(shutterScaleAnim, {
+          toValue: 1.05,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(shutterScaleAnim, {
+          toValue: 0.95,
+          duration: 1500,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ])
@@ -111,43 +141,58 @@ export default function SplashScreen({ onFinish }: Props) {
     outputRange: ['-5deg', '0deg'],
   });
 
+  const shutterSpin = shutterRotateAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   return (
     <Animated.View style={[styles.container, { opacity: fadeAnim }]}>
-      {/* Camera scope icon - positioned behind info box */}
+      {/* Camera shutter / iris aperture - positioned behind info box */}
       <Animated.View
         style={[
-          styles.scopeContainer,
+          styles.shutterContainer,
           {
             opacity: glowAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0.6, 1],
+              outputRange: [0.5, 0.9],
             }),
-            transform: [
-              {
-                scale: glowAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.95, 1.05],
-                }),
-              },
-            ],
+            transform: [{ scale: shutterScaleAnim }],
           },
         ]}
       >
-        {/* Outer ring */}
-        <View style={styles.scopeOuter}>
-          {/* Crosshairs */}
-          <View style={styles.scopeCrosshairH} />
-          <View style={styles.scopeCrosshairV} />
-          {/* Inner circle */}
-          <View style={styles.scopeInner}>
-            <View style={styles.scopeCenter} />
+        {/* Outer lens ring */}
+        <View style={styles.shutterOuter}>
+          {/* Rotating iris blades - overlapping like a real aperture */}
+          <Animated.View
+            style={[
+              styles.shutterBladeGroup,
+              { transform: [{ rotate: shutterSpin }] },
+            ]}
+          >
+            {[0, 45, 90, 135, 180, 225, 270, 315].map((deg, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.shutterBlade,
+                  {
+                    transform: [
+                      { rotate: `${deg}deg` },
+                      { translateY: -30 },
+                      { skewY: '25deg' },
+                    ],
+                  },
+                ]}
+              />
+            ))}
+          </Animated.View>
+          {/* Center aperture opening */}
+          <View style={styles.shutterAperture}>
+            <View style={styles.shutterApertureInner} />
           </View>
-          {/* Corner brackets */}
-          <View style={[styles.scopeBracket, styles.scopeBracketTL]} />
-          <View style={[styles.scopeBracket, styles.scopeBracketTR]} />
-          <View style={[styles.scopeBracket, styles.scopeBracketBL]} />
-          <View style={[styles.scopeBracket, styles.scopeBracketBR]} />
         </View>
+        {/* Outer ring glow */}
+        <View style={styles.shutterRingOuter} />
       </Animated.View>
 
       {/* Logo */}
@@ -225,7 +270,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: 80,
   },
-  scopeContainer: {
+  shutterContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -234,73 +279,60 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scopeOuter: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    borderWidth: 3,
+  shutterOuter: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    borderWidth: 2.5,
     borderColor: colors.cyan,
     alignItems: 'center',
     justifyContent: 'center',
-    ...shadows.glow(colors.cyan),
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0, 240, 255, 0.03)',
   },
-  scopeCrosshairH: {
+  shutterBladeGroup: {
     position: 'absolute',
-    width: '100%',
-    height: 2,
-    backgroundColor: colors.cyan,
+    width: 150,
+    height: 150,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  scopeCrosshairV: {
+  shutterBlade: {
     position: 'absolute',
-    width: 2,
-    height: '100%',
+    width: 48,
+    height: 52,
+    borderRadius: 6,
     backgroundColor: colors.cyan,
+    opacity: 0.25,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 240, 255, 0.4)',
   },
-  scopeInner: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
+  shutterAperture: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 2,
     borderColor: colors.cyan,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    ...shadows.glow(colors.cyan),
   },
-  scopeCenter: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  shutterApertureInner: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: colors.cyan,
+    opacity: 0.8,
+    ...shadows.glow(colors.cyan),
   },
-  scopeBracket: {
+  shutterRingOuter: {
     position: 'absolute',
-    width: 20,
-    height: 20,
-    borderColor: colors.cyan,
-    borderWidth: 3,
-  },
-  scopeBracketTL: {
-    top: -8,
-    left: -8,
-    borderRightWidth: 0,
-    borderBottomWidth: 0,
-  },
-  scopeBracketTR: {
-    top: -8,
-    right: -8,
-    borderLeftWidth: 0,
-    borderBottomWidth: 0,
-  },
-  scopeBracketBL: {
-    bottom: -8,
-    left: -8,
-    borderRightWidth: 0,
-    borderTopWidth: 0,
-  },
-  scopeBracketBR: {
-    bottom: -8,
-    right: -8,
-    borderLeftWidth: 0,
-    borderTopWidth: 0,
+    width: 166,
+    height: 166,
+    borderRadius: 83,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 240, 255, 0.2)',
   },
   logoContainer: {
     position: 'relative',

@@ -6,7 +6,7 @@
  * Will support TEE mode when Seeker Camera SDK ships.
  */
 import { Platform } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
 import { AttestationPayload } from '../types';
 
