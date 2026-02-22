@@ -174,6 +174,14 @@ router.post('/submit', requireWalletAuth, bountySubmitLimiter, upload.single('ph
       } as ApiResponse<never>);
     }
 
+    // Verify the authenticated wallet owns this bounty
+    if (bounty.playerWallet !== (req as any).verifiedWallet) {
+      return res.status(403).json({
+        success: false,
+        error: 'Wallet does not own this bounty',
+      } as ApiResponse<never>);
+    }
+
     // Check bounty status
     if (bounty.status !== 'pending') {
       return res.status(400).json({

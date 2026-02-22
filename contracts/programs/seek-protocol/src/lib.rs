@@ -251,9 +251,13 @@ pub struct Bounty {
 
 impl Bounty {
     /// Account size calculation:
-    /// 8 (discriminator) + 32*2 (pubkeys) + 8*7 (u64/i64s) + 1*5 (u8/bool/enum)
-    /// + 32*2 (commitment + mission_id) = 8 + 64 + 56 + 5 + 64 = 197, round to 200
-    pub const SIZE: usize = 200;
+    /// 8 (discriminator) + 32*2 (pubkeys) + 8*4 (u64/i64: entry, payout, created_at, expires_at)
+    /// + 1*4 (status, tier, singularity_won, bump)
+    /// + 32*2 (commitment + mission_id) + 1 (mission_revealed)
+    /// + 8*2 (resolved_at, challenge_ends_at) + 1 (proposed_win)
+    /// + 1 (is_disputed) + 8 (dispute_stake) + 8 (disputed_at)
+    /// = 8 + 64 + 32 + 4 + 64 + 1 + 16 + 1 + 1 + 16 = 207, padded to 216
+    pub const SIZE: usize = 216;
 }
 
 // ============================================================================
@@ -747,7 +751,7 @@ pub mod seek_protocol {
                 .checked_add(house_share)
                 .ok_or(SeekError::MathOverflow)?;
 
-            // 15% transfer to singularity vault
+            // 20% transfer to singularity vault
             let singularity_ctx = CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 Transfer {
@@ -764,7 +768,7 @@ pub mod seek_protocol {
                 .checked_add(singularity_share)
                 .ok_or(SeekError::MathOverflow)?;
 
-            // 15% transfer to protocol treasury
+            // 10% transfer to protocol treasury
             let protocol_ctx = CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
                 Transfer {

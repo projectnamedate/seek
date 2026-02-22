@@ -64,7 +64,7 @@ export async function startBounty(
 
 /**
  * Submit a photo for AI validation (demo mode)
- * Uses REAL GPT-4V validation!
+ * Uses REAL Claude Vision validation!
  */
 export async function submitPhoto(
   bountyId: string,

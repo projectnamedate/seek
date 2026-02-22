@@ -55,7 +55,7 @@ seek/
 │       ├── data/           # Mission pool (300 bounties)
 │       ├── routes/         # API endpoints
 │       ├── services/       # Business logic
-│       │   ├── ai.service.ts       # GPT-4V validation
+│       │   ├── ai.service.ts       # Claude Vision validation
 │       │   ├── bounty.service.ts   # Bounty management
 │       │   ├── exif.service.ts     # Photo metadata
 │       │   └── solana.service.ts   # Blockchain interaction
@@ -108,7 +108,7 @@ For hackathon demos, the app works without blockchain:
 # 1. Start backend with demo endpoints
 cd backend
 cp .env.example .env
-# Set your OPENAI_API_KEY in .env
+# Set your ANTHROPIC_API_KEY in .env
 npm install
 npm run dev
 
@@ -121,7 +121,7 @@ npx expo start
 # Press 'a' in Expo CLI or scan QR code
 ```
 
-Demo endpoints skip blockchain but use **real GPT-4V validation** - judges can see AI analyzing actual photos!
+Demo endpoints skip blockchain but use **real Claude Vision validation** - judges can see AI analyzing actual photos!
 
 ## Development
 

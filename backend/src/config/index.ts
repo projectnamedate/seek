@@ -8,7 +8,7 @@ dotenv.config();
 const envSchema = z.object({
   // Server
   PORT: z.string().default('3001'),
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('production'),
 
   // Solana
   SOLANA_RPC_URL: z.string().url(),
@@ -39,6 +39,11 @@ function loadConfig() {
     console.error('Invalid environment configuration:');
     console.error(parsed.error.format());
     throw new Error('Environment validation failed');
+  }
+
+  // Safety: never allow development mode on mainnet
+  if (parsed.data.NODE_ENV === 'development' && parsed.data.SOLANA_NETWORK === 'mainnet-beta') {
+    throw new Error('Cannot run in development mode on mainnet-beta. Set NODE_ENV=production.');
   }
 
   return {
