@@ -161,6 +161,17 @@ SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
 ANTHROPIC_API_KEY=sk-ant-your-api-key
 ```
 
+## Security Roadmap
+
+The following improvements are planned before mainnet deployment:
+
+- [ ] **VRF Randomness** — Replace slot-based jackpot roll with Switchboard or Orao VRF for provably fair outcomes
+- [ ] **Treasury PDA Constraint** — Add owner verification on protocol treasury during initialization
+- [ ] **Persistence Layer** — Replace in-memory bounty state with Redis/database to survive restarts
+- [ ] **Authority Multisig** — Split authority roles and add timelock/multisig for treasury operations
+- [ ] **Bounty Account Closing** — Add instruction to close resolved bounty accounts and reclaim rent
+- [ ] **TLS Enforcement** — Require HTTPS in production via reverse proxy
+
 ## License
 
 MIT
