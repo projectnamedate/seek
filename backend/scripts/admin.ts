@@ -12,9 +12,19 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  Transaction,
+  sendAndConfirmTransaction,
+  LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import { AnchorProvider, Program, Wallet, BN } from '@coral-xyz/anchor';
-import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import {
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction,
+  createMintToInstruction,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID,
+  getAccount,
+} from '@solana/spl-token';
 import bs58 from 'bs58';
 import idl from '../src/idl/seek_protocol.json';
 
@@ -182,6 +192,68 @@ async function withdrawTreasury(amountSkr: number) {
   console.log(`Withdrawn! TX: ${sig}`);
 }
 
+async function mintToPlayer(playerAddress: string, amountSkr: number) {
+  const { connection, authority } = setup();
+
+  const playerPubkey = new PublicKey(playerAddress);
+  const amountLamports = BigInt(Math.round(amountSkr * 1e9));
+
+  console.log(`Minting ${amountSkr} SKR to ${playerAddress}...\n`);
+
+  // Get or create the player's associated token account
+  const playerAta = await getAssociatedTokenAddress(SKR_MINT, playerPubkey);
+  const tx = new Transaction();
+
+  try {
+    await getAccount(connection, playerAta);
+    console.log(`Player ATA exists: ${playerAta.toBase58()}`);
+  } catch {
+    console.log(`Creating player ATA: ${playerAta.toBase58()}`);
+    tx.add(
+      createAssociatedTokenAccountInstruction(
+        authority.publicKey,    // payer
+        playerAta,             // ata
+        playerPubkey,          // owner
+        SKR_MINT,              // mint
+      )
+    );
+  }
+
+  // Mint tokens (authority must be the mint authority)
+  tx.add(
+    createMintToInstruction(
+      SKR_MINT,             // mint
+      playerAta,            // destination
+      authority.publicKey,  // mint authority
+      amountLamports,       // amount in smallest units
+    )
+  );
+
+  const sig = await sendAndConfirmTransaction(connection, tx, [authority]);
+  console.log(`\nMinted! TX: ${sig}`);
+
+  // Show new balance
+  const balance = await connection.getTokenAccountBalance(playerAta);
+  console.log(`Player SKR balance: ${formatSkr(BigInt(balance.value.amount))}`);
+}
+
+async function airdropSol(playerAddress: string, amountSol: number) {
+  const { connection } = setup();
+  const playerPubkey = new PublicKey(playerAddress);
+
+  console.log(`Airdropping ${amountSol} SOL to ${playerAddress}...\n`);
+
+  const sig = await connection.requestAirdrop(
+    playerPubkey,
+    amountSol * LAMPORTS_PER_SOL,
+  );
+  await connection.confirmTransaction(sig, 'confirmed');
+  console.log(`Airdropped! TX: ${sig}`);
+
+  const balance = await connection.getBalance(playerPubkey);
+  console.log(`Player SOL balance: ${balance / LAMPORTS_PER_SOL} SOL`);
+}
+
 // CLI router
 const command = process.argv[2];
 const arg = process.argv[3];
@@ -207,13 +279,35 @@ switch (command) {
     }
     withdrawTreasury(Number(arg)).catch(console.error);
     break;
+  case 'mint': {
+    const playerAddr = arg;
+    const amount = process.argv[4];
+    if (!playerAddr || !amount || isNaN(Number(amount))) {
+      console.error('Usage: npx ts-node scripts/admin.ts mint <player_address> <amount_in_skr>');
+      process.exit(1);
+    }
+    mintToPlayer(playerAddr, Number(amount)).catch(console.error);
+    break;
+  }
+  case 'airdrop': {
+    const addr = arg;
+    const sol = process.argv[4];
+    if (!addr || !sol || isNaN(Number(sol))) {
+      console.error('Usage: npx ts-node scripts/admin.ts airdrop <address> <amount_in_sol>');
+      process.exit(1);
+    }
+    airdropSol(addr, Number(sol)).catch(console.error);
+    break;
+  }
   default:
     console.log('Seek Protocol Admin CLI');
     console.log('');
     console.log('Commands:');
-    console.log('  status           Show protocol state and stats');
-    console.log('  balances         Show all vault balances');
-    console.log('  fund <amount>    Fund house vault (amount in SKR)');
-    console.log('  withdraw <amt>   Withdraw from treasury (amount in SKR)');
+    console.log('  status               Show protocol state and stats');
+    console.log('  balances             Show all vault balances');
+    console.log('  fund <amount>        Fund house vault (amount in SKR)');
+    console.log('  withdraw <amt>       Withdraw from treasury (amount in SKR)');
+    console.log('  mint <addr> <amt>    Mint devnet SKR to player wallet');
+    console.log('  airdrop <addr> <sol> Airdrop devnet SOL to player wallet');
     break;
 }

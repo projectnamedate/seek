@@ -60,14 +60,15 @@ export interface SubmitPhotoResponse {
   error?: string;
 }
 
-// Player wallet state (demo mode)
+// Player wallet state
 export interface WalletState {
   connected: boolean;
-  address: string | null;
-  skrName: string | null;  // .skr domain name (e.g., "player.skr")
-  balance: number;         // SKR balance
+  address: string | null;       // Display address (truncated, e.g. "AbC1...xYz9")
+  fullAddress: string | null;   // Full base58 address for API calls
+  skrName: string | null;       // .skr domain name (e.g., "player.skr")
+  balance: number;              // SKR balance
   isDemo: boolean;
-  sgtVerified?: boolean;   // Seeker Genesis Token verified
+  sgtVerified?: boolean;        // Seeker Genesis Token verified
 }
 
 // Camera attestation payload (sent with photo submission)

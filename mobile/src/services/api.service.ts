@@ -1,19 +1,11 @@
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Bounty, TierNumber, ValidationResult, AttestationPayload } from '../types';
+import { API_BASE_URL, DEMO_MODE } from '../config';
 
 // Dev-only logging - stripped from production builds
 const log = (...args: any[]) => __DEV__ && console.log(...args);
 const logError = (...args: any[]) => __DEV__ && console.error(...args);
-
-// API configuration
-// For demo, use your local network IP or ngrok tunnel
-const API_BASE_URL = __DEV__
-  ? 'http://10.0.2.2:3001/api' // 10.0.2.2 = host machine from Android emulator
-  : 'https://api.seek.app/api';
-
-// Demo mode - uses simplified endpoints without blockchain
-const DEMO_MODE = true;
 
 // Max photo upload size (10MB) - matches backend multer limit
 const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
@@ -35,7 +27,7 @@ export async function startBounty(
   tier: TierNumber
 ): Promise<{ success: boolean; bounty?: Bounty; error?: string }> {
   try {
-    const endpoint = DEMO_MODE ? '/bounty/demo/start' : '/bounty/start';
+    const endpoint = DEMO_MODE.USE_DEMO_ENDPOINTS ? '/bounty/demo/start' : '/bounty/start';
 
     const response = await api.post(endpoint, {
       tier,
@@ -72,7 +64,7 @@ export async function submitPhoto(
   attestation?: AttestationPayload
 ): Promise<{ success: boolean; validation?: ValidationResult; error?: string }> {
   try {
-    const endpoint = DEMO_MODE ? '/bounty/demo/submit' : '/bounty/submit';
+    const endpoint = DEMO_MODE.USE_DEMO_ENDPOINTS ? '/bounty/demo/submit' : '/bounty/submit';
 
     // Validate file size before uploading (backend enforces 10MB limit via multer)
     const fileInfo = await FileSystem.getInfoAsync(photoUri);

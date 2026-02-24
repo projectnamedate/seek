@@ -1,17 +1,33 @@
 // App configuration
 
+// ============================================================
+// NGROK_URL: Set this before building for real device testing.
+// Example: 'https://abc123.ngrok-free.app'
+// Leave empty/null to use emulator URL (10.0.2.2) in dev.
+// ============================================================
+const NGROK_URL: string | null = null;
+
 // API Configuration
 export const API_CONFIG = {
-  // For development, update this to your local IP
-  DEV_URL: 'http://10.0.2.2:3001/api', // 10.0.2.2 = host machine from Android emulator
+  NGROK_URL,
+  EMULATOR_URL: 'http://10.0.2.2:3001/api',
   PROD_URL: 'https://api.seek.app/api',
   TIMEOUT: 30000,
   AI_VALIDATION_TIMEOUT: 60000,
 };
 
-// Demo Mode - automatically disabled in production builds
+// Resolved API base URL: ngrok > emulator (dev) > prod
+export const API_BASE_URL = __DEV__
+  ? (NGROK_URL ? `${NGROK_URL}/api` : API_CONFIG.EMULATOR_URL)
+  : API_CONFIG.PROD_URL;
+
+// Hybrid Demo Mode:
+//   - Uses demo bounty endpoints (no on-chain tx for start/submit)
+//   - But connects real MWA wallet + fetches real SKR balance
+//   - Set USE_DEMO_ENDPOINTS=false to use full on-chain flow
 export const DEMO_MODE = {
-  ENABLED: __DEV__ ?? false, // Tied to __DEV__: true in dev, false in production
+  ENABLED: __DEV__ ?? false,           // Master switch (tied to __DEV__)
+  USE_DEMO_ENDPOINTS: true,            // Use /bounty/demo/* endpoints
   WALLET_ADDRESS: 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker',
   INITIAL_BALANCE: 10000,
 };

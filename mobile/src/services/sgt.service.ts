@@ -6,13 +6,9 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+import { API_BASE_URL } from '../config';
 
 const log = (...args: any[]) => __DEV__ && console.log(...args);
-
-// API base URL (matches api.service.ts)
-const API_BASE_URL = __DEV__
-  ? 'http://10.0.2.2:3001/api'
-  : 'https://api.seek.app/api';
 
 const SGT_CACHE_KEY = '@seek_sgt_verified';
 

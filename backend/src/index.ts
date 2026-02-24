@@ -15,10 +15,10 @@ const app = express();
 // Security headers
 app.use(helmet());
 
-// CORS configuration
+// CORS configuration — allow all origins in dev for ngrok/real-device testing
 app.use(cors({
   origin: config.server.isDev
-    ? ['http://localhost:3000', 'http://localhost:8081', 'http://10.0.2.2:3001']
+    ? true  // Allow any origin (ngrok URLs are dynamic)
     : false, // Mobile API — no browser origins in production
   methods: ['GET', 'POST'],
   allowedHeaders: [

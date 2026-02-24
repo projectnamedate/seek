@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { useMobileWallet } from '@wallet-ui/react-native-web3js';
 import { WalletState, Bounty } from '../types';
-import walletService from '../services/wallet.service';
+import walletService, { fetchRealBalance } from '../services/wallet.service';
 import { getStats, PlayerStats, recordGameResult } from '../utils/storage';
 import { DEMO_MODE } from '../config';
 import sgtService from '../services/sgt.service';
+import apiService from '../services/api.service';
 
 // Get MWA hook return type
 type MobileWalletContext = ReturnType<typeof useMobileWallet>;
@@ -77,26 +78,55 @@ export function AppProvider({ children }: AppProviderProps) {
     init();
   }, []);
 
-  // Sync MWA state to wallet state when not in demo mode
+  // Track whether we've started a balance fetch to avoid duplicates
+  const balanceFetchRef = useRef<string | null>(null);
+
+  // Sync MWA state to wallet state
   useEffect(() => {
-    if (!DEMO_MODE.ENABLED && mwa.account) {
-      setWallet({
+    if (mwa.account) {
+      const fullAddress = mwa.account.publicKey.toBase58();
+      const shortAddress = fullAddress.slice(0, 4) + '...' + fullAddress.slice(-4);
+
+      // Set wallet connected immediately with address
+      setWallet((prev) => ({
         connected: true,
-        address: mwa.account.publicKey.toString().slice(0, 4) + '...' + mwa.account.publicKey.toString().slice(-4),
-        skrName: null, // Will be fetched from API
-        balance: 0, // Balance will be fetched from chain
+        address: shortAddress,
+        fullAddress: fullAddress,
+        skrName: prev.address === shortAddress ? prev.skrName : null,
+        balance: prev.address === shortAddress ? prev.balance : 0,
         isDemo: false,
-      });
-    } else if (!DEMO_MODE.ENABLED && !mwa.account) {
+      }));
+
+      // Fetch real balance + .skr name in background (only once per address)
+      if (balanceFetchRef.current !== fullAddress) {
+        balanceFetchRef.current = fullAddress;
+
+        // Fetch balance
+        if (mwa.connection) {
+          fetchRealBalance(mwa.connection, mwa.account.publicKey).then((balance) => {
+            setWallet((prev) => prev.connected ? { ...prev, balance } : prev);
+          });
+        }
+
+        // Fetch .skr name
+        apiService.resolveSkrName(fullAddress).then((result) => {
+          if (result.success && result.skrName) {
+            setWallet((prev) => prev.connected ? { ...prev, skrName: result.skrName! } : prev);
+          }
+        });
+      }
+    } else if (!DEMO_MODE.ENABLED) {
+      balanceFetchRef.current = null;
       setWallet({
         connected: false,
         address: null,
+        fullAddress: null,
         skrName: null,
         balance: 0,
         isDemo: false,
       });
     }
-  }, [mwa.account]);
+  }, [mwa.account, mwa.connection]);
 
   // Subscribe to wallet changes (demo mode only)
   useEffect(() => {
@@ -108,17 +138,18 @@ export function AppProvider({ children }: AppProviderProps) {
   // Auto-check SGT verification when wallet connects
   useEffect(() => {
     const checkSGT = async () => {
-      if (wallet.connected && wallet.address) {
-        if (DEMO_MODE.ENABLED) {
+      const addr = wallet.fullAddress || wallet.address;
+      if (wallet.connected && addr) {
+        if (wallet.isDemo) {
           // Demo mode: always verified
           setSgtVerified(true);
         } else {
           // Real mode: check backend cache
           const cached = await sgtService.getCachedVerification();
-          if (cached.verified && cached.walletAddress === wallet.address) {
+          if (cached.verified && cached.walletAddress === addr) {
             setSgtVerified(true);
           } else {
-            const status = await sgtService.checkSGTStatus(wallet.address);
+            const status = await sgtService.checkSGTStatus(addr);
             setSgtVerified(status.verified);
           }
         }
@@ -127,27 +158,35 @@ export function AppProvider({ children }: AppProviderProps) {
       }
     };
     checkSGT();
-  }, [wallet.connected, wallet.address]);
+  }, [wallet.connected, wallet.fullAddress, wallet.address, wallet.isDemo]);
 
-  // Wallet actions
+  // Wallet actions — always try MWA first, fall back to demo wallet
   const connectWallet = useCallback(async () => {
-    if (DEMO_MODE.ENABLED) {
-      await walletService.connectWallet();
-    } else {
+    try {
       await mwa.connect();
+    } catch (error) {
+      if (__DEV__) console.log('[AppContext] MWA connect failed, falling back to demo:', error);
+      if (DEMO_MODE.ENABLED) {
+        await walletService.connectWallet();
+      }
     }
   }, [mwa]);
 
   const disconnectWallet = useCallback(async () => {
-    if (DEMO_MODE.ENABLED) {
-      await walletService.disconnectWallet();
-    } else {
-      await mwa.disconnect();
+    try {
+      if (wallet.isDemo) {
+        await walletService.disconnectWallet();
+      } else {
+        await mwa.disconnect();
+      }
+    } catch (error) {
+      if (__DEV__) console.log('[AppContext] Disconnect error:', error);
     }
+    balanceFetchRef.current = null;
     setActiveBounty(null);
     setSgtVerified(false);
     sgtService.clearVerification();
-  }, [mwa]);
+  }, [mwa, wallet.isDemo]);
 
   // Stats actions
   const refreshStats = async () => {

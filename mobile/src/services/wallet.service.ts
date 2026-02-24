@@ -1,5 +1,7 @@
+import { Connection, PublicKey } from '@solana/web3.js';
 import { WalletState } from '../types';
 import apiService from './api.service';
+import { TOKEN } from '../config';
 
 // Dev-only logging - stripped from production builds
 const log = (...args: any[]) => __DEV__ && console.log(...args);
@@ -16,6 +18,7 @@ const DEMO_WALLET = {
 let walletState: WalletState = {
   connected: false,
   address: null,
+  fullAddress: null,
   skrName: null,
   balance: 0,
   isDemo: true,
@@ -65,6 +68,7 @@ export async function connectWallet(): Promise<WalletState> {
   walletState = {
     connected: true,
     address: DEMO_WALLET.address,
+    fullAddress: DEMO_WALLET.fullAddress,
     skrName,
     balance: DEMO_WALLET.initialBalance,
     isDemo: true,
@@ -82,6 +86,7 @@ export async function disconnectWallet(): Promise<void> {
   walletState = {
     connected: false,
     address: null,
+    fullAddress: null,
     skrName: null,
     balance: 0,
     isDemo: true,
@@ -167,6 +172,40 @@ export function formatBalance(amount: number): string {
   return `${amount.toLocaleString()} $SKR`;
 }
 
+/**
+ * Fetch real on-chain SKR token balance for a wallet
+ * Returns balance in whole SKR units (not lamports)
+ */
+export async function fetchRealBalance(
+  connection: Connection,
+  publicKey: PublicKey,
+): Promise<number> {
+  try {
+    const mintPubkey = new PublicKey(TOKEN.MINT);
+    const accounts = await connection.getTokenAccountsByOwner(publicKey, {
+      mint: mintPubkey,
+    });
+
+    if (accounts.value.length === 0) {
+      log('[Wallet] No SKR token account found for', publicKey.toBase58());
+      return 0;
+    }
+
+    // Parse the token account data to get the balance
+    // Token account data: first 32 bytes = mint, next 32 = owner, next 8 = amount (little-endian u64)
+    const data = accounts.value[0].account.data;
+    const amountBytes = data.slice(64, 72);
+    const amount = Number(amountBytes.readBigUInt64LE(0));
+    const balance = amount / Math.pow(10, TOKEN.DECIMALS);
+
+    log(`[Wallet] Real SKR balance: ${balance} SKR`);
+    return balance;
+  } catch (error) {
+    logError('[Wallet] Failed to fetch real balance:', error);
+    return 0;
+  }
+}
+
 export default {
   subscribeToWallet,
   connectWallet,
@@ -177,4 +216,5 @@ export default {
   addWinnings,
   hasSufficientBalance,
   formatBalance,
+  fetchRealBalance,
 };

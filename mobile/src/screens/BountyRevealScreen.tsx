@@ -66,7 +66,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       // Try API first
       try {
         const result = await apiService.startBounty(
-          wallet.address || 'demo-wallet',
+          wallet.fullAddress || wallet.address || 'demo-wallet',
           tier
         );
 
