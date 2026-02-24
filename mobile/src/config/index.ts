@@ -29,7 +29,7 @@ export const DEMO_MODE = {
   ENABLED: __DEV__ ?? false,           // Master switch (tied to __DEV__)
   USE_DEMO_ENDPOINTS: true,            // Use /bounty/demo/* endpoints
   WALLET_ADDRESS: 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker',
-  INITIAL_BALANCE: 10000,
+  INITIAL_BALANCE: 50000,
 };
 
 // Game Settings
