@@ -13,7 +13,6 @@ import {
   Keypair,
   PublicKey,
   Transaction,
-  sendAndConfirmTransaction,
   LAMPORTS_PER_SOL,
 } from '@solana/web3.js';
 import { AnchorProvider, Program, Wallet, BN } from '@coral-xyz/anchor';
@@ -150,7 +149,7 @@ async function fundHouse(amountSkr: number) {
     process.exit(1);
   }
 
-  const sig = await program.methods
+  const sig = await (program.methods as any)
     .fundHouse(amountLamports)
     .accounts({
       authority: authority.publicKey,
@@ -178,7 +177,7 @@ async function withdrawTreasury(amountSkr: number) {
   const protocolTreasury = state.protocolTreasury as PublicKey;
   const authorityAta = await getAssociatedTokenAddress(SKR_MINT, authority.publicKey);
 
-  const sig = await program.methods
+  const sig = await (program.methods as any)
     .withdrawTreasury(amountLamports)
     .accounts({
       authority: authority.publicKey,
@@ -229,7 +228,8 @@ async function mintToPlayer(playerAddress: string, amountSkr: number) {
     )
   );
 
-  const sig = await sendAndConfirmTransaction(connection, tx, [authority]);
+  const sig = await connection.sendTransaction(tx, [authority]);
+  await connection.confirmTransaction(sig, 'confirmed');
   console.log(`\nMinted! TX: ${sig}`);
 
   // Show new balance
