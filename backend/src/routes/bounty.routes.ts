@@ -20,10 +20,14 @@ import {
   markBountyValidating,
   storeMissionSecrets,
   getMissionSecrets,
+  storePreparedBounty,
+  getPreparedBounty,
 } from '../services/bounty.service';
 import { extractExifMetadata, formatMetadata } from '../services/exif.service';
 import { validatePhoto, isValidImageFormat, checkImageSize } from '../services/ai.service';
-import { resolveBountyOnChain, generateMissionCommitment, formatSkr } from '../services/solana.service';
+import { resolveBountyOnChain, generateMissionCommitment, formatSkr, getCurrentSlotAndTimestamp, deriveBountyPda } from '../services/solana.service';
+import { getRandomMission } from '../data/missions';
+import { PublicKey } from '@solana/web3.js';
 import { isWalletSGTVerified } from '../services/sgt.service';
 import { attestationService, AttestationPayload } from '../services/attestation.service';
 import { requireWalletAuth } from '../middleware/auth.middleware';
@@ -56,11 +60,81 @@ const submitPhotoSchema = z.object({
   bountyId: z.string().uuid('Invalid bounty ID format'),
 });
 
+// Prepare bounty schema (pre-transaction)
+const prepareBountySchema = z.object({
+  tier: z.number().int().min(1).max(3) as z.ZodType<Tier>,
+  playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address'),
+});
+
 // Demo mode schemas
 const startBountyDemoSchema = z.object({
   tier: z.number().int().min(1).max(3) as z.ZodType<Tier>,
   wallet: z.string().optional(),
   entryAmount: z.number().optional(),
+});
+
+/**
+ * POST /api/bounty/prepare
+ * Prepare a bounty before on-chain transaction.
+ * Returns commitment, timestamp, and bountyPda for the mobile client
+ * to build the accept_bounty transaction.
+ * No wallet auth required (player hasn't signed anything yet).
+ */
+router.post('/prepare', validate(prepareBountySchema), async (req: Request, res: Response) => {
+  try {
+    const { tier, playerWallet } = req.body as { tier: Tier; playerWallet: string };
+
+    // Check for existing active bounty
+    const existing = getPlayerActiveBounty(playerWallet);
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        error: 'Player already has an active bounty',
+      });
+    }
+
+    // Get current Solana timestamp for PDA derivation
+    const { timestamp } = await getCurrentSlotAndTimestamp();
+
+    // Pick a random mission and generate commitment
+    const mission = getRandomMission(tier);
+    const { commitment, missionIdBytes, salt } = generateMissionCommitment(mission.id);
+
+    // Derive bounty PDA
+    const playerPubkey = new PublicKey(playerWallet);
+    const [bountyPda] = deriveBountyPda(playerPubkey, timestamp);
+
+    // Store prepared bounty data (keyed by bountyPda) so /start can retrieve it
+    storePreparedBounty(bountyPda.toBase58(), {
+      tier,
+      playerWallet,
+      timestamp: Number(timestamp),
+      missionId: mission.id,
+      missionDescription: mission.description,
+      missionIdBytes,
+      salt,
+      commitment,
+      createdAt: Date.now(),
+    });
+
+    console.log(`[API] Bounty prepared: PDA=${bountyPda.toBase58().slice(0, 8)}... | Tier ${tier} | ${mission.id}`);
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        commitment: Array.from(commitment),
+        timestamp: Number(timestamp),
+        bountyPda: bountyPda.toBase58(),
+        entryAmount: Number(ENTRY_AMOUNTS[tier]),
+      },
+    });
+  } catch (error) {
+    console.error('[API] Prepare bounty error:', error);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal server error',
+    });
+  }
 });
 
 /**
@@ -84,6 +158,9 @@ router.post('/start', requireWalletAuth, bountyStartLimiter, validate(startBount
     const sgtResult = isWalletSGTVerified(playerWallet);
     const sgtVerified = sgtResult?.verified || false;
 
+    // Try to use prepared bounty data (from /prepare endpoint)
+    const prepared = getPreparedBounty(bountyPda);
+
     // Create bounty
     const { bounty, missionDescription } = createBounty(
       playerWallet,
@@ -93,9 +170,17 @@ router.post('/start', requireWalletAuth, bountyStartLimiter, validate(startBount
       sgtVerified
     );
 
-    // Generate and store mission commitment for commit-reveal
-    const { missionIdBytes, salt } = generateMissionCommitment(bounty.missionId);
-    storeMissionSecrets(bounty.id, missionIdBytes, salt);
+    // Use prepared mission secrets (must match on-chain commitment)
+    if (prepared) {
+      storeMissionSecrets(bounty.id, prepared.missionIdBytes, prepared.salt);
+    } else {
+      // No prepared data: player used on-chain flow but /prepare data expired.
+      // Generate new secrets. NOTE: This won't match the on-chain commitment,
+      // so reveal_mission will fail. The bounty will expire naturally.
+      console.warn(`[API] No prepared data for bountyPda ${bountyPda} — commitment mismatch likely`);
+      const { missionIdBytes, salt } = generateMissionCommitment(bounty.missionId);
+      storeMissionSecrets(bounty.id, missionIdBytes, salt);
+    }
 
     // Return response
     const response: StartBountyResponse = {

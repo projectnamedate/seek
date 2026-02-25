@@ -38,7 +38,7 @@ const pendingFinalizations = new Map<string, PendingFinalization>();
 const MAX_ATTEMPTS = 10;
 
 // How often to poll (ms)
-const POLL_INTERVAL = 30_000; // 30 seconds
+const POLL_INTERVAL = 10_000; // 10 seconds (matches devnet challenge period)
 
 let intervalHandle: NodeJS.Timeout | null = null;
 

@@ -12,6 +12,21 @@ const bountyByPlayer = new Map<string, string>();
 // Keyed by bountyId → { missionIdBytes, salt }
 const missionSecrets = new Map<string, { missionIdBytes: Buffer; salt: Buffer }>();
 
+// Store prepared bounty data (from /prepare endpoint, before on-chain tx)
+// Keyed by bountyPda → prepared data
+export interface PreparedBounty {
+  tier: Tier;
+  playerWallet: string;
+  timestamp: number;
+  missionId: string;
+  missionDescription: string;
+  missionIdBytes: Buffer;
+  salt: Buffer;
+  commitment: Buffer;
+  createdAt: number;
+}
+const preparedBounties = new Map<string, PreparedBounty>();
+
 // Logging helper
 function log(message: string, data?: any) {
   const timestamp = new Date().toISOString();
@@ -144,6 +159,23 @@ export function getMissionSecrets(
   bountyId: string
 ): { missionIdBytes: Buffer; salt: Buffer } | undefined {
   return missionSecrets.get(bountyId);
+}
+
+/**
+ * Store prepared bounty data (from /prepare, before on-chain tx)
+ */
+export function storePreparedBounty(bountyPda: string, data: PreparedBounty): void {
+  preparedBounties.set(bountyPda, data);
+  // Auto-expire prepared bounties after 5 minutes
+  setTimeout(() => preparedBounties.delete(bountyPda), 5 * 60 * 1000);
+}
+
+/**
+ * Get prepared bounty data (non-destructive for retry safety).
+ * Data auto-expires via setTimeout in storePreparedBounty.
+ */
+export function getPreparedBounty(bountyPda: string): PreparedBounty | undefined {
+  return preparedBounties.get(bountyPda);
 }
 
 /**

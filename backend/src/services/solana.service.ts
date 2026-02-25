@@ -276,9 +276,9 @@ export async function resolveBountyOnChain(
     const proposeSig = await proposeResolutionOnChain(bountyPda, success);
 
     // Step 3: Queue finalization for after the challenge period
-    // The on-chain challenge period is 300 seconds (5 minutes).
+    // The on-chain challenge period is 10 seconds (devnet demo).
     // The finalization worker will pick this up and finalize when ready.
-    const challengeEndsAt = Math.floor(Date.now() / 1000) + 300; // 5 min from now
+    const challengeEndsAt = Math.floor(Date.now() / 1000) + 10; // 10s for devnet
     queueFinalization(bountyPda, playerWallet, challengeEndsAt);
 
     console.log(`[Solana] Resolution proposed, finalization queued for ${new Date(challengeEndsAt * 1000).toISOString()}`);

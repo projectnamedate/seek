@@ -13,6 +13,8 @@ import { RouteProp } from '@react-navigation/native';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, ValidationResult } from '../types';
 import apiService from '../services/api.service';
+import { useApp } from '../context/AppContext';
+import { DEMO_MODE } from '../config';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Validating'>;
@@ -29,6 +31,7 @@ const STAGES = [
 
 export default function ValidatingScreen({ navigation, route }: Props) {
   const { bounty, photoUri, attestation } = route.params;
+  const { wallet, signMessage } = useApp();
   const [currentStage, setCurrentStage] = useState(0);
   const [validationText, setValidationText] = useState('');
 
@@ -97,7 +100,10 @@ export default function ValidatingScreen({ navigation, route }: Props) {
 
       try {
         // Call the real API for validation
-        const result = await apiService.submitPhoto(bounty.id, photoUri, attestation);
+        const authOptions = !DEMO_MODE.USE_DEMO_ENDPOINTS && wallet.fullAddress
+          ? { signMessage, walletAddress: wallet.fullAddress }
+          : undefined;
+        const result = await apiService.submitPhoto(bounty.id, photoUri, attestation, authOptions);
 
         if (!isMounted) return;
 

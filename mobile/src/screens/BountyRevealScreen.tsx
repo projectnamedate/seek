@@ -6,15 +6,19 @@ import {
   SafeAreaView,
   Animated,
   Easing,
+  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
+import { PublicKey } from '@solana/web3.js';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
-import { RootStackParamList, TIERS, Bounty } from '../types';
+import { RootStackParamList, TIERS, Bounty, TierNumber } from '../types';
 import apiService from '../services/api.service';
+import { buildAcceptBountyTransaction } from '../services/solana.mobile';
 import { useApp } from '../context/AppContext';
+import { DEMO_MODE } from '../config';
 
-// Sample targets for demo (these would come from backend in production)
+// Sample targets for demo fallback
 const DEMO_TARGETS: Record<number, { target: string; hint: string }[]> = {
   1: [
     { target: 'Fire Hydrant', hint: 'Usually red or yellow, found on streets' },
@@ -47,11 +51,12 @@ type Props = {
 export default function BountyRevealScreen({ navigation, route }: Props) {
   const { tier } = route.params;
   const tierData = TIERS[tier];
-  const { wallet } = useApp();
+  const { wallet, signAndSendTransaction, signMessage, connection } = useApp();
 
   const [bounty, setBounty] = useState<Bounty | null>(null);
   const [isRevealing, setIsRevealing] = useState(true);
   const [countdown, setCountdown] = useState(3);
+  const [statusText, setStatusText] = useState('');
 
   // Animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -59,53 +64,164 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // Start bounty - try API first, fallback to local demo
+  // Start bounty flow
   useEffect(() => {
-    const startBounty = async () => {
-      // Try API first
-      try {
-        const result = await apiService.startBounty(
-          wallet.fullAddress || wallet.address || 'demo-wallet',
-          tier
-        );
+    if (DEMO_MODE.USE_DEMO_ENDPOINTS) {
+      startDemoBounty();
+    } else {
+      startOnChainBounty();
+    }
+  }, [tier]);
 
-        if (result.success && result.bounty) {
-          console.log('[BountyReveal] Got bounty from API:', result.bounty);
-          setBounty(result.bounty);
-          return;
-        }
-      } catch (error) {
-        console.log('[BountyReveal] API unavailable, using local demo');
+  /**
+   * Demo mode flow: just call API
+   */
+  const startDemoBounty = async () => {
+    try {
+      const result = await apiService.startBounty(
+        wallet.fullAddress || wallet.address || 'demo-wallet',
+        tier
+      );
+
+      if (result.success && result.bounty) {
+        console.log('[BountyReveal] Got bounty from API:', result.bounty);
+        setBounty(result.bounty);
+        return;
+      }
+    } catch (error) {
+      console.log('[BountyReveal] API unavailable, using local demo');
+    }
+
+    // Fallback to local demo data
+    useFallbackDemoBounty();
+  };
+
+  /**
+   * On-chain flow:
+   * 1. Call /prepare to get commitment + timestamp + bountyPda
+   * 2. Build accept_bounty transaction
+   * 3. Sign & send via Phantom (MWA)
+   * 4. Call /start with bountyPda + tx signature
+   * 5. Get mission details back
+   */
+  const startOnChainBounty = async () => {
+    const playerWallet = wallet.fullAddress;
+    if (!playerWallet || !connection) {
+      Alert.alert('Error', 'Wallet not connected');
+      navigation.goBack();
+      return;
+    }
+
+    try {
+      // Step 1: Prepare bounty (get commitment from backend)
+      setStatusText('Preparing bounty...');
+      const prepResult = await apiService.prepareBounty(playerWallet, tier);
+      if (!prepResult.success || !prepResult.data) {
+        throw new Error(prepResult.error || 'Failed to prepare bounty');
       }
 
-      // Fallback to local demo data
-      const targets = DEMO_TARGETS[tier];
-      const randomTarget = targets[Math.floor(Math.random() * targets.length)];
-      const now = Date.now();
+      const { commitment, timestamp, bountyPda, entryAmount } = prepResult.data;
+      console.log('[BountyReveal] Prepared:', { bountyPda: bountyPda.slice(0, 8), timestamp });
 
-      const demoBounty: Bounty = {
-        id: `demo-${now}`,
+      // Step 2: Build the accept_bounty transaction
+      setStatusText('Building transaction...');
+      const playerPubkey = new PublicKey(playerWallet);
+      const bountyPdaPubkey = new PublicKey(bountyPda);
+      const transaction = await buildAcceptBountyTransaction(
+        connection,
+        playerPubkey,
+        BigInt(entryAmount),
+        BigInt(timestamp),
+        commitment,
+        bountyPdaPubkey
+      );
+
+      // Step 3: Sign & send via Phantom (opens wallet for approval)
+      setStatusText('Approve in wallet...');
+      const slot = await connection.getSlot('confirmed');
+      const txSignature = await signAndSendTransaction(transaction, slot);
+      console.log('[BountyReveal] Tx sent:', txSignature);
+
+      // Step 4: Call /start to register bounty in backend
+      setStatusText('Starting mission...');
+      const startResult = await apiService.startBounty(
+        playerWallet,
         tier,
-        target: randomTarget.target,
-        targetHint: randomTarget.hint,
+        {
+          bountyPda,
+          transactionSignature: typeof txSignature === 'string' ? txSignature : undefined,
+          signMessage,
+        }
+      );
+
+      if (!startResult.success) {
+        throw new Error(startResult.error || 'Failed to start bounty');
+      }
+
+      // Step 5: Build bounty object from response
+      const responseData = startResult.data;
+      const now = Date.now();
+      const description = responseData?.mission?.description || 'Find the target';
+      const parts = description.split(': ');
+      const target = (parts[0] || description).replace('Find ', '').replace('Find a ', '').replace('Find an ', '');
+      const hint = parts[1] || 'Look around you';
+
+      const newBounty: Bounty = {
+        id: responseData?.bountyId || `onchain-${now}`,
+        tier,
+        target,
+        targetHint: hint,
         startTime: now,
-        endTime: now + tierData.timeLimit * 1000,
+        endTime: responseData?.expiresAt
+          ? new Date(responseData.expiresAt).getTime()
+          : now + tierData.timeLimit * 1000,
         status: 'revealing',
         entryAmount: tierData.entry,
         potentialReward: tierData.entry * 2,
       };
 
-      setBounty(demoBounty);
-    };
+      console.log('[BountyReveal] On-chain bounty started:', newBounty.id);
+      setBounty(newBounty);
+    } catch (error: any) {
+      console.error('[BountyReveal] On-chain flow error:', error);
+      const message = error?.message || 'Transaction failed';
 
-    startBounty();
-  }, [tier]);
+      // User cancelled in wallet
+      if (message.includes('cancel') || message.includes('rejected') || message.includes('declined')) {
+        navigation.goBack();
+        return;
+      }
+
+      Alert.alert('Transaction Failed', message, [
+        { text: 'Try Again', onPress: () => startOnChainBounty() },
+        { text: 'Cancel', onPress: () => navigation.goBack() },
+      ]);
+    }
+  };
+
+  const useFallbackDemoBounty = () => {
+    const targets = DEMO_TARGETS[tier];
+    const randomTarget = targets[Math.floor(Math.random() * targets.length)];
+    const now = Date.now();
+
+    setBounty({
+      id: `demo-${now}`,
+      tier,
+      target: randomTarget.target,
+      targetHint: randomTarget.hint,
+      startTime: now,
+      endTime: now + tierData.timeLimit * 1000,
+      status: 'revealing',
+      entryAmount: tierData.entry,
+      potentialReward: tierData.entry * 2,
+    });
+  };
 
   // Reveal animation sequence
   useEffect(() => {
     if (!bounty) return;
 
-    // Smooth continuous spin animation - linear for constant speed
+    // Smooth continuous spin animation
     Animated.loop(
       Animated.timing(rotateAnim, {
         toValue: 1,
@@ -177,6 +293,23 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
     inputRange: [0, 1],
     outputRange: ['0deg', '360deg'],
   });
+
+  // Show status while preparing on-chain tx
+  if (!bounty && !DEMO_MODE.USE_DEMO_ENDPOINTS && statusText) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.statusContainer}>
+          <Animated.View style={styles.spinner}>
+            <Text style={styles.spinnerEmoji}>⏳</Text>
+          </Animated.View>
+          <Text style={styles.statusText}>{statusText}</Text>
+          <Text style={styles.statusSubtext}>
+            {statusText.includes('wallet') ? 'Check your Phantom wallet' : 'Please wait...'}
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (!bounty) return null;
 
@@ -290,6 +423,28 @@ const styles = StyleSheet.create({
     backgroundColor: colors.dark,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  statusContainer: {
+    alignItems: 'center',
+    padding: spacing.xl,
+  },
+  spinner: {
+    marginBottom: spacing.lg,
+  },
+  spinnerEmoji: {
+    fontSize: 48,
+  },
+  statusText: {
+    color: colors.cyan,
+    fontSize: fontSize.lg,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  statusSubtext: {
+    color: colors.textSecondary,
+    fontSize: fontSize.sm,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
   backgroundGlow: {
     position: 'absolute',

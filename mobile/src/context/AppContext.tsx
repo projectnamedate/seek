@@ -19,6 +19,7 @@ interface AppContextType {
 
   // MWA (for transaction signing when not in demo mode)
   signAndSendTransaction: MobileWalletContext['signAndSendTransaction'];
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>;
   connection: MobileWalletContext['connection'];
 
   // Active bounty
@@ -222,6 +223,7 @@ export function AppProvider({ children }: AppProviderProps) {
     disconnectWallet,
     addWinnings,
     signAndSendTransaction: mwa.signAndSendTransaction,
+    signMessage: mwa.signMessage as (message: Uint8Array) => Promise<Uint8Array>,
     connection: mwa.connection,
     activeBounty,
     setActiveBounty,

@@ -27,7 +27,7 @@ export const API_BASE_URL = __DEV__
 //   - Set USE_DEMO_ENDPOINTS=false to use full on-chain flow
 export const DEMO_MODE = {
   ENABLED: __DEV__ ?? false,           // Master switch (tied to __DEV__)
-  USE_DEMO_ENDPOINTS: true,            // Use /bounty/demo/* endpoints
+  USE_DEMO_ENDPOINTS: false,           // false = real on-chain flow via MWA
   WALLET_ADDRESS: 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker',
   INITIAL_BALANCE: 50000,
 };
@@ -36,7 +36,7 @@ export const DEMO_MODE = {
 export const GAME_CONFIG = {
   MIN_CONFIDENCE: 0.70, // 70% AI confidence required
   SINGULARITY_ODDS: 500, // 1 in 500 chance
-  CHALLENGE_PERIOD: 300, // 5 minutes
+  CHALLENGE_PERIOD: 10, // 10 seconds (devnet)
 };
 
 // Tier Configuration - Solana Mobile colors

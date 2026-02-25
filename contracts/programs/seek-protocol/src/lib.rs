@@ -25,12 +25,12 @@ pub const PROTOCOL_SHARE_BPS: u64 = 1000;    // 10% to protocol treasury
 pub const SINGULARITY_ODDS: u64 = 500;
 
 /// Timer durations in seconds
-pub const TIER_1_DURATION: i64 = 300;  // 5 minutes
-pub const TIER_2_DURATION: i64 = 180;  // 3 minutes
-pub const TIER_3_DURATION: i64 = 120;  // 2 minutes
+pub const TIER_1_DURATION: i64 = 180;  // 3 minutes
+pub const TIER_2_DURATION: i64 = 120;  // 2 minutes
+pub const TIER_3_DURATION: i64 = 60;   // 1 minute
 
 /// Trust-minimization constants
-pub const CHALLENGE_PERIOD: i64 = 300;       // 5 minutes to challenge a result
+pub const CHALLENGE_PERIOD: i64 = 10;        // 10 seconds for devnet demo
 pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original entry to dispute
 pub const DISPUTE_WINDOW: i64 = 600;         // 10 minutes to file dispute after resolution
 
