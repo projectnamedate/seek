@@ -15,9 +15,9 @@ Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 2
 
 | Tier | Entry | Time | Difficulty | Example Bounties |
 |------|-------|------|------------|------------------|
-| 1 | 1000 $SKR | 5 min | Easy | Fire hydrant, blue car, dog |
-| 2 | 2000 $SKR | 3 min | Medium | Starbucks cup, golden retriever |
-| 3 | 3000 $SKR | 2 min | Hard | Dog jumping, person on bicycle |
+| 1 | 1000 $SKR | 3 min | Easy | Fire hydrant, blue car, dog |
+| 2 | 2000 $SKR | 2 min | Medium | Starbucks cup, golden retriever |
+| 3 | 3000 $SKR | 1 min | Hard | Dog jumping, person on bicycle |
 
 ## Economics
 
@@ -100,28 +100,43 @@ seek/
 4. Claude Vision object detection with confidence scoring
 5. Minimum 70% confidence threshold
 
+## Anti-Cheat
+
+- **Seeker Genesis Token (SGT)** — SIWS verification via Helius DAS API, "VERIFIED SEEKER" badge
+- **Camera Attestation** — SHA-256 photo hash + device fingerprint, TEE-ready for Seeker Camera SDK
+- **AI Screenshot Detection** — Claude rejects photos without valid EXIF/GPS metadata
+
 ## Demo Mode
 
-For hackathon demos, the app works without blockchain:
+For hackathon demos, the app uses a hybrid mode: **real MWA wallet connection** (Phantom) with demo bounty endpoints. No on-chain transactions needed, but uses **real Claude Vision validation** — judges can see AI analyzing actual photos.
 
 ```bash
-# 1. Start backend with demo endpoints
+# 1. Start backend
 cd backend
-cp .env.example .env
-# Set your ANTHROPIC_API_KEY in .env
-npm install
-npm run dev
+cp .env.example .env    # Set ANTHROPIC_API_KEY
+npm install && npm run dev
 
-# 2. Start mobile app
+# 2. Start Cloudflare tunnel (for real device testing)
+cloudflared tunnel --url http://localhost:3001
+# Copy the https://...trycloudflare.com URL
+
+# 3. Update mobile config with tunnel URL
+# Edit mobile/src/config/index.ts → set NGROK_URL to the tunnel URL
+
+# 4. Build and run on Android
 cd mobile
 npm install
-npx expo start
+npx expo run:android    # Phone connected via USB
 
-# 3. Run on Android (Seeker phone)
-# Press 'a' in Expo CLI or scan QR code
+# 5. For wireless testing: unplug USB, app works over cellular
 ```
 
-Demo endpoints skip blockchain but use **real Claude Vision validation** - judges can see AI analyzing actual photos!
+**Admin CLI** for player setup:
+```bash
+cd backend
+npx ts-node scripts/admin.ts mint <wallet-address> 50000   # Give SKR tokens
+npx ts-node scripts/admin.ts airdrop <wallet-address> 2    # Give SOL for fees
+```
 
 ## Development
 
@@ -154,7 +169,7 @@ SOLANA_RPC_URL=https://api.devnet.solana.com
 AUTHORITY_PRIVATE_KEY=your_base58_private_key
 
 # Program
-SEEK_PROGRAM_ID=Seek111111111111111111111111111111111111111
+SEEK_PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
 SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
 
 # Claude API (get from https://console.anthropic.com)
@@ -171,6 +186,8 @@ The following improvements are planned before mainnet deployment:
 - [ ] **Authority Multisig** — Split authority roles and add timelock/multisig for treasury operations
 - [ ] **Bounty Account Closing** — Add instruction to close resolved bounty accounts and reclaim rent
 - [ ] **TLS Enforcement** — Require HTTPS in production via reverse proxy
+- [ ] **Real Balance Fetching** — Replace demo balance fallback with on-chain RPC balance queries
+- [ ] **MWA Disconnect** — Verify full wallet session deauthorization on disconnect
 
 ## License
 
