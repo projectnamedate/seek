@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
-import { RootStackParamList, TierNumber, TIERS, WalletState } from '../types';
+import { RootStackParamList, TierNumber, TIERS } from '../types';
 import walletService from '../services/wallet.service';
 import { useApp } from '../context/AppContext';
 
@@ -29,8 +29,7 @@ type Props = {
 };
 
 export default function HomeScreen({ navigation }: Props) {
-  const { sgtVerified } = useApp();
-  const [wallet, setWallet] = useState<WalletState>(walletService.getWalletState());
+  const { sgtVerified, wallet, connectWallet, disconnectWallet } = useApp();
   const [selectedTier, setSelectedTier] = useState<TierNumber>(1);
   const [isConnecting, setIsConnecting] = useState(false);
   const [jackpot, setJackpot] = useState(128470); // Starting jackpot amount
@@ -66,10 +65,7 @@ export default function HomeScreen({ navigation }: Props) {
     ]).start();
   };
 
-  // Subscribe to wallet changes
-  useEffect(() => {
-    return walletService.subscribeToWallet(setWallet);
-  }, []);
+  // Wallet state is now managed by AppContext — no subscription needed
 
   // Jackpot animation and random updates
   useEffect(() => {
@@ -103,24 +99,20 @@ export default function HomeScreen({ navigation }: Props) {
 
   const handleConnect = async () => {
     setIsConnecting(true);
-    await walletService.connectWallet();
+    await connectWallet();
     setIsConnecting(false);
   };
 
   const handleStartHunt = async () => {
     const tier = TIERS[selectedTier];
 
-    // Check balance
-    if (!walletService.hasSufficientBalance(tier.entry)) {
+    // Check balance using AppContext wallet state (works for both MWA and demo)
+    if (wallet.balance < tier.entry) {
       // TODO: Show insufficient balance modal
       return;
     }
 
-    // Deduct entry
-    const success = await walletService.deductEntry(tier.entry);
-    if (success) {
-      navigation.navigate('BountyReveal', { tier: selectedTier });
-    }
+    navigation.navigate('BountyReveal', { tier: selectedTier });
   };
 
   const renderTierButton = (tierNum: TierNumber) => {
@@ -289,6 +281,18 @@ export default function HomeScreen({ navigation }: Props) {
         >
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Settings</Text>
+
+            {wallet.connected && (
+              <TouchableOpacity
+                style={[styles.modalItem, { borderBottomColor: '#ff4444' }]}
+                onPress={async () => {
+                  setSettingsVisible(false);
+                  await disconnectWallet();
+                }}
+              >
+                <Text style={[styles.modalItemText, { color: '#ff4444' }]}>Disconnect Wallet</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={styles.modalItem}

@@ -9,9 +9,9 @@ export interface Tier {
 }
 
 export const TIERS: Record<TierNumber, Tier> = {
-  1: { number: 1, entry: 1000, timeLimit: 300, difficulty: 'Easy' },
-  2: { number: 2, entry: 2000, timeLimit: 180, difficulty: 'Medium' },
-  3: { number: 3, entry: 3000, timeLimit: 120, difficulty: 'Hard' },
+  1: { number: 1, entry: 1000, timeLimit: 180, difficulty: 'Easy' },
+  2: { number: 2, entry: 2000, timeLimit: 120, difficulty: 'Medium' },
+  3: { number: 3, entry: 3000, timeLimit: 60, difficulty: 'Hard' },
 };
 
 // Bounty status

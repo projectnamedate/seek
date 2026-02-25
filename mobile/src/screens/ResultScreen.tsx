@@ -12,7 +12,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList } from '../types';
-import walletService from '../services/wallet.service';
+import { useApp } from '../context/AppContext';
 import { playWinSound, playLoseSound } from '../utils/sounds';
 
 type Props = {
@@ -23,6 +23,7 @@ type Props = {
 export default function ResultScreen({ navigation, route }: Props) {
   const { bounty, validation } = route.params;
   const isWin = bounty.status === 'won';
+  const { addWinnings } = useApp();
 
   // Animations
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -43,9 +44,10 @@ export default function ResultScreen({ navigation, route }: Props) {
     // Play sound effect
     if (isWin) {
       playWinSound();
-      walletService.addWinnings(bounty.potentialReward);
+      addWinnings(bounty.potentialReward);
     } else {
       playLoseSound();
+      addWinnings(-bounty.entryAmount);
     }
 
     // Background flash

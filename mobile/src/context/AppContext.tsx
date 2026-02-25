@@ -15,6 +15,7 @@ interface AppContextType {
   wallet: WalletState;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => Promise<void>;
+  addWinnings: (amount: number) => void;
 
   // MWA (for transaction signing when not in demo mode)
   signAndSendTransaction: MobileWalletContext['signAndSendTransaction'];
@@ -101,11 +102,13 @@ export function AppProvider({ children }: AppProviderProps) {
       if (balanceFetchRef.current !== fullAddress) {
         balanceFetchRef.current = fullAddress;
 
-        // Fetch balance
-        if (mwa.connection) {
+        // TODO(mainnet): Always fetch real on-chain balance via RPC instead of demo fallback
+        if (mwa.connection && !DEMO_MODE.USE_DEMO_ENDPOINTS) {
           fetchRealBalance(mwa.connection, mwa.account.publicKey).then((balance) => {
-            setWallet((prev) => prev.connected ? { ...prev, balance } : prev);
+            setWallet((prev) => prev.connected ? { ...prev, balance: balance || DEMO_MODE.INITIAL_BALANCE } : prev);
           });
+        } else {
+          setWallet((prev) => prev.connected ? { ...prev, balance: DEMO_MODE.INITIAL_BALANCE } : prev);
         }
 
         // Fetch .skr name
@@ -172,6 +175,7 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, [mwa]);
 
+  // TODO(mainnet): Verify mwa.disconnect() fully deauthorizes wallet session
   const disconnectWallet = useCallback(async () => {
     try {
       if (wallet.isDemo) {
@@ -183,10 +187,23 @@ export function AppProvider({ children }: AppProviderProps) {
       if (__DEV__) console.log('[AppContext] Disconnect error:', error);
     }
     balanceFetchRef.current = null;
+    setWallet({
+      connected: false,
+      address: null,
+      fullAddress: null,
+      skrName: null,
+      balance: 0,
+      isDemo: false,
+    });
     setActiveBounty(null);
     setSgtVerified(false);
     sgtService.clearVerification();
   }, [mwa, wallet.isDemo]);
+
+  // Update displayed balance on win (cosmetic — real balance is on-chain)
+  const addWinnings = useCallback((amount: number) => {
+    setWallet((prev) => prev.connected ? { ...prev, balance: prev.balance + amount } : prev);
+  }, []);
 
   // Stats actions
   const refreshStats = async () => {
@@ -203,6 +220,7 @@ export function AppProvider({ children }: AppProviderProps) {
     wallet,
     connectWallet,
     disconnectWallet,
+    addWinnings,
     signAndSendTransaction: mwa.signAndSendTransaction,
     connection: mwa.connection,
     activeBounty,

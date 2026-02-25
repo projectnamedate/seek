@@ -5,12 +5,12 @@
 // Example: 'https://abc123.ngrok-free.app'
 // Leave empty/null to use emulator URL (10.0.2.2) in dev.
 // ============================================================
-const NGROK_URL: string | null = null;
+const NGROK_URL: string | null = 'https://send-gel-computers-tracker.trycloudflare.com';
 
 // API Configuration
 export const API_CONFIG = {
   NGROK_URL,
-  EMULATOR_URL: 'http://10.0.2.2:3001/api',
+  EMULATOR_URL: 'http://localhost:3001/api',  // Use with `adb reverse tcp:3001 tcp:3001` for real devices
   PROD_URL: 'https://api.seek.app/api',
   TIMEOUT: 30000,
   AI_VALIDATION_TIMEOUT: 60000,
@@ -43,19 +43,19 @@ export const GAME_CONFIG = {
 export const TIERS = {
   1: {
     entry: 1000,
-    timeLimit: 300, // 5 minutes
+    timeLimit: 180, // 3 minutes
     difficulty: 'Easy',
     color: '#cfe6e4', // light teal (Easy)
   },
   2: {
     entry: 2000,
-    timeLimit: 180, // 3 minutes
+    timeLimit: 120, // 2 minutes
     difficulty: 'Medium',
     color: '#95d2e6', // sky blue (Medium)
   },
   3: {
     entry: 3000,
-    timeLimit: 120, // 2 minutes
+    timeLimit: 60, // 1 minute
     difficulty: 'Hard',
     color: '#61afbd', // bright cyan (Hard)
   },

@@ -15,6 +15,7 @@ const api = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': '1',
   },
 });
 
@@ -96,6 +97,7 @@ export async function submitPhoto(
     const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
+        'ngrok-skip-browser-warning': '1',
       },
       timeout: 60000, // AI validation can take time
     });

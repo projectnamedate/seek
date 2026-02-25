@@ -12,7 +12,7 @@ import { RouteProp } from '@react-navigation/native';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TIERS, Bounty } from '../types';
 import apiService from '../services/api.service';
-import walletService from '../services/wallet.service';
+import { useApp } from '../context/AppContext';
 
 // Sample targets for demo (these would come from backend in production)
 const DEMO_TARGETS: Record<number, { target: string; hint: string }[]> = {
@@ -47,6 +47,7 @@ type Props = {
 export default function BountyRevealScreen({ navigation, route }: Props) {
   const { tier } = route.params;
   const tierData = TIERS[tier];
+  const { wallet } = useApp();
 
   const [bounty, setBounty] = useState<Bounty | null>(null);
   const [isRevealing, setIsRevealing] = useState(true);
@@ -61,8 +62,6 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   // Start bounty - try API first, fallback to local demo
   useEffect(() => {
     const startBounty = async () => {
-      const wallet = walletService.getWalletState();
-
       // Try API first
       try {
         const result = await apiService.startBounty(

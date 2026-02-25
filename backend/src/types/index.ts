@@ -8,11 +8,11 @@ export const ENTRY_AMOUNTS: Record<Tier, bigint> = {
   3: 3_000_000_000_000n, // 3000 SKR
 };
 
-// Timer durations in seconds (must match contract: 300/180/120)
+// Timer durations in seconds (must match mobile TIERS config)
 export const TIER_DURATIONS: Record<Tier, number> = {
-  1: 300, // 5 minutes
-  2: 180, // 3 minutes
-  3: 120, // 2 minutes
+  1: 180, // 3 minutes
+  2: 120, // 2 minutes
+  3: 60,  // 1 minute
 };
 
 // Per-tier AI confidence thresholds (higher stakes = higher bar)
