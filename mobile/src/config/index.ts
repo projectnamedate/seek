@@ -17,9 +17,10 @@ export const API_CONFIG = {
 };
 
 // Resolved API base URL: ngrok > emulator (dev) > prod
-export const API_BASE_URL = __DEV__
-  ? (NGROK_URL ? `${NGROK_URL}/api` : API_CONFIG.EMULATOR_URL)
-  : API_CONFIG.PROD_URL;
+// NGROK_URL takes priority in ALL builds (needed for release build testing)
+export const API_BASE_URL = NGROK_URL
+  ? `${NGROK_URL}/api`
+  : (__DEV__ ? API_CONFIG.EMULATOR_URL : API_CONFIG.PROD_URL);
 
 // Hybrid Demo Mode:
 //   - Uses demo bounty endpoints (no on-chain tx for start/submit)
