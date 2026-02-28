@@ -7,6 +7,7 @@ import {
   SafeAreaView,
   Animated,
   Easing,
+  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -156,6 +157,23 @@ export default function ResultScreen({ navigation, route }: Props) {
 
   const handlePlayAgain = () => {
     navigation.popToTop();
+  };
+
+  const handleChallenge = () => {
+    Alert.alert(
+      'Challenge Result',
+      `Challenge this result? You'll need to stake an additional ${bounty.entryAmount} $SKR. An independent review will determine the outcome.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Challenge',
+          style: 'destructive',
+          onPress: () => {
+            Alert.alert('Coming Soon', 'The dispute system is not yet available. Stay tuned!');
+          },
+        },
+      ]
+    );
   };
 
   const confidencePercent = Math.round(validation.confidence * 100);
@@ -308,6 +326,17 @@ export default function ResultScreen({ navigation, route }: Props) {
             {isWin ? 'HUNT AGAIN' : 'TRY AGAIN'}
           </Text>
         </TouchableOpacity>
+
+        {/* Challenge Button (loss only) */}
+        {!isWin && (
+          <TouchableOpacity
+            style={styles.challengeButton}
+            onPress={handleChallenge}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.challengeButtonText}>CHALLENGE</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Compliance Disclaimer */}
         {isWin && (
@@ -479,6 +508,21 @@ const styles = StyleSheet.create({
   },
   playAgainText: {
     color: colors.dark,
+    fontSize: fontSize.lg,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  challengeButton: {
+    marginTop: spacing.md,
+    padding: spacing.lg,
+    borderRadius: borderRadius.lg,
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: colors.error,
+  },
+  challengeButtonText: {
+    color: colors.error,
     fontSize: fontSize.lg,
     fontWeight: '800',
     letterSpacing: 2,

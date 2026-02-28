@@ -32,6 +32,7 @@ export interface Mission {
   description: string;
   keywords: string[]; // For AI validation
   difficulty: 'easy' | 'medium' | 'hard';
+  location: 'indoor' | 'outdoor';
 }
 
 // Active bounty being hunted
