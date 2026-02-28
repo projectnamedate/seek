@@ -1,6 +1,6 @@
 # Seek
 
-Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 3x your entry. Built for the Solana Seeker phone.
+Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 2x your entry. Built for the Solana Seeker phone.
 
 ## How It Works
 
@@ -9,7 +9,7 @@ Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 3
 3. **Hunt** - Find the object in the real world before time runs out
 4. **Capture** - Take a photo with your camera
 5. **Validate** - AI verifies your photo is legit
-6. **Complete/Fail** - Earn 3x reward or entry forfeited
+6. **Complete/Fail** - Earn 2x your entry or entry forfeited
 
 ## The Three Tiers
 
