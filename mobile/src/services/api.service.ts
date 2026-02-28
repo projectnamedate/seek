@@ -167,6 +167,41 @@ export async function startBounty(
 }
 
 /**
+ * Start a bounty with pre-signed auth headers.
+ * Use this when auth was signed before the on-chain tx to avoid double MWA prompts.
+ */
+export async function startBountyWithHeaders(
+  wallet: string,
+  tier: TierNumber,
+  options: {
+    bountyPda?: string;
+    transactionSignature?: string;
+  },
+  headers: Record<string, string>,
+): Promise<{ success: boolean; data?: any; error?: string }> {
+  try {
+    const response = await api.post('/bounty/start', {
+      tier,
+      playerWallet: wallet,
+      bountyPda: options.bountyPda,
+      transactionSignature: options.transactionSignature,
+    }, { headers });
+
+    if (response.data.success && response.data.data) {
+      return { success: true, data: response.data.data };
+    }
+
+    return { success: false, error: response.data.error || 'Failed to start bounty' };
+  } catch (error: any) {
+    logError('[API] Start bounty error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || 'Failed to start bounty',
+    };
+  }
+}
+
+/**
  * Submit a photo for AI validation.
  * In demo mode: uses /bounty/demo/submit (no auth).
  * In devnet mode: uses /bounty/submit (with wallet auth headers).
@@ -216,14 +251,8 @@ export async function submitPhoto(
       'ngrok-skip-browser-warning': '1',
     };
 
-    // Add auth headers for devnet mode
-    if (!DEMO_MODE.USE_DEMO_ENDPOINTS && authOptions) {
-      const authHeaders = await getWalletAuthHeaders(
-        authOptions.signMessage,
-        authOptions.walletAddress
-      );
-      Object.assign(headers, authHeaders);
-    }
+    // Auth removed from /submit — on-chain tx proves wallet ownership
+    // Wallet address still sent for rate limiting
 
     const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
       headers,
@@ -355,6 +384,7 @@ export async function resolveSkrName(
 export default {
   prepareBounty,
   startBounty,
+  startBountyWithHeaders,
   submitPhoto,
   getBountyStatus,
   getPlayerBounty,

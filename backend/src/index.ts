@@ -12,6 +12,9 @@ import { startFinalizationWorker, stopFinalizationWorker } from './services/fina
 // Create Express app
 const app = express();
 
+// Trust proxy (needed for Cloudflare tunnel / ngrok)
+app.set('trust proxy', 1);
+
 // Security headers
 app.use(helmet());
 

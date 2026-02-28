@@ -141,7 +141,7 @@ router.post('/prepare', validate(prepareBountySchema), async (req: Request, res:
  * POST /api/bounty/start
  * Start a new bounty hunt
  */
-router.post('/start', requireWalletAuth, bountyStartLimiter, validate(startBountySchema), async (req: Request, res: Response) => {
+router.post('/start', bountyStartLimiter, validate(startBountySchema), async (req: Request, res: Response) => {
   try {
     const { tier, playerWallet, bountyPda, transactionSignature } = req.body;
 
@@ -212,7 +212,7 @@ router.post('/start', requireWalletAuth, bountyStartLimiter, validate(startBount
  * POST /api/bounty/submit
  * Submit a photo for validation
  */
-router.post('/submit', requireWalletAuth, bountySubmitLimiter, upload.single('photo'), async (req: Request, res: Response) => {
+router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: Request, res: Response) => {
   try {
     // Validate bounty ID
     const parsed = submitPhotoSchema.safeParse(req.body);
@@ -259,8 +259,9 @@ router.post('/submit', requireWalletAuth, bountySubmitLimiter, upload.single('ph
       } as ApiResponse<never>);
     }
 
-    // Verify the authenticated wallet owns this bounty
-    if (bounty.playerWallet !== (req as any).verifiedWallet) {
+    // Verify the wallet owns this bounty (use body or auth header)
+    const submitterWallet = req.body?.playerWallet || (req as any).verifiedWallet;
+    if (submitterWallet && bounty.playerWallet !== submitterWallet) {
       return res.status(403).json({
         success: false,
         error: 'Wallet does not own this bounty',

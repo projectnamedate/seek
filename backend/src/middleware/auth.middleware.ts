@@ -3,7 +3,7 @@ import { PublicKey } from '@solana/web3.js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 
-const SIGNATURE_MAX_AGE_MS = 30_000; // 30 seconds
+const SIGNATURE_MAX_AGE_MS = 120_000; // 120 seconds (allows time for on-chain tx approval)
 
 /**
  * Wallet signature verification middleware.

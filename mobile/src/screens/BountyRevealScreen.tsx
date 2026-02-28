@@ -136,21 +136,32 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         bountyPdaPubkey
       );
 
-      // Step 3: Sign & send via Phantom (opens wallet for approval)
+      // Step 3: Sign & send via Phantom (single wallet prompt)
       setStatusText('Approve in wallet...');
-      const slot = await connection.getSlot('confirmed');
-      const txSignature = await signAndSendTransaction(transaction, slot);
+      let slot: number | undefined;
+      try {
+        slot = await Promise.race([
+          connection.getSlot('confirmed'),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('slot timeout')), 5000)),
+        ]);
+      } catch {
+        console.warn('[BountyReveal] getSlot timed out, sending without minContextSlot');
+      }
+      const txSignature = await signAndSendTransaction(transaction, ...(slot !== undefined ? [slot] : []) as [number]);
       console.log('[BountyReveal] Tx sent:', txSignature);
 
-      // Step 4: Call /start to register bounty in backend
+      // Brief delay after Phantom deep-link return to let network stabilize
+      await new Promise(r => setTimeout(r, 1500));
+
+      // Step 4: Call /start (no auth needed — on-chain tx proves wallet ownership)
       setStatusText('Starting mission...');
+      console.log('[BountyReveal] Calling /start...');
       const startResult = await apiService.startBounty(
         playerWallet,
         tier,
         {
           bountyPda,
           transactionSignature: typeof txSignature === 'string' ? txSignature : undefined,
-          signMessage,
         }
       );
 
