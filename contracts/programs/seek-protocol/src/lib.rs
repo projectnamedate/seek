@@ -197,7 +197,7 @@ pub struct Bounty {
     /// Entry amount in SKR lamports (1000B, 2000B, or 3000B)
     pub entry_amount: u64,
 
-    /// Potential reward (2x entry)
+    /// Potential reward (3x entry: entry back + 2x profit)
     pub payout_amount: u64,
 
     /// Unix timestamp when bounty was accepted
@@ -434,9 +434,9 @@ pub mod seek_protocol {
             .checked_add(duration)
             .ok_or(SeekError::MathOverflow)?;
 
-        // Calculate 2x payout
+        // Calculate 3x payout (entry back + 2x profit)
         let payout_amount = entry_amount
-            .checked_mul(2)
+            .checked_mul(3)
             .ok_or(SeekError::MathOverflow)?;
 
         // Initialize bounty account
@@ -635,13 +635,13 @@ pub mod seek_protocol {
 
         if success {
             // === WIN PATH ===
-            // Check house has enough funds for 2x payout
+            // Check house has enough funds for 3x payout
             require!(
                 global_state.house_fund_balance >= bounty.payout_amount,
                 SeekError::InsufficientHouseFunds
             );
 
-            // Transfer 2x entry to player
+            // Transfer 3x entry to player (entry back + 2x profit)
             let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
             let signer_seeds = &[&seeds[..]];
 
@@ -656,7 +656,7 @@ pub mod seek_protocol {
             );
             token::transfer(transfer_ctx, bounty.payout_amount)?;
 
-            // Update house balance (subtract 2x, but we received 1x, so net -1x)
+            // Update house balance (subtract 3x, but we received 1x, so net -2x)
             global_state.house_fund_balance = global_state
                 .house_fund_balance
                 .checked_sub(bounty.payout_amount)

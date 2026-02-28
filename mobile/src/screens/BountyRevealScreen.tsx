@@ -188,7 +188,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
           : now + tierData.timeLimit * 1000,
         status: 'revealing',
         entryAmount: tierData.entry,
-        potentialReward: tierData.entry * 2,
+        potentialReward: tierData.entry * 3,
       };
 
       console.log('[BountyReveal] On-chain bounty started:', newBounty.id);
@@ -224,7 +224,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       endTime: now + tierData.timeLimit * 1000,
       status: 'revealing',
       entryAmount: tierData.entry,
-      potentialReward: tierData.entry * 2,
+      potentialReward: tierData.entry * 3,
     });
   };
 

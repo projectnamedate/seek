@@ -145,7 +145,7 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
             <View style={styles.tierButtonRight}>
               <Text style={styles.tierButtonEntry}>{tier.entry} $SKR</Text>
-              <Text style={styles.tierButtonWin}>Reward {tier.entry * 2}</Text>
+              <Text style={styles.tierButtonWin}>Reward {tier.entry * 3}</Text>
             </View>
           </View>
           {isSelected && (
@@ -247,7 +247,7 @@ export default function HomeScreen({ navigation }: Props) {
           </Text>
           {wallet.connected && (
             <Text style={styles.startButtonSubtext}>
-              Entry {TIERS[selectedTier].entry} $SKR → Reward {TIERS[selectedTier].entry * 2}
+              Entry {TIERS[selectedTier].entry} $SKR → Reward {TIERS[selectedTier].entry * 3}
             </Text>
           )}
         </TouchableOpacity>
