@@ -233,6 +233,10 @@ export async function submitPhoto(
     // Create form data with photo
     const formData = new FormData();
     formData.append('bountyId', bountyId);
+    // playerWallet is required by backend for ownership verification
+    if (authOptions?.walletAddress) {
+      formData.append('playerWallet', authOptions.walletAddress);
+    }
     formData.append('photo', {
       uri: photoUri,
       type: 'image/jpeg',
@@ -250,9 +254,6 @@ export async function submitPhoto(
       'Content-Type': 'multipart/form-data',
       'ngrok-skip-browser-warning': '1',
     };
-
-    // Auth removed from /submit — on-chain tx proves wallet ownership
-    // Wallet address still sent for rate limiting
 
     const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
       headers,

@@ -25,7 +25,7 @@ import {
 } from '../services/bounty.service';
 import { extractExifMetadata, formatMetadata } from '../services/exif.service';
 import { validatePhoto, isValidImageFormat, checkImageSize } from '../services/ai.service';
-import { resolveBountyOnChain, generateMissionCommitment, formatSkr, getCurrentSlotAndTimestamp, deriveBountyPda } from '../services/solana.service';
+import { resolveBountyOnChain, generateMissionCommitment, formatSkr, getCurrentSlotAndTimestamp, deriveBountyPda, verifyTransaction } from '../services/solana.service';
 import { getRandomMission } from '../data/missions';
 import { PublicKey } from '@solana/web3.js';
 import { isWalletSGTVerified } from '../services/sgt.service';
@@ -58,6 +58,7 @@ const startBountySchema = z.object({
 
 const submitPhotoSchema = z.object({
   bountyId: z.string().uuid('Invalid bounty ID format'),
+  playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address'),
 });
 
 // Prepare bounty schema (pre-transaction)
@@ -154,6 +155,17 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
+    // Verify on-chain transaction if provided
+    if (transactionSignature) {
+      const txVerified = await verifyTransaction(transactionSignature);
+      if (!txVerified) {
+        return res.status(400).json({
+          success: false,
+          error: 'Transaction not confirmed on-chain',
+        } as ApiResponse<never>);
+      }
+    }
+
     // Check SGT verification status
     const sgtResult = isWalletSGTVerified(playerWallet);
     const sgtVerified = sgtResult?.verified || false;
@@ -161,26 +173,34 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
     // Try to use prepared bounty data (from /prepare endpoint)
     const prepared = getPreparedBounty(bountyPda);
 
-    // Create bounty
+    if (!prepared) {
+      // No prepared data means commitment mismatch — reject
+      return res.status(400).json({
+        success: false,
+        error: 'No prepared bounty data found. Call /prepare first.',
+      } as ApiResponse<never>);
+    }
+
+    // Verify prepared data matches the caller
+    if (prepared.playerWallet !== playerWallet) {
+      return res.status(403).json({
+        success: false,
+        error: 'Prepared bounty belongs to a different wallet',
+      } as ApiResponse<never>);
+    }
+
+    // Create bounty using the prepared mission (not a new random one)
     const { bounty, missionDescription } = createBounty(
       playerWallet,
       tier,
       bountyPda,
       transactionSignature,
-      sgtVerified
+      sgtVerified,
+      prepared.missionId // Use the prepared mission, not a random one
     );
 
-    // Use prepared mission secrets (must match on-chain commitment)
-    if (prepared) {
-      storeMissionSecrets(bounty.id, prepared.missionIdBytes, prepared.salt);
-    } else {
-      // No prepared data: player used on-chain flow but /prepare data expired.
-      // Generate new secrets. NOTE: This won't match the on-chain commitment,
-      // so reveal_mission will fail. The bounty will expire naturally.
-      console.warn(`[API] No prepared data for bountyPda ${bountyPda} — commitment mismatch likely`);
-      const { missionIdBytes, salt } = generateMissionCommitment(bounty.missionId);
-      storeMissionSecrets(bounty.id, missionIdBytes, salt);
-    }
+    // Store prepared mission secrets (must match on-chain commitment)
+    storeMissionSecrets(bounty.id, prepared.missionIdBytes, prepared.salt);
 
     // Return response
     const response: StartBountyResponse = {
@@ -214,16 +234,16 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
  */
 router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: Request, res: Response) => {
   try {
-    // Validate bounty ID
+    // Validate required fields
     const parsed = submitPhotoSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid bounty ID',
+        error: parsed.error.errors[0]?.message || 'Invalid request',
       } as ApiResponse<never>);
     }
 
-    const { bountyId } = parsed.data;
+    const { bountyId, playerWallet: submitterWallet } = parsed.data;
 
     // Check photo was uploaded
     if (!req.file) {
@@ -259,9 +279,8 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       } as ApiResponse<never>);
     }
 
-    // Verify the wallet owns this bounty (use body or auth header)
-    const submitterWallet = req.body?.playerWallet || (req as any).verifiedWallet;
-    if (submitterWallet && bounty.playerWallet !== submitterWallet) {
+    // Verify the wallet owns this bounty
+    if (bounty.playerWallet !== submitterWallet) {
       return res.status(403).json({
         success: false,
         error: 'Wallet does not own this bounty',
@@ -385,7 +404,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
     };
 
     if (success) {
-      response.payout = formatSkr(bounty.entryAmount * 2n);
+      response.payout = formatSkr(bounty.entryAmount * 3n);
       response.singularityWon = singularityWon;
 
       if (singularityWon) {
@@ -555,8 +574,6 @@ router.get('/:id', async (req: Request, res: Response) => {
       } as ApiResponse<never>);
     }
 
-    const mission = getBountyMission(req.params.id);
-
     return res.status(200).json({
       success: true,
       data: {
@@ -564,10 +581,6 @@ router.get('/:id', async (req: Request, res: Response) => {
         status: bounty.status,
         tier: bounty.tier,
         entryAmount: formatSkr(bounty.entryAmount),
-        mission: mission ? {
-          id: mission.id,
-          description: mission.description,
-        } : null,
         createdAt: bounty.createdAt.toISOString(),
         expiresAt: bounty.expiresAt.toISOString(),
         isExpired: isBountyExpired(bounty),
@@ -597,18 +610,12 @@ router.get('/player/:wallet', async (req: Request, res: Response) => {
       } as ApiResponse<never>);
     }
 
-    const mission = getBountyMission(bounty.id);
-
     return res.status(200).json({
       success: true,
       data: {
         id: bounty.id,
         status: bounty.status,
         tier: bounty.tier,
-        mission: mission ? {
-          id: mission.id,
-          description: mission.description,
-        } : null,
         expiresAt: bounty.expiresAt.toISOString(),
         remainingSeconds: Math.max(0, Math.floor((bounty.expiresAt.getTime() - Date.now()) / 1000)),
       },

@@ -41,7 +41,8 @@ export function createBounty(
   tier: Tier,
   bountyPda: string,
   transactionSignature?: string,
-  sgtVerified?: boolean
+  sgtVerified?: boolean,
+  preparedMissionId?: string
 ): { bounty: ActiveBounty; missionDescription: string } {
   // Check if player already has an active bounty
   const existingBountyId = bountyByPlayer.get(playerWallet);
@@ -52,8 +53,10 @@ export function createBounty(
     }
   }
 
-  // Get random mission for this tier
-  const mission = getRandomMission(tier);
+  // Use prepared mission if provided, otherwise get random
+  const mission = preparedMissionId
+    ? getMissionById(preparedMissionId) || getRandomMission(tier)
+    : getRandomMission(tier);
 
   // Calculate expiration
   const now = new Date();
