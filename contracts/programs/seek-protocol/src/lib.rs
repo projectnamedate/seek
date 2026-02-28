@@ -635,9 +635,10 @@ pub mod seek_protocol {
 
         if success {
             // === WIN PATH ===
-            // Check house has enough funds for 3x payout
+            // Check house vault has enough actual tokens for 3x payout
+            // Use actual vault balance (not tracked) to avoid divergence issues
             require!(
-                global_state.house_fund_balance >= bounty.payout_amount,
+                ctx.accounts.house_vault.amount >= bounty.payout_amount,
                 SeekError::InsufficientHouseFunds
             );
 
@@ -657,10 +658,10 @@ pub mod seek_protocol {
             token::transfer(transfer_ctx, bounty.payout_amount)?;
 
             // Update house balance (subtract 3x, but we received 1x, so net -2x)
+            // Use saturating_sub: tracked balance may be lower than actual vault balance
             global_state.house_fund_balance = global_state
                 .house_fund_balance
-                .checked_sub(bounty.payout_amount)
-                .ok_or(SeekError::MathOverflow)?;
+                .saturating_sub(bounty.payout_amount);
 
             // === SINGULARITY JACKPOT ROLL ===
             // Use (slot + timestamp) % 500 for randomness
