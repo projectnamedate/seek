@@ -22,6 +22,10 @@ import {
   getMissionSecrets,
   storePreparedBounty,
   getPreparedBounty,
+  acquireWalletLock,
+  releaseWalletLock,
+  acquireBountyLock,
+  releaseBountyLock,
 } from '../services/bounty.service';
 import { extractExifMetadata, formatMetadata } from '../services/exif.service';
 import { validatePhoto, isValidImageFormat, checkImageSize } from '../services/ai.service';
@@ -146,6 +150,15 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
   try {
     const { tier, playerWallet, bountyPda, transactionSignature } = req.body;
 
+    // Acquire per-wallet lock to prevent race conditions
+    if (!acquireWalletLock(playerWallet)) {
+      return res.status(409).json({
+        success: false,
+        error: 'Bounty creation already in progress for this wallet',
+      } as ApiResponse<never>);
+    }
+
+    try {
     // Check for existing active bounty
     const existing = getPlayerActiveBounty(playerWallet);
     if (existing) {
@@ -219,6 +232,9 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       success: true,
       data: response,
     } as ApiResponse<StartBountyResponse>);
+    } finally {
+      releaseWalletLock(playerWallet);
+    }
   } catch (error) {
     console.error('[API] Start bounty error:', error);
     return res.status(500).json({
@@ -245,6 +261,15 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
 
     const { bountyId, playerWallet: submitterWallet } = parsed.data;
 
+    // Acquire per-bounty lock to prevent double submission
+    if (!acquireBountyLock(bountyId)) {
+      return res.status(409).json({
+        success: false,
+        error: 'Photo validation already in progress for this bounty',
+      } as ApiResponse<never>);
+    }
+
+    try {
     // Check photo was uploaded
     if (!req.file) {
       return res.status(400).json({
@@ -418,6 +443,9 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       success: true,
       data: response,
     } as ApiResponse<SubmitPhotoResponse>);
+    } finally {
+      releaseBountyLock(bountyId);
+    }
   } catch (error) {
     console.error('[API] Submit photo error:', error);
     return res.status(500).json({

@@ -12,6 +12,30 @@ const bountyByPlayer = new Map<string, string>();
 // Keyed by bountyId → { missionIdBytes, salt }
 const missionSecrets = new Map<string, { missionIdBytes: Buffer; salt: Buffer }>();
 
+// Mutex locks for race condition prevention
+const walletLocks = new Set<string>();  // Per-wallet lock for bounty creation
+const bountyLocks = new Set<string>();  // Per-bounty lock for submission
+
+export function acquireWalletLock(wallet: string): boolean {
+  if (walletLocks.has(wallet)) return false;
+  walletLocks.add(wallet);
+  return true;
+}
+
+export function releaseWalletLock(wallet: string): void {
+  walletLocks.delete(wallet);
+}
+
+export function acquireBountyLock(bountyId: string): boolean {
+  if (bountyLocks.has(bountyId)) return false;
+  bountyLocks.add(bountyId);
+  return true;
+}
+
+export function releaseBountyLock(bountyId: string): void {
+  bountyLocks.delete(bountyId);
+}
+
 // Store prepared bounty data (from /prepare endpoint, before on-chain tx)
 // Keyed by bountyPda → prepared data
 export interface PreparedBounty {

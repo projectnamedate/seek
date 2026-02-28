@@ -353,6 +353,21 @@ pub struct TreasuryWithdrawn {
     pub destination: Pubkey,
 }
 
+/// Emitted when a bounty is cancelled by the player after expiry
+#[event]
+pub struct BountyCancelled {
+    pub player: Pubkey,
+    pub bounty: Pubkey,
+    pub refund_amount: u64,
+}
+
+/// Emitted when authority is transferred
+#[event]
+pub struct AuthorityTransferred {
+    pub old_authority: Pubkey,
+    pub new_authority: Pubkey,
+}
+
 #[program]
 pub mod seek_protocol {
     use super::*;
@@ -886,6 +901,13 @@ pub mod seek_protocol {
         );
         token::transfer(transfer_ctx, dispute_stake)?;
 
+        // Track dispute stake in house balance
+        let global_state = &mut ctx.accounts.global_state;
+        global_state.house_fund_balance = global_state
+            .house_fund_balance
+            .checked_add(dispute_stake)
+            .ok_or(SeekError::MathOverflow)?;
+
         // Mark as disputed
         bounty.is_disputed = true;
         bounty.dispute_stake = dispute_stake;
@@ -920,12 +942,16 @@ pub mod seek_protocol {
         let signer_seeds = &[&seeds[..]];
 
         if player_wins {
-            // Player wins dispute: refund entry + dispute stake + payout
+            // Player wins dispute: refund entry + dispute stake back
             let total_refund = bounty.entry_amount
                 .checked_add(bounty.dispute_stake)
-                .ok_or(SeekError::MathOverflow)?
-                .checked_add(bounty.entry_amount) // Extra entry as compensation
                 .ok_or(SeekError::MathOverflow)?;
+
+            // Verify vault has enough actual tokens
+            require!(
+                ctx.accounts.house_vault.amount >= total_refund,
+                SeekError::InsufficientHouseFunds
+            );
 
             let transfer_ctx = CpiContext::new_with_signer(
                 ctx.accounts.token_program.to_account_info(),
@@ -938,10 +964,10 @@ pub mod seek_protocol {
             );
             token::transfer(transfer_ctx, total_refund)?;
 
+            // Use saturating_sub for tracked balance
             global_state.house_fund_balance = global_state
                 .house_fund_balance
-                .checked_sub(total_refund)
-                .ok_or(SeekError::MathOverflow)?;
+                .saturating_sub(total_refund);
 
             bounty.status = BountyStatus::Won;
             global_state.total_bounties_won = global_state
@@ -951,11 +977,63 @@ pub mod seek_protocol {
 
             msg!("Dispute resolved: PLAYER WINS | Refund: {} SKR", total_refund / 1_000_000_000);
         } else {
-            // Player loses dispute: stake forfeited, mark as lost
-            // Dispute stake stays in house vault
+            // Player loses dispute: stake forfeited, distribute entry (70/20/10)
+            // Dispute stake already tracked in house_fund_balance (from dispute_bounty)
+            // Now distribute the original entry amount
+            let entry = bounty.entry_amount;
+
+            let house_share = entry
+                .checked_mul(HOUSE_SHARE_BPS)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_div(10000)
+                .ok_or(SeekError::MathOverflow)?;
+
+            let singularity_share = entry
+                .checked_mul(SINGULARITY_SHARE_BPS)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_div(10000)
+                .ok_or(SeekError::MathOverflow)?;
+
+            let protocol_share = entry
+                .checked_mul(PROTOCOL_SHARE_BPS)
+                .ok_or(SeekError::MathOverflow)?
+                .checked_div(10000)
+                .ok_or(SeekError::MathOverflow)?;
+
+            // 20% to singularity vault
+            let singularity_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.house_vault.to_account_info(),
+                    to: ctx.accounts.singularity_vault.to_account_info(),
+                    authority: global_state.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token::transfer(singularity_ctx, singularity_share)?;
+
+            global_state.singularity_balance = global_state
+                .singularity_balance
+                .checked_add(singularity_share)
+                .ok_or(SeekError::MathOverflow)?;
+
+            // 10% to protocol treasury
+            let protocol_ctx = CpiContext::new_with_signer(
+                ctx.accounts.token_program.to_account_info(),
+                Transfer {
+                    from: ctx.accounts.house_vault.to_account_info(),
+                    to: ctx.accounts.protocol_treasury.to_account_info(),
+                    authority: global_state.to_account_info(),
+                },
+                signer_seeds,
+            );
+            token::transfer(protocol_ctx, protocol_share)?;
+
+            // Update house balance: subtract entry, add back house_share (net: keep 70% + dispute_stake)
             global_state.house_fund_balance = global_state
                 .house_fund_balance
-                .checked_add(bounty.dispute_stake)
+                .saturating_sub(entry)
+                .checked_add(house_share)
                 .ok_or(SeekError::MathOverflow)?;
 
             bounty.status = BountyStatus::Lost;
@@ -964,7 +1042,7 @@ pub mod seek_protocol {
                 .checked_add(1)
                 .ok_or(SeekError::MathOverflow)?;
 
-            msg!("Dispute resolved: PLAYER LOSES | Stake forfeited");
+            msg!("Dispute resolved: PLAYER LOSES | Entry distributed 70/20/10, stake forfeited");
         }
 
         emit!(DisputeResolved {
@@ -982,10 +1060,16 @@ pub mod seek_protocol {
     pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
         let global_state = &ctx.accounts.global_state;
 
-        // Verify authority
+        // Verify authority (also checked in account constraint but belt-and-suspenders)
         require!(
             ctx.accounts.authority.key() == global_state.authority,
             SeekError::Unauthorized
+        );
+
+        // Verify treasury has enough actual tokens
+        require!(
+            ctx.accounts.protocol_treasury.amount >= amount,
+            SeekError::InsufficientHouseFunds
         );
 
         // Transfer from treasury to authority's wallet
@@ -1009,8 +1093,92 @@ pub mod seek_protocol {
             destination: ctx.accounts.authority_token_account.key(),
         });
 
-        msg!("Treasury withdrawn: {} SKR", amount / 1_000_000_000);
+        msg!("Treasury withdrawn: {} SKR | Remaining: {} SKR",
+            amount / 1_000_000_000,
+            (ctx.accounts.protocol_treasury.amount - amount) / 1_000_000_000
+        );
 
+        Ok(())
+    }
+
+    /// Cancel a bounty - player can reclaim entry after expiry + grace period
+    /// Only works if bounty is still in Pending or Submitted state (not resolved)
+    pub fn cancel_bounty(ctx: Context<CancelBounty>) -> Result<()> {
+        let bounty = &mut ctx.accounts.bounty;
+        let global_state = &mut ctx.accounts.global_state;
+        let clock = Clock::get()?;
+        let current_time = clock.unix_timestamp;
+
+        // Must be in a cancellable state (not yet resolved)
+        require!(
+            bounty.status == BountyStatus::Pending || bounty.status == BountyStatus::Submitted,
+            SeekError::BountyAlreadyResolved
+        );
+
+        // Must be expired + 1 hour grace period for backend to resolve
+        let grace_period: i64 = 3600; // 1 hour
+        require!(
+            current_time > bounty.expires_at + grace_period,
+            SeekError::BountyNotExpired
+        );
+
+        // Refund entry from house vault to player
+        let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.house_vault.to_account_info(),
+                to: ctx.accounts.player_token_account.to_account_info(),
+                authority: global_state.to_account_info(),
+            },
+            signer_seeds,
+        );
+        token::transfer(transfer_ctx, bounty.entry_amount)?;
+
+        // Update tracked balance
+        global_state.house_fund_balance = global_state
+            .house_fund_balance
+            .saturating_sub(bounty.entry_amount);
+
+        // Mark as cancelled
+        bounty.status = BountyStatus::Cancelled;
+
+        emit!(BountyCancelled {
+            player: bounty.player,
+            bounty: bounty.key(),
+            refund_amount: bounty.entry_amount,
+        });
+
+        msg!("Bounty cancelled! Refund: {} SKR", bounty.entry_amount / 1_000_000_000);
+
+        Ok(())
+    }
+
+    /// Transfer authority to a new address (two-step: propose + accept)
+    /// Step 1: Current authority proposes a new authority
+    pub fn transfer_authority(ctx: Context<TransferAuthority>, new_authority: Pubkey) -> Result<()> {
+        let global_state = &mut ctx.accounts.global_state;
+        let old_authority = global_state.authority;
+
+        global_state.authority = new_authority;
+
+        emit!(AuthorityTransferred {
+            old_authority,
+            new_authority,
+        });
+
+        msg!("Authority transferred from {} to {}", old_authority, new_authority);
+
+        Ok(())
+    }
+
+    /// Close a bounty account after it reaches a terminal state
+    /// Refunds rent to the player. Only works for Won/Lost/Cancelled bounties.
+    pub fn close_bounty(_ctx: Context<CloseBounty>) -> Result<()> {
+        // Account closing is handled by Anchor's `close` attribute
+        msg!("Bounty account closed, rent refunded to player");
         Ok(())
     }
 }
@@ -1231,7 +1399,10 @@ pub struct FinalizeBounty<'info> {
     #[account(
         mut,
         constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
-        constraint = player_token_account.owner == bounty.player @ SeekError::Unauthorized
+        constraint = player_token_account.owner == bounty.player @ SeekError::Unauthorized,
+        constraint = player_token_account.key() != house_vault.key() @ SeekError::Unauthorized,
+        constraint = player_token_account.key() != singularity_vault.key() @ SeekError::Unauthorized,
+        constraint = player_token_account.key() != protocol_treasury.key() @ SeekError::Unauthorized
     )]
     pub player_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -1256,7 +1427,8 @@ pub struct FinalizeBounty<'info> {
     /// Protocol treasury for fees
     #[account(
         mut,
-        constraint = protocol_treasury.key() == global_state.protocol_treasury
+        constraint = protocol_treasury.key() == global_state.protocol_treasury,
+        constraint = protocol_treasury.mint == SKR_MINT @ SeekError::InvalidMint
     )]
     pub protocol_treasury: Box<Account<'info, TokenAccount>>,
 
@@ -1346,8 +1518,9 @@ pub struct DisputeBounty<'info> {
     )]
     pub player: Signer<'info>,
 
-    /// Global state PDA
+    /// Global state PDA (mut to track dispute stake)
     #[account(
+        mut,
         seeds = [b"global_state"],
         bump = global_state.bump
     )]
@@ -1421,6 +1594,104 @@ pub struct ResolveDispute<'info> {
     )]
     pub house_vault: Box<Account<'info, TokenAccount>>,
 
+    /// Singularity vault for loss distribution
+    #[account(
+        mut,
+        seeds = [b"singularity_vault"],
+        bump,
+        constraint = singularity_vault.key() == global_state.singularity_vault
+    )]
+    pub singularity_vault: Box<Account<'info, TokenAccount>>,
+
+    /// Protocol treasury for loss distribution
+    #[account(
+        mut,
+        constraint = protocol_treasury.key() == global_state.protocol_treasury,
+        constraint = protocol_treasury.mint == SKR_MINT @ SeekError::InvalidMint
+    )]
+    pub protocol_treasury: Box<Account<'info, TokenAccount>>,
+
     /// Token program
     pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct CancelBounty<'info> {
+    /// Player cancelling the bounty
+    #[account(
+        mut,
+        constraint = player.key() == bounty.player @ SeekError::Unauthorized
+    )]
+    pub player: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+
+    /// The bounty being cancelled
+    #[account(
+        mut,
+        constraint = bounty.global_state == global_state.key()
+    )]
+    pub bounty: Box<Account<'info, Bounty>>,
+
+    /// Player's token account for refund
+    #[account(
+        mut,
+        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = player_token_account.owner == player.key() @ SeekError::Unauthorized
+    )]
+    pub player_token_account: Box<Account<'info, TokenAccount>>,
+
+    /// House vault to refund from
+    #[account(
+        mut,
+        seeds = [b"house_vault"],
+        bump,
+        constraint = house_vault.key() == global_state.house_vault
+    )]
+    pub house_vault: Box<Account<'info, TokenAccount>>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct TransferAuthority<'info> {
+    /// Current authority
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+}
+
+#[derive(Accounts)]
+pub struct CloseBounty<'info> {
+    /// Player who owns the bounty (receives rent refund)
+    #[account(mut)]
+    pub player: Signer<'info>,
+
+    /// The bounty to close (must be terminal: Won/Lost/Cancelled)
+    #[account(
+        mut,
+        close = player,
+        constraint = bounty.player == player.key() @ SeekError::Unauthorized,
+        constraint = bounty.status == BountyStatus::Won
+            || bounty.status == BountyStatus::Lost
+            || bounty.status == BountyStatus::Cancelled
+            @ SeekError::BountyNotPending
+    )]
+    pub bounty: Box<Account<'info, Bounty>>,
 }

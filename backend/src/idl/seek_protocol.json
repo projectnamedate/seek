@@ -170,6 +170,145 @@
       ]
     },
     {
+      "name": "cancel_bounty",
+      "docs": [
+        "Cancel a bounty - player can reclaim entry after expiry + grace period",
+        "Only works if bounty is still in Pending or Submitted state (not resolved)"
+      ],
+      "discriminator": [
+        79,
+        65,
+        107,
+        143,
+        128,
+        165,
+        135,
+        46
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "docs": [
+            "Player cancelling the bounty"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "The bounty being cancelled"
+          ],
+          "writable": true
+        },
+        {
+          "name": "player_token_account",
+          "docs": [
+            "Player's token account for refund"
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault to refund from"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "close_bounty",
+      "docs": [
+        "Close a bounty account after it reaches a terminal state",
+        "Refunds rent to the player. Only works for Won/Lost/Cancelled bounties."
+      ],
+      "discriminator": [
+        90,
+        33,
+        205,
+        110,
+        210,
+        22,
+        247,
+        49
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "docs": [
+            "Player who owns the bounty (receives rent refund)"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "The bounty to close (must be terminal: Won/Lost/Cancelled)"
+          ],
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "dispute_bounty",
       "docs": [
         "Dispute a bounty result - player stakes additional SKR to challenge",
@@ -197,8 +336,9 @@
         {
           "name": "global_state",
           "docs": [
-            "Global state PDA"
+            "Global state PDA (mut to track dispute stake)"
           ],
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -926,6 +1066,46 @@
           }
         },
         {
+          "name": "singularity_vault",
+          "docs": [
+            "Singularity vault for loss distribution"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  105,
+                  110,
+                  103,
+                  117,
+                  108,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_treasury",
+          "docs": [
+            "Protocol treasury for loss distribution"
+          ],
+          "writable": true
+        },
+        {
           "name": "token_program",
           "docs": [
             "Token program"
@@ -1017,6 +1197,66 @@
               32
             ]
           }
+        }
+      ]
+    },
+    {
+      "name": "transfer_authority",
+      "docs": [
+        "Transfer authority to a new address (two-step: propose + accept)",
+        "Step 1: Current authority proposes a new authority"
+      ],
+      "discriminator": [
+        48,
+        169,
+        76,
+        72,
+        229,
+        180,
+        55,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Current authority"
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_authority",
+          "type": "pubkey"
         }
       ]
     },
@@ -1132,6 +1372,19 @@
   ],
   "events": [
     {
+      "name": "AuthorityTransferred",
+      "discriminator": [
+        245,
+        109,
+        179,
+        54,
+        135,
+        92,
+        22,
+        64
+      ]
+    },
+    {
       "name": "BountyAccepted",
       "discriminator": [
         11,
@@ -1142,6 +1395,19 @@
         109,
         162,
         234
+      ]
+    },
+    {
+      "name": "BountyCancelled",
+      "discriminator": [
+        234,
+        186,
+        248,
+        214,
+        198,
+        69,
+        152,
+        23
       ]
     },
     {
@@ -1366,6 +1632,25 @@
   ],
   "types": [
     {
+      "name": "AuthorityTransferred",
+      "docs": [
+        "Emitted when authority is transferred"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "new_authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
       "name": "Bounty",
       "docs": [
         "Individual bounty PDA - created when player accepts a hunt"
@@ -1397,7 +1682,7 @@
           {
             "name": "payout_amount",
             "docs": [
-              "Potential reward (2x entry)"
+              "Potential reward (3x entry: entry back + 2x profit)"
             ],
             "type": "u64"
           },
@@ -1550,6 +1835,29 @@
           {
             "name": "expires_at",
             "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BountyCancelled",
+      "docs": [
+        "Emitted when a bounty is cancelled by the player after expiry"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "refund_amount",
+            "type": "u64"
           }
         ]
       }
