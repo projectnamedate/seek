@@ -1,6 +1,6 @@
 # Seek
 
-Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 2x your entry. Built for the Solana Seeker phone.
+Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 3x your entry. Built for the Solana Seeker phone.
 
 ## How It Works
 
@@ -9,7 +9,7 @@ Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 2
 3. **Hunt** - Find the object in the real world before time runs out
 4. **Capture** - Take a photo with your camera
 5. **Validate** - AI verifies your photo is legit
-6. **Complete/Fail** - Earn 2x reward or entry forfeited
+6. **Complete/Fail** - Earn 3x reward or entry forfeited
 
 ## The Three Tiers
 
@@ -22,7 +22,7 @@ Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 2
 ## Economics
 
 **Bounty Completed (~40% success rate):**
-- Get 2x your entry back as reward
+- Get 3x your entry back (entry + 2x profit)
 - 1-in-500 chance to win the Singularity jackpot
 
 **Bounty Failed:**
@@ -77,17 +77,23 @@ seek/
 ## Smart Contract Features
 
 - Variable entry validation (1000/2000/3000 SKR only)
-- 2x reward on success
+- 3x reward on success (entry returned + 2x profit from house vault)
 - Automatic 70/20/10 distribution on failure
 - Singularity jackpot (1-in-500 on every completion)
+- Commit-reveal mission assignment (SHA-256 + random salt)
+- Player cancel after expiry + grace period (reclaim stuck funds)
+- Dispute resolution with on-chain arbitration
+- Authority key rotation via `transfer_authority`
+- Bounty account closing to reclaim rent
 - PDA-based account management
 - Event emission for real-time tracking
 
 ## Backend API
 
-**Endpoints:**
-- `POST /api/bounty/start` - Start a bounty hunt
-- `POST /api/bounty/submit` - Submit photo for validation
+**On-Chain Flow:**
+- `POST /api/bounty/prepare` - Prepare bounty (generates commitment, returns tx data)
+- `POST /api/bounty/start` - Start hunt (after MWA signs accept_bounty on-chain)
+- `POST /api/bounty/submit` - Submit photo for AI validation + on-chain resolve
 - `GET /api/bounty/:id` - Get bounty status
 - `GET /api/bounty/player/:wallet` - Get player's active bounty
 - `GET /api/health` - Health check
@@ -106,9 +112,17 @@ seek/
 - **Camera Attestation** — SHA-256 photo hash + device fingerprint, TEE-ready for Seeker Camera SDK
 - **AI Screenshot Detection** — Claude rejects photos without valid EXIF/GPS metadata
 
-## Demo Mode
+## On-Chain Integration
 
-For hackathon demos, the app uses a hybrid mode: **real MWA wallet connection** (Phantom) with demo bounty endpoints. No on-chain transactions needed, but uses **real Claude Vision validation** — judges can see AI analyzing actual photos.
+The app runs fully on-chain on Solana devnet:
+
+1. Mobile calls `/prepare` → backend generates commitment + returns account addresses
+2. Mobile builds `accept_bounty` instruction → MWA (Phantom) signs via Solana Mobile Stack
+3. `/start` verifies the on-chain transaction → hunt begins with timer
+4. Player finds target, takes photo → `/submit` with AI validation
+5. Backend calls `resolve_bounty` + `finalize_bounty` on-chain → tokens transferred
+
+**Devnet Program:** `DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v`
 
 ```bash
 # 1. Start backend
@@ -176,18 +190,28 @@ SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
 ANTHROPIC_API_KEY=sk-ant-your-api-key
 ```
 
-## Security Roadmap
+## Security
 
-The following improvements are planned before mainnet deployment:
+Full security audit completed (contract + backend). See `tasks/security-audit.md` for details.
 
-- [ ] **VRF Randomness** — Replace slot-based jackpot roll with Switchboard or Orao VRF for provably fair outcomes
-- [ ] **Treasury PDA Constraint** — Add owner verification on protocol treasury during initialization
-- [ ] **Persistence Layer** — Replace in-memory bounty state with Redis/database to survive restarts
-- [ ] **Authority Multisig** — Split authority roles and add timelock/multisig for treasury operations
-- [ ] **Bounty Account Closing** — Add instruction to close resolved bounty accounts and reclaim rent
-- [ ] **TLS Enforcement** — Require HTTPS in production via reverse proxy
-- [ ] **Real Balance Fetching** — Replace demo balance fallback with on-chain RPC balance queries
-- [ ] **MWA Disconnect** — Verify full wallet session deauthorization on disconnect
+**Implemented:**
+- [x] Commit-reveal mission assignment (prevents front-running)
+- [x] Rate limiting (IP-based)
+- [x] Transaction verification on bounty start
+- [x] Wallet ownership validation on photo submit
+- [x] Race condition locks (per-wallet + per-bounty mutex)
+- [x] Player cancel after expiry (reclaim stuck funds)
+- [x] Dispute accounting with proper loss distribution
+- [x] Authority key rotation
+- [x] Bounty account closing (rent reclaim)
+- [x] Actual vault balance checks (not tracked balance)
+- [x] Duplicate account guards
+- [x] Treasury mint + balance constraints
+
+**Mainnet Roadmap:**
+- [ ] **VRF Randomness** — Switchboard or Orao VRF for provably fair jackpot
+- [ ] **Persistence Layer** — Redis/database to survive backend restarts
+- [ ] **Authority Multisig** — Timelock/multisig for treasury operations
 
 ## License
 
