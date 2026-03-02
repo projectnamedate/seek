@@ -5,7 +5,7 @@ import { config } from '../config';
 // Demo .skr names for testing
 const DEMO_SKR_NAMES: Record<string, string> = {
   'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker': 'seeker_demo',
-  // Add more demo mappings as needed
+  '7MKnzxAzmQvib4x6QvdawB7fhWT2ADcyYK2GMXy1wpe6': 'hammer',
 };
 
 class SkrService {
