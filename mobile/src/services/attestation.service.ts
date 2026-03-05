@@ -45,12 +45,11 @@ export function detectDevice(): DeviceInfo {
  */
 async function computePhotoHash(photoUri: string): Promise<string> {
   try {
-    // Read file as base64
+    // Read file as base64 and hash it
     const base64Data = await FileSystem.readAsStringAsync(photoUri, {
       encoding: 'base64',
     });
 
-    // Hash the base64-decoded bytes
     const hash = await Crypto.digestStringAsync(
       Crypto.CryptoDigestAlgorithm.SHA256,
       base64Data,

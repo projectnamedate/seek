@@ -247,47 +247,64 @@ export async function submitPhoto(
       formData.append('attestation', JSON.stringify(attestation));
     }
 
-    log(`[API] Submitting photo for bounty: ${bountyId}${attestation ? ` [${attestation.type} attestation]` : ''}`);
+    log(`[API] Submitting photo for bounty: ${bountyId} | uri: ${photoUri} | size: ${fileInfo.size} | wallet: ${authOptions?.walletAddress || 'none'}${attestation ? ` | ${attestation.type} attestation` : ''}`);
+    log(`[API] Endpoint: ${API_BASE_URL}${endpoint}`);
 
-    // Build headers
-    const headers: Record<string, string> = {
-      'Content-Type': 'multipart/form-data',
-      'ngrok-skip-browser-warning': '1',
-    };
+    // Use fetch instead of axios — better multipart/FormData support on Android
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
 
-    const response = await axios.post(`${API_BASE_URL}${endpoint}`, formData, {
-      headers,
-      timeout: 60000, // AI validation can take time
+    const fetchResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'POST',
+      headers: { 'ngrok-skip-browser-warning': '1' },
+      body: formData,
+      signal: controller.signal,
     });
+    clearTimeout(timeoutId);
 
-    log('[API] Validation response:', response.data);
+    const responseText = await fetchResponse.text();
+    log(`[API] Raw response (${fetchResponse.status}): ${responseText.substring(0, 500)}`);
+    let responseData: any;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch {
+      return { success: false, error: `Non-JSON response (${fetchResponse.status}): ${responseText.substring(0, 100)}` };
+    }
+
+    if (!fetchResponse.ok) {
+      return {
+        success: false,
+        error: responseData.error || `Server error: ${fetchResponse.status}`,
+      };
+    }
 
     // Handle devnet response format (data.validation) vs demo format (validation)
-    const validation = response.data.data?.validation || response.data.validation;
-    const status = response.data.data?.status || (validation?.isValid ? 'won' : 'lost');
+    const validation = responseData.data?.validation || responseData.validation;
+    const status = responseData.data?.status || (validation?.isValid ? 'won' : 'lost');
 
-    if (response.data.success && validation) {
+    if (responseData.success && validation) {
       return {
         success: true,
         validation: {
           ...validation,
           // Normalize: devnet returns transactionSignature at top level
-          transactionSignature: response.data.data?.transactionSignature,
-          payout: response.data.data?.payout,
-          singularityWon: response.data.data?.singularityWon,
+          transactionSignature: responseData.data?.transactionSignature,
+          payout: responseData.data?.payout,
+          singularityWon: responseData.data?.singularityWon,
         },
       };
     }
 
     return {
       success: false,
-      error: response.data.error || 'Validation failed',
+      error: responseData.error || 'Validation failed',
     };
   } catch (error: any) {
-    logError('[API] Submit photo error:', error);
+    const detail = error.message || 'Unknown error';
+    logError(`[API] Submit photo error: ${detail}`);
     return {
       success: false,
-      error: error.response?.data?.error || 'Failed to validate photo',
+      error: detail,
     };
   }
 }

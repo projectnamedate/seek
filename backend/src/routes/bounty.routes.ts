@@ -359,23 +359,10 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       console.log(`[API] Attestation: ${attestationResult.type} | Confidence: ${attestationResult.confidence} | Integrity: ${attestationResult.photoIntegrity}`);
     }
 
-    // Reject if attestation claims Seeker device but photo integrity fails
+    // Log attestation integrity (hard rejection disabled until TEE SDK ships —
+    // standard hash check is unreliable across device camera pipelines)
     if (attestationPayload && attestationResult.isSeekerDevice && !attestationResult.photoIntegrity) {
-      updateBountyStatus(bountyId, 'lost');
-      return res.status(200).json({
-        success: true,
-        data: {
-          status: 'lost',
-          validation: {
-            isValid: false,
-            confidence: 0,
-            reasoning: 'Photo integrity check failed — image was modified after capture',
-            detectedObjects: [],
-            isScreenshot: false,
-            matchesTarget: false,
-          },
-        },
-      } as ApiResponse<SubmitPhotoResponse>);
+      console.log(`[API] Attestation hash mismatch for Seeker device (non-blocking) — proceeding to AI validation`);
     }
 
     // Record attestation type on the bounty for analytics
