@@ -6,6 +6,7 @@ import { config } from '../config';
 const DEMO_SKR_NAMES: Record<string, string> = {
   'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker': 'seeker_demo',
   '7MKnzxAzmQvib4x6QvdawB7fhWT2ADcyYK2GMXy1wpe6': 'hammer',
+  'FstGYqfpz2Gs6XCU79GJJvLetbmcWvTycbj6wJ4q6uMm': 'johnnysolami',
 };
 
 class SkrService {

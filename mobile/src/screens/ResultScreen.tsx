@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   SafeAreaView,
+  ScrollView,
   Animated,
   Easing,
   Alert,
@@ -250,6 +251,7 @@ export default function ResultScreen({ navigation, route }: Props) {
 
       {/* Result Text */}
       <Animated.View style={[styles.resultContent, { opacity: fadeAnim }]}>
+        <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.resultTitle, { color: isWin ? colors.success : colors.error }]}>
           {isWin ? 'BOUNTY COMPLETE!' : 'BOUNTY FAILED'}
         </Text>
@@ -310,6 +312,7 @@ export default function ResultScreen({ navigation, route }: Props) {
             </View>
           </View>
         )}
+        </ScrollView>
       </Animated.View>
 
       {/* Play Again Button */}
@@ -396,14 +399,17 @@ const styles = StyleSheet.create({
   },
   resultContent: {
     flex: 1,
-    alignItems: 'center',
     paddingHorizontal: spacing.xl,
     marginTop: spacing.xl,
+  },
+  resultScroll: {
+    alignItems: 'center',
   },
   resultTitle: {
     fontSize: fontSize.xxl,
     fontWeight: '900',
     letterSpacing: 2,
+    textAlign: 'center',
   },
   targetText: {
     color: colors.textSecondary,
@@ -424,7 +430,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   confidenceContainer: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     width: '100%',
     alignItems: 'center',
   },
@@ -452,7 +458,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   reasoningContainer: {
-    marginTop: spacing.xl,
+    marginTop: spacing.lg,
     width: '100%',
     backgroundColor: colors.darkAlt,
     borderRadius: borderRadius.lg,
