@@ -213,6 +213,47 @@ Full security audit completed (contract + backend). See `tasks/security-audit.md
 - [ ] **Persistence Layer** — Redis/database to survive backend restarts
 - [ ] **Authority Multisig** — Timelock/multisig for treasury operations
 
+## Roadmap to Mainnet
+
+### Phase 1: Smart Contract Hardening
+- [ ] Integrate VRF (Switchboard/Orao) for provably fair jackpot rolls — replaces current `slot + timestamp % 500`
+- [ ] Deploy authority multisig (Squads Protocol) for treasury and admin operations
+- [ ] Increase challenge period from 10s (devnet) to 300s (mainnet)
+- [ ] External smart contract audit by a specialized firm
+- [ ] Redeploy program to mainnet with verified build
+
+### Phase 2: Backend Production Infrastructure
+- [ ] Replace in-memory storage (JavaScript Maps) with Redis or PostgreSQL for persistence across restarts
+- [ ] Set up production hosting (Railway, Fly.io, or AWS) — replace Cloudflare tunnel
+- [ ] Configure production domain and SSL (`api.seek.app`)
+- [ ] Add error tracking (Sentry) and monitoring (Datadog/Prometheus)
+- [ ] Enable Proguard/R8 minification for release builds
+- [ ] Rate limiting tuning for production traffic
+
+### Phase 3: Token & Economics
+- [ ] Deploy $SKR token to mainnet (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`)
+- [ ] Fund house vault with initial liquidity
+- [ ] Set up protocol treasury wallet
+- [ ] Token metadata registration (name, symbol, logo) on-chain
+
+### Phase 4: Release Signing & APK
+- [ ] Generate production release keystore (store securely, back up passphrase)
+- [ ] Configure Gradle release signing with environment-based credentials
+- [ ] Build production-signed APK
+- [ ] Increment versionCode for each release
+
+### Phase 5: Solana dApp Store Submission
+- [ ] Register as a Solana dApp Store publisher
+- [ ] Create dApp Store listing (description, screenshots, logo)
+- [ ] Submit APK for review
+- [ ] Implement any feedback from dApp Store review team
+
+### Phase 6: Post-Launch
+- [ ] Integrate Seeker Camera SDK (TEE attestation) when available from Solana Mobile
+- [ ] Add leaderboard and player stats
+- [ ] Expand mission pool beyond 300 bounties
+- [ ] Community-created missions
+
 ## License
 
 MIT
