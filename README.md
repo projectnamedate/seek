@@ -231,10 +231,8 @@ Full security audit completed (contract + backend). See `tasks/security-audit.md
 - [ ] Rate limiting tuning for production traffic
 
 ### Phase 3: Token & Economics
-- [ ] Deploy $SKR token to mainnet (`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`)
 - [ ] Fund house vault with initial liquidity
 - [ ] Set up protocol treasury wallet
-- [ ] Token metadata registration (name, symbol, logo) on-chain
 
 ### Phase 4: Release Signing & APK
 - [ ] Generate production release keystore (store securely, back up passphrase)
