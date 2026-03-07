@@ -5,7 +5,7 @@
 // Example: 'https://abc123.ngrok-free.app'
 // Leave empty/null to use emulator URL (10.0.2.2) in dev.
 // ============================================================
-const NGROK_URL: string | null = 'https://ali-naturals-victory-debug.trycloudflare.com';
+const NGROK_URL: string | null = null;
 
 // API Configuration
 export const API_CONFIG = {

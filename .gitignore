@@ -50,3 +50,13 @@ coverage/
 .cache/
 tmp/
 .mcp.json
+
+# Claude Code / AI tooling
+.claude/
+.agents/
+skills-lock.json
+
+# Local notes
+memory/gamma-deck-copy.md
+memory/demo-script.md
+2026-*.txt
