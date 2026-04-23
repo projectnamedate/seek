@@ -104,10 +104,14 @@ export function getWalletState(): WalletState {
 }
 
 /**
- * Get full wallet address (for display in certain contexts)
+ * Get full wallet address (for display in certain contexts).
+ * Prefer `walletState.fullAddress` (populated by MWA) over the hardcoded
+ * DEMO_WALLET constant — previously this always returned the demo address
+ * even for real wallets.
  */
 export function getFullAddress(): string | null {
-  return walletState.connected ? DEMO_WALLET.fullAddress : null;
+  if (!walletState.connected) return null;
+  return walletState.fullAddress ?? (walletState.isDemo ? DEMO_WALLET.fullAddress : null);
 }
 
 /**
