@@ -21,7 +21,7 @@ Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 2
 
 ## Economics
 
-**Bounty Completed (~40% success rate):**
+**Bounty Completed (8–12% target win rate at launch):**
 - Get 3x your entry back (entry + 2x profit)
 - 1-in-500 chance to win the Singularity jackpot
 

@@ -65,7 +65,7 @@ Finished 2026-04-22. 12 commits on `master`. CI green.
 
 ### Docs
 - [x] [tasks/audit-2026-04-22.md](audit-2026-04-22.md) — full mainnet-readiness audit
-- [x] [tasks/mainnet-plan.md](mainnet-plan.md) — 6-phase detailed execution plan
+- [x] [tasks/archive/mainnet-plan-2026-04-22.md](archive/mainnet-plan-2026-04-22.md) — original 6-phase plan, superseded by this roadmap (archived 2026-04-23)
 - [x] [tasks/dapp-store-checklist.md](dapp-store-checklist.md) — dApp Store submission requirements + CLI
 - [x] [tasks/dapp-store-listing-copy.md](dapp-store-listing-copy.md) — ready-to-paste listing copy
 - [x] [tasks/lessons.md](lessons.md) — updated with 2026-04-22 audit lessons

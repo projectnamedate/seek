@@ -63,7 +63,7 @@ Pokemon-GO for crypto on Solana Seeker. Players stake $SKR (1000/2000/3000 per t
 - `backend/src/` — Node + Express + TypeScript (~4000 lines). Orchestrates AI validation, commit-reveal, on-chain reveal/propose/finalize
 - `mobile/src/` — React Native + Expo (~6400 lines). MWA-first wallet integration
 - `tasks/audit-2026-04-22.md` — latest mainnet-readiness audit. Read this first for known issues
-- `tasks/mainnet-plan.md` — 6-phase execution plan with gate decisions
+- `tasks/roadmap.md` — single source of truth for phases, blockers, deferred items (supersedes the archived mainnet-plan)
 - `tasks/dapp-store-checklist.md` — dApp Store submission requirements + CLI flow
 - `mobile/android/SIGNING.md` — release keystore generation + Gradle signing wiring
 
