@@ -6,7 +6,7 @@ import {
 import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../config';
-import { Tier, ENTRY_AMOUNTS } from '../types';
+import { Tier, ENTRY_AMOUNTS, SKR_MULTIPLIER } from '../types';
 import bs58 from 'bs58';
 import { createHash, randomFillSync } from 'crypto';
 import { queueFinalization } from './finalizer.service';
@@ -418,9 +418,10 @@ export async function verifyTransaction(signature: string): Promise<boolean> {
 }
 
 /**
- * Format lamports to SKR display value
+ * Format SKR base units to a human-readable whole-SKR string.
+ * Uses SKR_DECIMALS which follows the SOLANA_NETWORK env (mainnet=6, devnet=9).
  */
 export function formatSkr(lamports: bigint): string {
-  const skr = Number(lamports) / 1_000_000_000;
+  const skr = Number(lamports) / Number(SKR_MULTIPLIER);
   return skr.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }

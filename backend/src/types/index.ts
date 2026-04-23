@@ -1,11 +1,17 @@
 // Bounty tiers
 export type Tier = 1 | 2 | 3;
 
-// Entry amounts in lamports (with 9 decimals)
+// SKR base-unit multiplier — MUST match the on-chain SKR_DECIMALS const.
+// Mainnet SKR (official Solana Mobile token) uses 6 decimals; devnet test
+// mint uses 9. Exported so consumers can format balances consistently.
+export const SKR_DECIMALS = (process.env.SOLANA_NETWORK ?? 'devnet').toLowerCase() === 'mainnet-beta' ? 6 : 9;
+export const SKR_MULTIPLIER = BigInt(10) ** BigInt(SKR_DECIMALS);
+
+// Entry amounts in base units (whole SKR × SKR_MULTIPLIER).
 export const ENTRY_AMOUNTS: Record<Tier, bigint> = {
-  1: 1_000_000_000_000n, // 1000 SKR
-  2: 2_000_000_000_000n, // 2000 SKR
-  3: 3_000_000_000_000n, // 3000 SKR
+  1: 1000n * SKR_MULTIPLIER,
+  2: 2000n * SKR_MULTIPLIER,
+  3: 3000n * SKR_MULTIPLIER,
 };
 
 // Timer durations in seconds (must match mobile TIERS config)

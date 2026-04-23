@@ -8,6 +8,7 @@ import {
   SubmitPhotoResponse,
   Tier,
   ENTRY_AMOUNTS,
+  SKR_MULTIPLIER,
   TIER_CONFIDENCE_THRESHOLDS,
 } from '../types';
 import {
@@ -474,8 +475,8 @@ if (config.server.isDev) {
           startTime: bounty.createdAt.getTime(),
           endTime: bounty.expiresAt.getTime(),
           status: 'hunting',
-          entryAmount: Number(ENTRY_AMOUNTS[tier] / 1_000_000_000n),
-          potentialReward: Number((ENTRY_AMOUNTS[tier] * 2n) / 1_000_000_000n),
+          entryAmount: Number(ENTRY_AMOUNTS[tier] / SKR_MULTIPLIER),
+          potentialReward: Number((ENTRY_AMOUNTS[tier] * 2n) / SKR_MULTIPLIER),
         },
       });
     } catch (error) {

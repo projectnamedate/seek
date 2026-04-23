@@ -1,20 +1,83 @@
 import { Router, Request, Response } from 'express';
 import { getBountyStats } from '../services/bounty.service';
-import { getHouseVaultBalance, getSingularityVaultBalance, formatSkr } from '../services/solana.service';
+import {
+  getHouseVaultBalance,
+  getSingularityVaultBalance,
+  formatSkr,
+  getConnection,
+  getGlobalState,
+} from '../services/solana.service';
 import { getFinalizerStatus } from '../services/finalizer.service';
+import { getRedis } from '../services/redis.service';
 import { config } from '../config';
 
 const router = Router();
 
 /**
  * GET /api/health
- * Basic health check
+ * Liveness check — does not touch downstream deps. Use for load-balancer
+ * health probes; should always return 200 if the process is alive.
  */
 router.get('/', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
+    network: config.solana.network,
+  });
+});
+
+/**
+ * GET /api/health/ready
+ * Readiness check — verifies downstream deps (RPC + on-chain program + Redis).
+ * Returns 503 if anything critical is failing. Use for deployment gates.
+ */
+router.get('/ready', async (req: Request, res: Response) => {
+  const checks: Record<string, { ok: boolean; error?: string; info?: string }> = {};
+
+  // RPC reachable?
+  try {
+    const conn = getConnection();
+    const slot = await conn.getSlot();
+    checks.rpc = { ok: true, info: `slot=${slot}` };
+  } catch (e: any) {
+    checks.rpc = { ok: false, error: e.message };
+  }
+
+  // Program initialized on this cluster?
+  try {
+    const state = await getGlobalState();
+    if (state) {
+      checks.program = { ok: true, info: `authority=${state.authority.toBase58().slice(0, 8)}...` };
+    } else {
+      checks.program = { ok: false, error: 'global_state not found — protocol not initialized' };
+    }
+  } catch (e: any) {
+    checks.program = { ok: false, error: e.message };
+  }
+
+  // Redis connected (if configured)?
+  if (config.redis.url) {
+    try {
+      const r = await getRedis();
+      if (r) {
+        const pong = await r.ping();
+        checks.redis = { ok: pong === 'PONG', info: pong };
+      } else {
+        checks.redis = { ok: false, error: 'getRedis returned null' };
+      }
+    } catch (e: any) {
+      checks.redis = { ok: false, error: e.message };
+    }
+  } else {
+    checks.redis = { ok: true, info: 'disabled (REDIS_URL unset)' };
+  }
+
+  const ready = Object.values(checks).every((c) => c.ok);
+  res.status(ready ? 200 : 503).json({
+    ready,
+    checks,
+    timestamp: new Date().toISOString(),
   });
 });
 
