@@ -50,3 +50,92 @@
 - **Simplicity First**: Make every change as simple as possible. Impact minimal code.
 - **No Laziness**: Find root causes. No temporary fixes. Senior developer standards.
 - **Minimal Impact**: Changes should only touch what's necessary. Avoid introducing bugs.
+
+---
+
+# Seek — Project Reference
+
+## What this is
+Pokemon-GO for crypto on Solana Seeker. Players stake $SKR (1000/2000/3000 per tier), get a random real-world target, photograph it, AI (Claude Vision) validates, 2x profit on win, 70/20/10 loss split, 1-in-500 jackpot on each win. Won Solana Mobile Monolith 2026 hackathon (Feb 2026). Preparing for mainnet + Solana dApp Store.
+
+## Stack map
+- `contracts/programs/seek-protocol/src/lib.rs` — Anchor Rust program (~1800 lines, 16 instructions)
+- `backend/src/` — Node + Express + TypeScript (~4000 lines). Orchestrates AI validation, commit-reveal, on-chain reveal/propose/finalize
+- `mobile/src/` — React Native + Expo (~6400 lines). MWA-first wallet integration
+- `tasks/audit-2026-04-22.md` — latest mainnet-readiness audit. Read this first for known issues
+- `tasks/mainnet-plan.md` — 6-phase execution plan with gate decisions
+- `tasks/dapp-store-checklist.md` — dApp Store submission requirements + CLI flow
+- `mobile/android/SIGNING.md` — release keystore generation + Gradle signing wiring
+
+## $SKR token (CRITICAL — don't assume)
+- Mainnet mint: `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`
+- Decimals: **6** (NOT 9 — early contract assumed 9, fixed 2026-04-22)
+- SKR is the **official Solana Mobile ecosystem token** (staking + governance). Not a Seek-owned token. User does not control the mint (mint authority is `FMNn5sor…`, owned by SMS program `SKRiHLt…`)
+- Current price ~$0.017, total supply ~10.24B
+- Tier 1 entry = 1000 SKR ≈ $17. House vault needs real $$ — 10M SKR starter ≈ $170k
+
+## Build commands
+
+### Contract (Anchor 0.32 CLI / 0.30.1 lib)
+```bash
+cd contracts
+anchor build                                                      # mainnet (default)
+anchor build --no-default-features --features devnet              # devnet
+anchor deploy --provider.cluster mainnet                          # DESTRUCTIVE
+anchor deploy --provider.cluster devnet
+```
+Feature flags gate SKR_MINT, SKR_DECIMALS, CHALLENGE_PERIOD (mainnet 300s / devnet 10s). Entry amounts derive from `DECIMALS_MULTIPLIER`.
+
+### Backend
+```bash
+cd backend
+npm run dev                    # ts-node-dev, watches + respawns
+npm run build && npm start     # production (compile then run dist/)
+npx tsc --noEmit               # typecheck only
+```
+
+Required env on mainnet (see `backend/.env.example`):
+- `SOLANA_NETWORK=mainnet-beta` + `SOLANA_RPC_URL` (Helius/QuickNode)
+- `AUTHORITY_PRIVATE_KEY` (COLD — Ledger-backed; used only for admin ops)
+- `HOT_AUTHORITY_PRIVATE_KEY` (hot — backend-held; reveal + propose only). Config throws if missing on mainnet.
+- `SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`
+- `REDIS_URL` (Upstash recommended) + `SENTRY_DSN`
+
+### Mobile
+```bash
+cd mobile
+npx expo run:android                                              # dev build
+cd android && ./gradlew assembleRelease                           # release APK (uses env-based signing)
+```
+Switch `NETWORK` in `mobile/src/config/index.ts` to swap mainnet/devnet ($SKR mint + decimals + challenge period all derive from it).
+
+### Deploy targets
+- Backend → Railway (Dockerfile at `backend/Dockerfile`, `backend/railway.json`). Add Upstash Redis addon. Custom domain on `seek.app`.
+- APK → Solana dApp Store via `npx @solana-mobile/dapp-store-cli` flow. See `tasks/dapp-store-checklist.md`.
+
+## On-chain auth model (hot/cold split)
+- **Cold authority** (`GlobalState.authority`) — Ledger hardware wallet. Signs: `withdraw_treasury`, `fund_house`, `set_hot_authority`, `propose_authority_transfer`, `resolve_dispute`, `cancel_authority_transfer`. Two-step transfer (`propose_authority_transfer` + `accept_authority_transfer`) prevents typo loss.
+- **Hot authority** (`GlobalState.hot_authority`) — Backend-held keypair in Railway env. Signs ONLY: `reveal_mission`, `propose_resolution`. Compromise is contained (cannot drain treasury or rotate authority). Rotate via `set_hot_authority` (cold-signed).
+- User is solo operator — uses Ledger, not Squads multisig. Don't suggest multisig unless explicitly asked.
+- **External audit skipped** — internal audit only. Don't re-propose unless contract surface changes materially.
+
+## Key architectural invariants
+- **Commit-reveal missions**: Mission ID + 32-byte salt committed at `accept_bounty`, revealed at `reveal_mission` (after photo submit). Prevents mission front-running.
+- **Optimistic resolve + dispute window**: `propose_resolution` → 300s challenge period → `finalize_bounty`. Player can `dispute_bounty` during challenge (stake 50% of entry) → `resolve_dispute` (cold-signed).
+- **Jackpot RNG** (v1): strengthened entropy = `hash(mission_commitment || bounty_pda || slot || timestamp) % 500`. Still grindable by a slot leader with low ROI at launch jackpot sizes. **Task #3 upgrade to Switchboard On-Demand VRF when jackpot pool > $50k.**
+- **finalize_bounty is permissionless** — anyone can crank once challenge period ends. Backend finalizer worker (`backend/src/services/finalizer.service.ts`) does this on a poll loop (`POLL_INTERVAL` = challenge_period/5, min 2s).
+- **Redis is the source of truth** for mission secrets, prepared bounties, finalizer queue. In-memory Maps are a cache + fallback for dev. On restart, finalizer hydrates from Redis. `REDIS_URL` unset = in-memory only (dev only).
+
+## Known gotchas
+- **MWA back-to-back transact hangs Phantom** — only ONE MWA call per user action. Insert `await new Promise(r => setTimeout(r, 1500))` after Phantom returns via deep-link before making HTTP calls. See `tasks/lessons.md`.
+- **SKR decimals = 6, not 9**. Anything computing or displaying SKR amounts must use `DECIMALS_MULTIPLIER` (contract) or `TOKEN.DECIMALS` (mobile). Logs use `value / DECIMALS_MULTIPLIER` to print whole SKR.
+- **Challenge period config must match on-chain** — contract const + backend `config.protocol.challengePeriodSeconds` + mobile `GAME_CONFIG.CHALLENGE_PERIOD` must all agree. Currently driven by feature flag / `NETWORK` toggle.
+- **Trust proxy** — `app.set('trust proxy', 1)` is required behind Cloudflare tunnel / Railway. Rate limiters crash without it.
+- **Release APK signing**: dApp Store rejects debug-signed APKs. Use `mobile/android/SIGNING.md` flow. Lost keystore = permanently locked out of updates.
+
+## Current state (2026-04-22 mainnet-readiness snapshot)
+**Done**: SKR mint/decimals fixed (feature-gated), challenge period 300s, two-step auth, hot/cold split, Claude Sonnet 4.6, Sentry wired, Redis-backed critical state, Android manifest hardened + R8 enabled + release signing wired, Dockerfile + railway.json, strengthened jackpot RNG.
+
+**Gated on user**: seek.app domain purchase, Ledger pubkey share, release keystore generation (`keytool` flow in SIGNING.md), SKR house-vault funding, mainnet program deploy, dApp Store publisher NFT mint, APK submission.
+
+**Deferred (post-launch)**: Switchboard On-Demand VRF (task #3), Postgres analytics, horizontal-scale Redis migration for `activeBounties`/locks.

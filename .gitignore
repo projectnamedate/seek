@@ -60,3 +60,9 @@ skills-lock.json
 memory/gamma-deck-copy.md
 memory/demo-script.md
 2026-*.txt
+
+# Large binary artifacts (don't commit to git — host elsewhere)
+*.apk
+*.aab
+*.mp4
+Seek*.pdf
