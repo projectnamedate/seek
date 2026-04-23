@@ -119,6 +119,35 @@ Switch `NETWORK` in `mobile/src/config/index.ts` to swap mainnet/devnet ($SKR mi
 - User is solo operator — uses Ledger, not Squads multisig. Don't suggest multisig unless explicitly asked.
 - **External audit skipped** — internal audit only. Don't re-propose unless contract surface changes materially.
 
+## Economic model — NORTH STAR
+
+**Player win rate target: 15-18%. House edge: 20-30% per bet.** The house must win. This is not a skill game with break-even payouts; players are farmed.
+
+Per-bounty P&L (1000 SKR tier 1 entry):
+- Win: house pool pays 2000 SKR profit (player gets entry + 2x)
+- Loss: 700 → house, 200 → jackpot, 100 → treasury (all kept by protocol)
+
+Break-even for the house pool alone is ~26% win rate. Above that it bleeds. We target *well below* it.
+
+| Win rate | House edge | Status |
+|---------:|-----------:|:-------|
+| 10% | +53% | aggressive |
+| 15% | +29% | target low |
+| 18% | +18% | target high |
+| 25% | +3% | break-even-ish |
+| 30% | −11% | losing |
+| 40% | −38% | bleeding |
+
+**Levers (tune any or all to hit target):**
+1. Mission difficulty — ~20% of the 300-mission pool should be intentionally near-impossible within the tier timer.
+2. AI confidence thresholds (`backend/src/types/index.ts` `TIER_CONFIDENCE_THRESHOLDS`, current 0.80/0.85/0.90).
+3. Tier timers (180s/120s/60s — shorten if needed).
+4. Screenshot + metadata strictness (already blocking outside dev).
+
+**Do NOT cite the pitch deck's "40% success rate" line** — that was marketing, not operational. Operationally we target 15-18%.
+
+See [memory/project_economic_model.md](~/.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_economic_model.md) for full math + monitoring plan, and [tasks/roadmap.md § B7](tasks/roadmap.md) for the launch-blocker audit task.
+
 ## Key architectural invariants
 - **Commit-reveal missions**: Mission ID + 32-byte salt committed at `accept_bounty`, revealed at `reveal_mission` (after photo submit). Prevents mission front-running.
 - **Optimistic resolve + dispute window**: `propose_resolution` → 300s challenge period → `finalize_bounty`. Player can `dispute_bounty` during challenge (stake 50% of entry) → `resolve_dispute` (cold-signed).
