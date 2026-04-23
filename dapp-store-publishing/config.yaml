@@ -1,0 +1,107 @@
+# Solana dApp Store publishing config for Seek.
+#
+# Used by `@solana-mobile/dapp-store-cli` to mint the Publisher NFT (once),
+# the App NFT (once per app), and Release NFTs (one per version).
+#
+# Docs: https://docs.solanamobile.com/dapp-publishing/intro
+# CLI:  https://github.com/solana-mobile/dapp-publishing
+#
+# Pipeline:
+#   npx dapp-store init                           # scaffolds this file
+#   npx dapp-store create publisher -k publisher.json
+#   npx dapp-store create app -k publisher.json
+#   npx dapp-store create release -k publisher.json
+#   npx dapp-store publish submit \
+#       -k publisher.json \
+#       --requestor-is-authorized \
+#       --complies-with-solana-dapp-store-policies
+#
+# Placeholders below — fill in before first real mint.
+
+publisher:
+  # Your publisher identity (NFT owner). This keypair must stay funded with
+  # ~0.5 SOL. BACK IT UP — losing it means losing control of the listing.
+  address: PLACEHOLDER_PUBLISHER_PUBKEY
+  name: Projectnamedate
+  website: https://seek.app
+  email: jeff@projectname.date
+
+app:
+  # Android package name — must match mobile/app.json android.package
+  android_package: app.seek.mobile
+  name: Seek
+  urls:
+    license_url: https://seek.app/license
+    copyright_url: https://seek.app/license
+    privacy_policy_url: https://seek.app/privacy
+    website: https://seek.app
+
+release:
+  address: AUTO_GENERATED_AT_CREATE_TIME
+  media:
+    - purpose: icon
+      uri: assets/icon.png
+    - purpose: banner
+      uri: assets/feature-graphic.png
+  files:
+    - purpose: install
+      uri: ../mobile/android/app/build/outputs/apk/release/app-release.apk
+  catalog:
+    en-US:
+      name: Seek
+      short_description: Pokemon GO for crypto. Hunt real-world targets, win 2x your $SKR entry.
+      long_description: |
+        Seek turns your Seeker phone into a real-world treasure-hunting device.
+
+        HOW IT WORKS
+        1. Connect your Solana wallet with MWA (no browser, no extension).
+        2. Pick a tier: Easy (1000 $SKR / 3 min), Medium (2000 $SKR / 2 min), or Hard (3000 $SKR / 1 min).
+        3. Pay your entry and receive a randomly-assigned target.
+        4. Race the clock. Find it in the real world. Photograph it.
+        5. AI (Claude Vision) verifies.
+        6. Win = claim 2x your entry. Fail = entry fuels the ecosystem.
+
+        SKILL-BASED, ON-CHAIN, PHONE-NATIVE
+        All bounties are on-chain transactions on Solana. Commit-reveal mission
+        assignment, AI + EXIF cross-check, Seeker Genesis Token verification.
+
+        ECONOMICS
+        Win: keep your entry + earn 2x more from the house pool. Jackpot:
+        1-in-500 chance on every win. Loss: 70% house / 20% jackpot / 10%
+        treasury.
+
+        BUILT FOR SEEKER
+        Native MWA, .SKR name resolution, camera attestation. Can only exist
+        on Seeker.
+
+        18+ only. Skill-based competition. Not available where skill-based
+        contests with cash prizes are restricted.
+      new_in_version: Initial mainnet launch.
+      saga_features_localized: Native Mobile Wallet Adapter, .SKR name resolution, Seeker Genesis Token bonus, camera attestation.
+
+solana_mobile_dapp_publisher_portal:
+  google_store_package: ""  # empty — we're dApp-Store-only, not also on Play Store
+  testing_instructions: |
+    Test wallet with 50,000 devnet SKR + 0.1 SOL is provided in the
+    submission notes. To run a complete flow:
+    1. Launch the app (age gate on first run — accept 18+)
+    2. Tap Connect Wallet → approve MWA
+    3. Pick Easy tier → Start Hunt → approve transaction
+    4. Accept the random mission
+    5. Tap camera → capture any photo matching the mission
+    6. AI validates in ~3 seconds
+    7. On win: +2000 SKR credited on-chain. On loss: entry distributed.
+
+    Source at github.com/projectnamedate/seek. Questions:
+    jeff@projectname.date.
+
+# Age / content ratings (per dApp Store policy)
+iarc_rating_system:
+  age_rating: EIGHTEEN_PLUS
+  reasons:
+    - SIMULATED_GAMBLING        # skill-based stakes
+    - USER_GENERATED_CONTENT    # photos uploaded for validation
+
+# Required attestations (submit flow). Keep these as-is — the CLI injects
+# them via --requestor-is-authorized --complies-with-solana-dapp-store-policies
+# flags at publish time.
