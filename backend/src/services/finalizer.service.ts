@@ -23,6 +23,9 @@ import {
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../config';
 import { getRedis, RK } from './redis.service';
+import { childLogger } from './logger.service';
+
+const log = childLogger('finalizer');
 
 // Track bounties pending finalization: bountyPda → { playerWallet, challengeEndsAt, attempts }
 interface PendingFinalization {
@@ -58,7 +61,7 @@ export function queueFinalization(
   challengeEndsAt: number
 ): void {
   if (pendingFinalizations.has(bountyPda)) {
-    console.log(`[Finalizer] Bounty ${bountyPda.slice(0, 8)}... already queued`);
+    log.info({ bountyPda: bountyPda.slice(0, 8) }, 'bounty already queued');
     return;
   }
 
@@ -74,12 +77,15 @@ export function queueFinalization(
 
   // Persist to Redis (fire-and-forget; in-memory copy keeps working if Redis is slow/down)
   void persistQueueEntry(entry).catch((err) =>
-    console.error(`[Finalizer] Redis persist failed for ${bountyPda.slice(0, 8)}...:`, err)
+    log.error({ err, bountyPda: bountyPda.slice(0, 8) }, 'redis persist failed')
   );
 
-  console.log(
-    `[Finalizer] Queued bounty ${bountyPda.slice(0, 8)}... ` +
-    `(finalizes after ${new Date(challengeEndsAt * 1000).toISOString()})`
+  log.info(
+    {
+      bountyPda: bountyPda.slice(0, 8),
+      finalizeAt: new Date(challengeEndsAt * 1000).toISOString(),
+    },
+    'queued bounty for finalization'
   );
 }
 
@@ -127,10 +133,10 @@ async function hydrateFromRedis(): Promise<void> {
       }
     }
     if (restored > 0) {
-      console.log(`[Finalizer] Restored ${restored} pending finalizations from Redis`);
+      log.info({ restored }, 'restored pending finalizations from redis');
     }
   } catch (err) {
-    console.error('[Finalizer] Redis hydration failed:', err);
+    log.error({ err }, 'redis hydration failed');
   }
 }
 
@@ -151,29 +157,35 @@ async function processPendingFinalizations(): Promise<void> {
 
   if (ready.length === 0) return;
 
-  console.log(`[Finalizer] Processing ${ready.length} ready bounties...`);
+  log.info({ count: ready.length }, 'processing ready bounties');
 
   for (const pending of ready) {
     try {
       await finalizeSingleBounty(pending);
       pendingFinalizations.delete(pending.bountyPda);
       await removeQueueEntry(pending.bountyPda);
-      console.log(`[Finalizer] Finalized bounty ${pending.bountyPda.slice(0, 8)}...`);
+      log.info({ bountyPda: pending.bountyPda.slice(0, 8) }, 'finalized bounty');
     } catch (error: any) {
       pending.attempts++;
       // Persist attempt count so retries survive restart
       void persistQueueEntry(pending).catch(() => { /* non-critical */ });
 
-      console.error(
-        `[Finalizer] Failed to finalize ${pending.bountyPda.slice(0, 8)}... ` +
-        `(attempt ${pending.attempts}/${MAX_ATTEMPTS}): ${error.message}`
+      log.warn(
+        {
+          bountyPda: pending.bountyPda.slice(0, 8),
+          attempt: pending.attempts,
+          max: MAX_ATTEMPTS,
+          err: error.message,
+        },
+        'finalize failed'
       );
 
       if (pending.attempts >= MAX_ATTEMPTS) {
         pendingFinalizations.delete(pending.bountyPda);
         await removeQueueEntry(pending.bountyPda);
-        console.error(
-          `[Finalizer] Giving up on ${pending.bountyPda.slice(0, 8)}... after ${MAX_ATTEMPTS} attempts`
+        log.error(
+          { bountyPda: pending.bountyPda.slice(0, 8), max: MAX_ATTEMPTS },
+          'giving up on bounty after max attempts'
         );
       }
     }
@@ -221,18 +233,18 @@ async function finalizeSingleBounty(pending: PendingFinalization): Promise<strin
  */
 export function startFinalizationWorker(): void {
   if (intervalHandle) {
-    console.log('[Finalizer] Worker already running');
+    log.info('worker already running');
     return;
   }
 
-  console.log(`[Finalizer] Starting worker (polling every ${POLL_INTERVAL / 1000}s)`);
+  log.info({ pollIntervalMs: POLL_INTERVAL }, 'starting worker');
 
   // Restore queue from Redis first (no-op if Redis disabled)
-  void hydrateFromRedis().catch((err) => console.error('[Finalizer] Hydrate error:', err));
+  void hydrateFromRedis().catch((err) => log.error({ err }, 'hydrate error'));
 
   intervalHandle = setInterval(() => {
     processPendingFinalizations().catch((err) => {
-      console.error('[Finalizer] Worker error:', err.message);
+      log.error({ err: err.message }, 'worker error');
     });
   }, POLL_INTERVAL);
 }
@@ -244,7 +256,7 @@ export function stopFinalizationWorker(): void {
   if (intervalHandle) {
     clearInterval(intervalHandle);
     intervalHandle = null;
-    console.log('[Finalizer] Worker stopped');
+    log.info('worker stopped');
   }
 }
 
