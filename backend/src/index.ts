@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
+import pinoHttp from 'pino-http';
+import { randomUUID } from 'crypto';
 import { config } from './config';
 import bountyRoutes from './routes/bounty.routes';
 import healthRoutes from './routes/health.routes';
@@ -9,6 +11,7 @@ import skrRoutes from './routes/skr.routes';
 import sgtRoutes from './routes/sgt.routes';
 import { startFinalizationWorker, stopFinalizationWorker } from './services/finalizer.service';
 import { initSentry, setupSentryErrorHandler } from './services/sentry.service';
+import { logger } from './services/logger.service';
 
 // Initialize Sentry FIRST — auto-instruments http + express via OpenTelemetry.
 initSentry();
@@ -18,6 +21,31 @@ const app = express();
 
 // Trust proxy (needed for Cloudflare tunnel / ngrok / Railway proxy)
 app.set('trust proxy', 1);
+
+// Structured request logging with correlation IDs. Every request gets a UUID
+// stamped on every log line for its duration, so a single grep surfaces the
+// full lifecycle. Health probes skipped to avoid log noise.
+app.use(
+  pinoHttp({
+    logger,
+    genReqId: (req, res) => {
+      const existing = (req.headers['x-request-id'] as string | undefined) || randomUUID();
+      res.setHeader('x-request-id', existing);
+      return existing;
+    },
+    autoLogging: {
+      ignore: (req) => (req.url ?? '').startsWith('/api/health'),
+    },
+    serializers: {
+      req: (req) => ({
+        method: req.method,
+        url: req.url,
+        // Do NOT log body — photos + wallet addrs are PII-adjacent.
+      }),
+      res: (res) => ({ statusCode: res.statusCode }),
+    },
+  })
+);
 
 // Security headers
 app.use(helmet());
@@ -55,17 +83,8 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// Request logging in development
-if (config.server.isDev) {
-  app.use((req, res, next) => {
-    const start = Date.now();
-    res.on('finish', () => {
-      const duration = Date.now() - start;
-      console.log(`[${req.method}] ${req.path} - ${res.statusCode} (${duration}ms)`);
-    });
-    next();
-  });
-}
+// Request logging is now handled by pino-http above — the old console-based
+// middleware has been removed.
 
 // Routes
 app.use('/api/bounty', bountyRoutes);
@@ -104,11 +123,10 @@ setupSentryErrorHandler(app);
 
 // Global error handler — no stack traces or internal paths in production
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (config.server.isDev) {
-    console.error('[Error]', err);
-  } else {
-    console.error('[Error]', err.message);
-  }
+  logger.error(
+    { err, reqId: (req as any).id, path: req.path },
+    'Request error'
+  );
   res.status(500).json({
     success: false,
     error: config.server.isDev ? err.message : 'Internal server error',
@@ -120,28 +138,16 @@ const PORT = config.server.port;
 const HOST = '0.0.0.0'; // Listen on all interfaces for emulator access
 
 const server = app.listen(PORT, HOST, () => {
-  console.log('');
-  console.log('╔═══════════════════════════════════════════╗');
-  console.log('║         SEEK PROTOCOL API SERVER          ║');
-  console.log('╠═══════════════════════════════════════════╣');
-  console.log(`║  Port:     ${PORT}                            ║`);
-  console.log(`║  Network:  ${config.solana.network.padEnd(27)}║`);
-  console.log(`║  Mode:     ${config.server.nodeEnv.padEnd(27)}║`);
-  console.log('╚═══════════════════════════════════════════╝');
-  console.log('');
-  console.log('Endpoints:');
-  console.log('  GET  /api/health          - Health check');
-  console.log('  GET  /api/health/stats    - Protocol stats');
-  console.log('  POST /api/bounty/start    - Start bounty hunt');
-  console.log('  POST /api/bounty/submit   - Submit photo');
-  console.log('  GET  /api/bounty/:id      - Get bounty status');
-  console.log('  GET  /api/skr/lookup/:x   - Resolve .skr domain');
-  console.log('  POST /api/sgt/verify      - Verify Seeker Genesis Token');
-  if (config.server.isDev) {
-    console.log('  POST /api/bounty/demo/*   - Demo endpoints (dev only)');
-    console.log('  GET  /api/health/demo     - Demo stats (dev only)');
-  }
-  console.log('');
+  logger.info(
+    {
+      port: PORT,
+      network: config.solana.network,
+      mode: config.server.nodeEnv,
+      redis: config.redis.url ? 'enabled' : 'disabled',
+      sentry: config.sentry.dsn ? 'enabled' : 'disabled',
+    },
+    'Seek backend listening'
+  );
 
   // Start finalization worker for challenge period processing
   startFinalizationWorker();
@@ -149,15 +155,15 @@ const server = app.listen(PORT, HOST, () => {
 
 // Graceful shutdown
 function shutdown(signal: string) {
-  console.log(`\n[${signal}] Shutting down gracefully...`);
+  logger.info({ signal }, 'Shutting down gracefully');
   stopFinalizationWorker();
   server.close(() => {
-    console.log('Server closed.');
+    logger.info('Server closed cleanly');
     process.exit(0);
   });
   // Force exit after 10 seconds if connections hang
   setTimeout(() => {
-    console.error('Forced shutdown after timeout');
+    logger.error('Forced shutdown after timeout');
     process.exit(1);
   }, 10_000);
 }

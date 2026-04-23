@@ -35,9 +35,8 @@ import { getRandomMission } from '../data/missions';
 import { PublicKey } from '@solana/web3.js';
 import { isWalletSGTVerified } from '../services/sgt.service';
 import { attestationService, AttestationPayload } from '../services/attestation.service';
-import { requireWalletAuth } from '../middleware/auth.middleware';
 import { validate } from '../middleware/validate.middleware';
-import { bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
+import { bountyPrepareLimiter, bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
 import { config } from '../config';
 
 const router = Router();
@@ -86,7 +85,7 @@ const startBountyDemoSchema = z.object({
  * to build the accept_bounty transaction.
  * No wallet auth required (player hasn't signed anything yet).
  */
-router.post('/prepare', validate(prepareBountySchema), async (req: Request, res: Response) => {
+router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), async (req: Request, res: Response) => {
   try {
     const { tier, playerWallet } = req.body as { tier: Tier; playerWallet: string };
 
