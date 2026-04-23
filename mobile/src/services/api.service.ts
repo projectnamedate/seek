@@ -1,7 +1,8 @@
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Bounty, TierNumber, ValidationResult, AttestationPayload } from '../types';
-import { API_BASE_URL, DEMO_MODE } from '../config';
+import { API_BASE_URL } from '../config';
+import { encodeBase58 } from '../utils/bs58';
 
 // Dev-only logging - stripped from production builds
 const log = (...args: any[]) => __DEV__ && console.log(...args);
@@ -9,31 +10,6 @@ const logError = (...args: any[]) => __DEV__ && console.error(...args);
 
 // Max photo upload size (10MB) - matches backend multer limit
 const MAX_PHOTO_SIZE_BYTES = 10 * 1024 * 1024;
-
-// Base58 alphabet (same as Solana)
-const BS58_CHARS = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-
-/**
- * Encode bytes to base58 string
- */
-function encodeBase58(bytes: Uint8Array): string {
-  // Count leading zeros
-  let zeros = 0;
-  for (let i = 0; i < bytes.length && bytes[i] === 0; i++) {
-    zeros++;
-  }
-
-  // Convert to big number
-  let num = BigInt('0x' + Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(''));
-  let result = '';
-  while (num > 0n) {
-    result = BS58_CHARS[Number(num % 58n)] + result;
-    num = num / 58n;
-  }
-
-  // Add leading '1' for each leading zero byte
-  return '1'.repeat(zeros) + result;
-}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -45,16 +21,26 @@ const api = axios.create({
 });
 
 /**
- * Generate wallet auth headers for authenticated endpoints.
- * Signs message: "seek:{walletAddress}:{timestamp}"
- * Backend verifies Ed25519 signature within 30s window.
+ * Auth operations the backend's `requireWalletAuth` middleware accepts.
+ */
+export type AuthOperation = 'prepare' | 'submit';
+
+/**
+ * Generate wallet auth headers for an authenticated endpoint.
+ * Signs message: "seek:{operation}:{walletAddress}:{timestamp}"
+ * Backend verifies Ed25519 signature within 120s window AND consumes a Redis
+ * nonce so the same (op, wallet, ts, sig) tuple can't be replayed.
+ *
+ * Operation binding prevents reuse across endpoints — a /prepare auth header
+ * cannot be replayed against /submit.
  */
 export async function getWalletAuthHeaders(
   signMessage: (message: Uint8Array) => Promise<Uint8Array>,
-  walletAddress: string
+  walletAddress: string,
+  operation: AuthOperation,
 ): Promise<Record<string, string>> {
   const timestamp = Date.now().toString();
-  const message = `seek:${walletAddress}:${timestamp}`;
+  const message = `seek:${operation}:${walletAddress}:${timestamp}`;
   const messageBytes = new TextEncoder().encode(message);
   const signatureBytes = await signMessage(messageBytes);
   const signatureBase58 = encodeBase58(signatureBytes);
@@ -69,11 +55,14 @@ export async function getWalletAuthHeaders(
 /**
  * Prepare a bounty (pre-transaction).
  * Returns commitment, timestamp, bountyPda for building on-chain tx.
- * No auth required.
+ * Wallet auth required (defeats targeted PDA-poisoning DoS).
+ *
+ * Pass `authHeaders` from `getWalletAuthHeaders(signMessage, wallet, 'prepare')`.
  */
 export async function prepareBounty(
   playerWallet: string,
-  tier: TierNumber
+  tier: TierNumber,
+  authHeaders: Record<string, string>,
 ): Promise<{
   success: boolean;
   data?: {
@@ -88,7 +77,7 @@ export async function prepareBounty(
     const response = await api.post('/bounty/prepare', {
       tier,
       playerWallet,
-    });
+    }, { headers: authHeaders });
 
     if (response.data.success && response.data.data) {
       return {
@@ -111,81 +100,26 @@ export async function prepareBounty(
 }
 
 /**
- * Start a new bounty hunt.
- * In demo mode: uses /bounty/demo/start (no auth).
- * In devnet mode: uses /bounty/start (with wallet auth headers).
+ * Start a new bounty hunt. No auth header required — backend's
+ * verifyTransaction parses the on-chain accept_bounty tx and asserts
+ * (player, bountyPda, programId) match. The on-chain signature IS the
+ * authorization for /start.
  */
 export async function startBounty(
   wallet: string,
   tier: TierNumber,
-  options?: {
-    bountyPda?: string;
-    transactionSignature?: string;
-    signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
-  }
-): Promise<{ success: boolean; bounty?: Bounty; data?: any; error?: string }> {
-  try {
-    if (DEMO_MODE.USE_DEMO_ENDPOINTS) {
-      // Demo mode: no auth, simplified request
-      const response = await api.post('/bounty/demo/start', {
-        tier,
-        wallet,
-      });
-
-      if (response.data.success && response.data.bounty) {
-        return { success: true, bounty: response.data.bounty };
-      }
-      return { success: false, error: response.data.error || 'Failed to start bounty' };
-    }
-
-    // Devnet mode: auth headers + full request
-    const headers: Record<string, string> = {};
-    if (options?.signMessage) {
-      const authHeaders = await getWalletAuthHeaders(options.signMessage, wallet);
-      Object.assign(headers, authHeaders);
-    }
-
-    const response = await api.post('/bounty/start', {
-      tier,
-      playerWallet: wallet,
-      bountyPda: options?.bountyPda,
-      transactionSignature: options?.transactionSignature,
-    }, { headers });
-
-    if (response.data.success && response.data.data) {
-      return { success: true, data: response.data.data };
-    }
-
-    return { success: false, error: response.data.error || 'Failed to start bounty' };
-  } catch (error: any) {
-    logError('[API] Start bounty error:', error);
-    return {
-      success: false,
-      error: error.response?.data?.error || 'Failed to start bounty',
-    };
-  }
-}
-
-/**
- * Start a bounty with pre-signed auth headers.
- * Use this when auth was signed before the on-chain tx to avoid double MWA prompts.
- */
-export async function startBountyWithHeaders(
-  wallet: string,
-  tier: TierNumber,
   options: {
-    bountyPda?: string;
-    transactionSignature?: string;
+    bountyPda: string;
+    transactionSignature: string;
   },
-  headers: Record<string, string>,
-): Promise<{ success: boolean; data?: any; error?: string }> {
+): Promise<{ success: boolean; bounty?: Bounty; data?: any; error?: string }> {
   try {
     const response = await api.post('/bounty/start', {
       tier,
       playerWallet: wallet,
       bountyPda: options.bountyPda,
       transactionSignature: options.transactionSignature,
-    }, { headers });
+    });
 
     if (response.data.success && response.data.data) {
       return { success: true, data: response.data.data };
@@ -216,7 +150,7 @@ export async function submitPhoto(
   }
 ): Promise<{ success: boolean; validation?: ValidationResult; error?: string }> {
   try {
-    const endpoint = DEMO_MODE.USE_DEMO_ENDPOINTS ? '/bounty/demo/submit' : '/bounty/submit';
+    const endpoint = '/bounty/submit';
 
     // Validate file size before uploading (backend enforces 10MB limit via multer)
     const fileInfo = await FileSystem.getInfoAsync(photoUri);
@@ -247,6 +181,14 @@ export async function submitPhoto(
       formData.append('attestation', JSON.stringify(attestation));
     }
 
+    // Wallet auth headers — backend's requireWalletAuth('submit') runs after
+    // multer parses FormData and verifies the per-operation signed message.
+    const submitHeaders: Record<string, string> = { 'ngrok-skip-browser-warning': '1' };
+    if (authOptions?.signMessage && authOptions?.walletAddress) {
+      const wAuth = await getWalletAuthHeaders(authOptions.signMessage, authOptions.walletAddress, 'submit');
+      Object.assign(submitHeaders, wAuth);
+    }
+
     log(`[API] Submitting photo for bounty: ${bountyId} | uri: ${photoUri} | size: ${fileInfo.size} | wallet: ${authOptions?.walletAddress || 'none'}${attestation ? ` | ${attestation.type} attestation` : ''}`);
     log(`[API] Endpoint: ${API_BASE_URL}${endpoint}`);
 
@@ -256,7 +198,7 @@ export async function submitPhoto(
 
     const fetchResponse = await fetch(`${API_BASE_URL}${endpoint}`, {
       method: 'POST',
-      headers: { 'ngrok-skip-browser-warning': '1' },
+      headers: submitHeaders,
       body: formData,
       signal: controller.signal,
     });
@@ -280,7 +222,6 @@ export async function submitPhoto(
 
     // Handle devnet response format (data.validation) vs demo format (validation)
     const validation = responseData.data?.validation || responseData.validation;
-    const status = responseData.data?.status || (validation?.isValid ? 'won' : 'lost');
 
     if (responseData.success && validation) {
       return {
@@ -402,7 +343,6 @@ export async function resolveSkrName(
 export default {
   prepareBounty,
   startBounty,
-  startBountyWithHeaders,
   submitPhoto,
   getBountyStatus,
   getPlayerBounty,

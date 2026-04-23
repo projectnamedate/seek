@@ -61,7 +61,7 @@ Edit `contracts/programs/seek-protocol/src/lib.rs`:
 
 ### 1.3 (optional, depends on G5) Split authority
 - Add `hot_authority: Pubkey` field on GlobalState. Use for `reveal_mission` + `propose_resolution`.
-- Keep `authority` field for `withdraw_treasury`, `transfer_authority`, `resolve_dispute`, `fund_house`.
+- Keep `authority` field for `transfer_authority`, `resolve_dispute`, `fund_house`, `set_treasury`, `set_hot_authority`. (`withdraw_treasury` was removed 2026-04-23 — under FEES_WALLET-owned-ATA, the Ledger holding the rake spends it directly via DEX.)
 - Bump Bounty + GlobalState size.
 - Add `set_hot_authority` instruction (authority-only).
 
@@ -103,7 +103,7 @@ Edit `contracts/programs/seek-protocol/src/lib.rs`:
 ### 2.5 Railway deploy
 - `railway up` after connecting GitHub repo.
 - Set env vars: SOLANA_RPC_URL (Helius mainnet), SOLANA_NETWORK, AUTHORITY_PRIVATE_KEY / HOT_AUTHORITY_PRIVATE_KEY, SEEK_PROGRAM_ID (mainnet), SKR_MINT (mainnet), ANTHROPIC_API_KEY, HELIUS_API_KEY, SGT_BONUS_CONFIDENCE_REDUCTION, SENTRY_DSN, REDIS_URL.
-- Add custom domain (e.g. api.seek.app or seekapi.xyz), DNS CNAME to Railway, wait for SSL.
+- Add custom domain (api.seek.mythx.art), DNS CNAME to Railway, wait for SSL.
 
 ### 2.6 Smoke test
 - curl `/api/health` from public URL (HTTPS).

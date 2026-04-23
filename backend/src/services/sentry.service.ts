@@ -1,6 +1,9 @@
 import * as Sentry from '@sentry/node';
 import type { Express } from 'express';
 import { config } from '../config';
+import { childLogger } from './logger.service';
+
+const log = childLogger('sentry');
 
 let initialized = false;
 
@@ -14,7 +17,7 @@ let initialized = false;
 export function initSentry(): void {
   if (initialized) return;
   if (!config.sentry.dsn) {
-    console.log('[Sentry] SENTRY_DSN not set — error tracking disabled');
+    log.info('SENTRY_DSN not set — error tracking disabled');
     return;
   }
 
@@ -38,7 +41,7 @@ export function initSentry(): void {
   });
 
   initialized = true;
-  console.log('[Sentry] Error tracking enabled');
+  log.info('error tracking enabled');
 }
 
 /**

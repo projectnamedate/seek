@@ -87,11 +87,18 @@ I can execute each in ≤10 minutes except the deploy itself.
 **Needs:** `keytool` on user's laptop + 1Password backup + paper backup.
 **Unblocks:** release APK builds, dApp Store submission.
 
-### B2. Production domain
-**Options:** `seek.app` (likely premium), `seekgame.xyz`, `playseek.xyz`, or
-Railway default `*.up.railway.app` for v1.
-**Needs:** user purchase + DNS CNAME to Railway.
-**Unblocks:** final `PROD_URL` wiring in `mobile/src/config/index.ts`, dApp Store listing URLs.
+### B2. Production domain — ✅ DECIDED 2026-04-23
+**Structure:** namespaced under user-owned `mythx.art`.
+- `seek.mythx.art` — marketing + legal pages (Vercel one-pager). Brand-facing URL — what wallet shows in SIWS prompt.
+- `api.seek.mythx.art` — Railway backend.
+
+**App distribution:** Seeker-exclusive via Solana Mobile dApp Store. No iOS, no general Play Store, no web build.
+
+**Done in code:** `PROD_URL`, SIWS domain/uri, MWA `identity.uri`, dApp Store config.yaml + listing copy all reference `seek.mythx.art` / `api.seek.mythx.art`.
+
+**Still TODO (user, post-deploy):**
+1. DNS: CNAME `api.seek.mythx.art` → Railway custom-domain target (Phase C step 11 gives the target).
+2. Build a one-page Vercel site at `seek.mythx.art` containing `/privacy` and `/terms` (use the in-app legal copy as the content). Optional: a brief landing/marketing section on `/`.
 
 ### B3. Ledger pubkey + funding
 **Runbook:** [backend/scripts/DEPLOY_MAINNET.md](../backend/scripts/DEPLOY_MAINNET.md) § 2.
@@ -99,9 +106,18 @@ Railway default `*.up.railway.app` for v1.
 **Unblocks:** mainnet program deploy, cold authority rotation.
 
 ### B4. SKR holdings for house vault
-**Plan:** ≥10M SKR (≈$170k at $0.017) to seed house vault.
+**Plan:** ~58,824 SKR (≈ $1,000 at $0.017) starter — intentionally small (revised 2026-04-23, was $170k). Mission pool + AI thresholds tuned for 8-12% target win rate to grow this organically.
 **Needs:** user confirms SKR wallet + source (airdrop / DEX buy).
-**Unblocks:** `admin.ts fund` after protocol init.
+**Unblocks:** `admin.ts fund 58824` after protocol init.
+
+### B4b. Fees wallet wired + ROTATABLE (✅ 2026-04-23)
+**Address:** `Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr` (a separate Ledger from cold authority) — receives the 10% protocol-treasury cut. Set at `initialize_singularity_vault` and **rotatable post-init** via the new `set_treasury` contract instruction + `admin.ts set-treasury <new_pubkey>` CLI command (cold-authority signed). The dead `withdraw_treasury` instruction was removed 2026-04-23 (it required PDA-owned treasury; non-functional under FEES_WALLET-owned-ATA). FEES_WALLET swaps SKR rake directly on a DEX (Ledger-signed) and off-ramps to fiat — the rake is income, not operating budget. Wired through:
+- `contracts/programs/seek-protocol/src/lib.rs` — `set_treasury` instruction + `SetTreasury` accounts struct + `TreasuryRotated` event
+- `backend/src/idl/seek_protocol.json` — IDL regenerated + copied
+- `backend/scripts/admin.ts` — `set-treasury` command
+- `backend/.env.example` + `backend/scripts/initialize-protocol.ts` — `FEES_WALLET` env required, init script throws if unset
+- `backend/scripts/DEPLOY_MAINNET.md` — prereqs + step 6 export + step 7b rotation runbook
+- `memory/project_fees_wallet.md` + `memory/project_ledger_architecture.md`
 
 ### B5. Publisher wallet for dApp Store
 **Runbook:** [dapp-store-publishing/README.md](../dapp-store-publishing/README.md).
@@ -113,37 +129,60 @@ Railway default `*.up.railway.app` for v1.
 graphic (1200×630), app icon (512×512 — may reuse `mobile/assets/icon.png`).
 **Unblocks:** `dapp-store-publishing/config.yaml` final fill + release NFT mint.
 
-### B7. Mission pool difficulty audit — HOUSE-EDGE CRITICAL
-**Target:** 15-18% player win rate = 20-30% house edge per bet. Anything
-above ~26% and the house pool bleeds. See
-[memory/project_economic_model.md](../../.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_economic_model.md)
-for the full math.
+### B9. seek.mythx.art marketing + legal site — 🟡 QUEUED (agency-tier build)
 
-**Scope:**
-- Walk all 300 missions in `backend/src/data/missions.ts`; rate each for
-  realistic completion probability within its tier's timer (180s / 120s / 60s).
-- Rebalance so ~20% of each tier is *intentionally near-impossible*
-  within the time window (obscure combinations, specific brand/attribute
-  requirements, unusual conditions).
-- Remaining ~80% should be hard-but-doable — require specificity or
-  scarcity that raises the realistic pass bar to ~30% per attempt.
-- If the mission set alone can't hit target win rate, shorten timers
-  and/or raise `TIER_CONFIDENCE_THRESHOLDS` in `backend/src/types/index.ts`
-  (current 0.80 / 0.85 / 0.90 → suggested 0.85 / 0.90 / 0.93).
+**Goal:** $100k+ agency-quality landing page that makes Seek look inevitable. Awe-inspiring on first scroll. Solana Mobile Seeker brand language. Required for dApp Store policy compliance (privacy + ToS URLs must resolve to real pages).
 
-**Do in this order pre-launch:**
-1. Categorize every mission by realistic completion rate (trivial /
-   moderate / hard / near-impossible).
-2. Prune + replace until the distribution matches target.
-3. Recompile expected win rate; compare to target.
-4. Tune AI thresholds + timers to close any remaining gap.
-5. Post-launch, monitor actual win rate weekly via
-   `GlobalState.total_bounties_won / total_bounties_created`. Alert if
-   weekly win rate drifts above 22%.
+**Stack (proposed — confirm before build):**
+- Next.js 15 App Router + TypeScript + Tailwind v4
+- Framer Motion for entrance/scroll animations + Lenis for buttery smooth scroll
+- shadcn/ui primitives (only what's needed — keep bundle small)
+- Three.js / React Three Fiber if we go for a hero 3D scene (e.g. orbiting Seeker phones, particle field, generative SKR coin)
+- Vercel deploy (free tier, edge-rendered, auto SSL on `seek.mythx.art`)
 
-**Blocks:** launch. A too-easy mission pool = immediate capital loss.
-The house vault funding is irreversible once deposited, so we audit
-before we fund, not after.
+**Pages:**
+- `/` — hero (animated headline, CTA "Get on Seeker"), live stats counter (bounties played, SKR in jackpot, biggest win), how-it-works 3-step, mission examples carousel, dApp Store badge + Seeker phone mockup, FAQ, footer
+- `/privacy` — privacy policy (lift in-app copy, render in clean typographic layout)
+- `/terms` — terms of service (same treatment)
+- `/license` — license page (referenced by dApp Store config `license_url` + `copyright_url`)
+
+**Brand source — STRICT:**
+- **Reference:** https://solanamobile.com/seeker — clone the Seeker visual language end-to-end (palette, gradients, type, motion, imagery).
+- **NOT generic Solana brand** — Seeker has its own distinct look (olive/sage accent, not bright Solana green; restrained motion vs. crypto-maximalist). User was explicit.
+- **At build time:** use Playwright to screenshot the page + `browser_evaluate` computed CSS to extract exact color hex values, gradient stops, font-family stacks, border-radius, shadow tokens. `WebFetch` alone returns thin markdown (JS-rendered site).
+- **Site should feel like an official Solana Mobile partner app**, not a generic crypto landing page.
+
+**Per CLAUDE.md global "Shipping a Website" rules — bake in from day one:**
+1. **Analytics:** `@vercel/analytics` + `@vercel/speed-insights` installed in root layout. `track()` events on: dApp Store CTA click, "Get on Seeker" CTA, scroll-past-fold, FAQ expand.
+2. **SEO:** `metadata` per route, `app/sitemap.ts`, `app/robots.ts`, OG image (1200×630) generated via `@vercel/og`, JSON-LD `Organization` + `SoftwareApplication`, canonical URLs, alt text on all images, semantic `<h1>` `<nav>` `<main>` `<article>`.
+3. **Vercel SSO:** PATCH project to clear `ssoProtection` after first deploy (per global rule — Vercel auto-applies and gates the URL behind a 401 wall otherwise).
+
+**User needs to provide:**
+- Brand assets if any exist (logo, color palette beyond Solana defaults, screenshots — overlap with B6)
+- Final copy approval (or accept Claude-drafted copy)
+- A Vercel account + `seek.mythx.art` DNS access (I'll do the wiring once user clicks deploy)
+
+**Effort estimate (after global rule "divide by 10"): ~30-45 min** to scaffold + ship a strong v1, longer for any custom 3D / video work.
+
+**Lives in repo:** new top-level `web/` directory — keeps it separate from `mobile/` and `backend/` and gets its own Vercel project.
+
+---
+
+### B7. Mission pool difficulty audit — ✅ COMPLETE 2026-04-23
+
+**Target (revised for $1k vault):** 8-12% realistic win rate = 35-45% house edge per bet. Hard ceiling 15%. See [memory/project_economic_model.md](../../.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_economic_model.md) for full math + variance analysis.
+
+**Done:**
+- Rewrote all 300 missions in `backend/src/data/missions.ts`. Every tier-1 mission now requires color/condition/context specificity (e.g. "find a USPS mailbox with the red flag in the up position", not "find a mailbox"). ~20% of each tier is intentionally near-impossible inside the timer (e.g. "house number ending in 7", "bird actively eating from a feeder", "dog mid-bark"). Indoor/outdoor split preserved: T1 70/30, T2 60/40, T3 50/50.
+- Bumped `TIER_CONFIDENCE_THRESHOLDS` 0.80/0.85/0.90 → **0.88/0.92/0.95** in `backend/src/types/index.ts`. Bias hard toward false negatives — false negatives cost a fraction of a bet, false positives cost 3-10% of vault.
+- Kept tier timers at 180s/120s/60s (already aggressive enough; further compression hurts UX without proportional house-edge gain).
+- Typecheck green. Mission helpers (`getRandomMission`, `getMissionsByTierAndLocation`) verified for all tier+location combos.
+
+**Post-launch monitoring (CRITICAL with $1k vault):**
+- 20-bet rolling win rate > 25% → page operator immediately, consider pausing new bounties.
+- Vault < 50,000 SKR (85% of starting) → first alert.
+- Vault < 30,000 SKR → tracked follow-up: auto-pause new bounty preparation (see § E8).
+- Track win-rate-by-mission to find any single mission with > 30% win rate; either retire or harden it.
 
 ---
 
@@ -179,6 +218,48 @@ Per [dapp-store-publishing/README.md](../dapp-store-publishing/README.md):
 5. `npx dapp-store publish submit --requestor-is-authorized --complies-with-solana-dapp-store-policies`
 6. Wait 2-5 business days; iterate on any review feedback
 7. Ship
+
+---
+
+## Phase B8 — Comprehensive audit + remediation (2026-04-23)
+
+Three parallel sub-agent audits (security / simplify / architecture) ran across contract + backend + mobile. Top CRIT items fixed in this pass; HIGH items queued.
+
+### CRIT — fixed
+- [x] **Wallet auth wired on `/prepare`, `/start`, `/submit`** — `requireWalletAuth` was defined but applied to ZERO routes. Mobile `getWalletAuthHeaders` flow now properly enforced server-side. `BountyRevealScreen` signs auth headers ONCE (single MWA prompt) and reuses across prepare → start within the 120s window. `req.body.playerWallet` replaced with `req.verifiedWallet`.
+- [x] **`verifyTransaction` parses on-chain tx properly** — was checking only `confirmationStatus`, trivially bypassed with any random confirmed sig. Now fetches tx, asserts (a) status confirmed, (b) accountKeys includes `expectedPlayer`, (c) accountKeys includes `expectedBountyPda`, (d) at least one instruction targets SEEK PROGRAM_ID. `transactionSignature` now required (no longer optional).
+- [x] **`player_token_account` pinned to canonical ATA** — in `AcceptBounty`, `FinalizeBounty`, `DisputeBounty`, `ResolveDispute`, `CancelBounty`. Constraint is now `player_token_account.key() == get_associated_token_address(&owner, &SKR_MINT)`. Closes the "alt-ATA-redirect" attack on win payouts.
+- [x] **`close_bounty` 24h cooldown** — was `close = player` with no time guard, allowed PDA-reuse races (close + re-init same `(player, timestamp)` PDA). Now requires `now >= bounty.created_at + 86_400`. New `BountyCooldown` error variant.
+- [x] **Expirer worker calls `propose_resolution(false)` on stale Pending bounties** — was only marking `'expired'` in memory. Without on-chain proposal, `cancel_bounty`'s 1h grace let patient players reclaim 100% of entry → loss rate 0. New `expireAndResolveOldBounties()` runs every 30s, locks per-bounty, calls `resolveBountyOnChain(false, ...)` for any Pending past expiry.
+
+### Simplify wins applied (~150 lines deleted, dead surface removed)
+- [x] Removed `withdraw_treasury` instruction + `WithdrawTreasury` accounts struct + `TreasuryWithdrawn` event (done in earlier session — non-functional under FEES_WALLET-owned-ATA)
+- [x] Removed `finalizeBountyOnChain` + `getAuthorityKeypair` from `solana.service.ts` (dead — finalizer worker inlines its own)
+- [x] Removed `/api/bounty/demo/start` + `/api/bounty/demo/submit` + `startBountyDemoSchema` (~135 lines — mobile `USE_DEMO_ENDPOINTS=false`, never called)
+- [x] Removed `calculateDistance` Haversine helper from `exif.service.ts` (no GPS-pinned missions in current design)
+- [x] Removed dead contract surface: `DISPUTE_WINDOW` const, `DisputeWindowExpired` / `InvalidDisputeStake` / `StillInChallengePeriod` error variants
+
+### HIGH — ✅ all 9 fixed in second pass
+- [x] **B8-1** Nonce store + operation-bound auth message — Redis SETNX with 120s TTL. Message now `seek:{op}:{wallet}:{ts}` where `op ∈ {prepare, start, submit}`. `requireWalletAuth(operation)` factory consumes the nonce; replay impossible.
+- [x] **B8-2** SIWS domain/uri/chainId checks — `verifySIWSSignature` now validates `message.domain === SIWS_DOMAIN`, `message.uri === SIWS_URI`, and `message.chainId === 'mainnet'|'devnet'` before signature check. Cross-domain phishing relay closed.
+- [x] **B8-3** Timeouts on outbound calls — new `backend/src/utils/timeout.ts` `withTimeout()` wrapper. Applied to Anthropic (45s), Helius RPC, and `finalize_bounty` RPC (30s). `TimeoutError` class for typed catch.
+- [x] **B8-4** Atomicity — `queueFinalization` now async + awaits `persistQueueEntry` before returning so propose-then-queue is at-least-once. Finalizer reconciler scans the persisted queue on hydrate.
+- [x] **B8-5** Hot/cold key disjointness — `config/index.ts` throws on mainnet boot if `HOT_AUTHORITY_PRIVATE_KEY === AUTHORITY_PRIVATE_KEY`.
+- [x] **B8-6** In-memory locks → Redis — `acquireWalletLock` / `acquireBountyLock` / `releaseWalletLock` / `releaseBountyLock` all async, backed by `redisAcquireLock` (SETNX + EX). TTLs 60s wallet / 120s bounty. All call sites awaited.
+- [x] **B8-7** NETWORK assertion — `mobile/src/config/index.ts` throws at module load if `!__DEV__ && NETWORK !== 'mainnet-beta'`. Release builds cannot ship pointing at devnet.
+- [x] **B8-8** Hot wallet SOL balance alert — `checkHotWalletBalance()` runs every 5min, emits `Sentry.captureMessage('hot wallet low')` at < 0.1 SOL. Managed handle in `start/stop` hooks.
+- [x] **B8-9** SGT verifications + nonces → Redis — verifications cached 30d (`RK.sgtVerified`), anti-sybil mint→owner mapping persisted no-TTL (`RK.sgtMintOwner`), nonces in Redis with TTL (`RK.sgtNonce`). All verification reads async.
+
+### MED — ✅ all 6 cleaned up
+- [x] **B8-10** Pino migration — remaining service files now use `childLogger('name')` (bounty, sgt, attestation, ai, finalizer). No more `console.*` in service code.
+- [x] **B8-11** TEE provider stub collapsed — `AttestationService` is now a single class with one `verifyAttestation` method. `AttestationProvider` interface, `TEEAttestationProvider`, providers Map all deleted. Type narrowed to `'none' | 'standard'`.
+- [x] **B8-12** Mobile dedupe — single `mobile/src/utils/bs58.ts` source of truth (replaces hand-rolled encoders in api.service.ts + sgt.service.ts). `formatTime` consolidated in `utils/format.ts`. `BountyRevealScreen` uses shared utils.
+- [x] **B8-13** setInterval shutdown hooks — `bounty.service.ts` exports `startBountyWorkers()` / `stopBountyWorkers()` managing `expirerHandle` + `cleanupHandle`. Wired into `index.ts` listen + shutdown. No more module-load intervals.
+- [x] **B8-14** DEMO_MODE collapse + dead wallet code — `startDemoBounty`, `deductEntry`, `addWinnings`, demo branches in BountyRevealScreen all removed. `getFullAddress` returns real wallet only.
+- [x] **B8-15** Single source of truth for tier constants — `mobile/src/types/index.ts` re-exports `TIERS` from `config/index.ts`. `AttestationPayload.type` narrowed to `'standard'`.
+
+### Result
+Backend `tsc --noEmit` clean. Contract `cargo check` + `cargo test` pass (1 unit test, 28 unrelated cfg warnings). Mobile typecheck clean apart from pre-existing `@sentry/react-native` types not yet installed. ~150 lines net deletion across the three layers.
 
 ---
 
@@ -219,6 +300,15 @@ Not on the critical path. Each unblocks future scale or raises the security bar.
 - [ ] Mission pool expansion 300 → 1000+
 - [ ] Community-submitted missions with staking
 - [ ] GPS Super Hunts (partner-hosted, city-wide events)
+
+### E8. Vault-protection mechanics (added 2026-04-23 post-B7)
+The $1k launch vault makes per-bet variance the dominant risk. These
+are not on the critical path but should land within the first month live.
+- [ ] **Tier gating by vault size** — contract change. Disable tier 2 acceptance until `house_fund_balance > 200_000 SKR` (~$3.4k); disable tier 3 until > 500_000 SKR (~$8.5k). Caps tail-risk exposure on the small vault. Adds one new error variant + branch in `accept_bounty`.
+- [ ] **Vault floor pause** — contract or backend gate. New `accept_bounty` calls reject when `house_fund_balance < 30_000 SKR` (~$510). Backend can enforce this in `/prepare` for v1; contract enforcement is cleaner.
+- [ ] **Per-wallet daily bet rate limit** — backend-side. Cap each wallet at e.g. 20 bounties/day to prevent a single attacker from draining via lucky streak before we notice. Track in Redis with `EXPIRE 86400`.
+- [ ] **Per-mission win-rate dashboard** — track `wins[missionId] / attempts[missionId]` in Redis or Postgres. Auto-flag any mission with > 30% win rate over 50+ attempts for retirement.
+- [ ] **Auto-throttle on win-rate drift** — if 20-bet rolling win rate > 25%, automatically tighten AI thresholds by +0.02 until it normalizes. Reset when stable.
 
 ---
 

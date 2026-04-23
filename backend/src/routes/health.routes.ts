@@ -9,7 +9,10 @@ import {
 } from '../services/solana.service';
 import { getFinalizerStatus } from '../services/finalizer.service';
 import { getRedis } from '../services/redis.service';
+import { childLogger } from '../services/logger.service';
 import { config } from '../config';
+
+const log = childLogger('health');
 
 const router = Router();
 
@@ -106,7 +109,7 @@ router.get('/stats', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('[Health] Stats error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'stats error');
     res.status(500).json({
       success: false,
       error: 'Failed to fetch stats',

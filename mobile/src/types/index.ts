@@ -1,18 +1,10 @@
 // Bounty tier definitions
 export type TierNumber = 1 | 2 | 3;
 
-export interface Tier {
-  number: TierNumber;
-  entry: number;      // SKR amount
-  timeLimit: number;  // seconds
-  difficulty: 'Easy' | 'Medium' | 'Hard';
-}
-
-export const TIERS: Record<TierNumber, Tier> = {
-  1: { number: 1, entry: 1000, timeLimit: 180, difficulty: 'Easy' },
-  2: { number: 2, entry: 2000, timeLimit: 120, difficulty: 'Medium' },
-  3: { number: 3, entry: 3000, timeLimit: 60, difficulty: 'Hard' },
-};
+// Re-export the single source of truth (TIERS in config). Keeps existing
+// `import { TIERS } from '../types'` call sites working without divergence.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+export { TIERS } from '../config';
 
 // Bounty status
 export type BountyStatus =
@@ -71,15 +63,13 @@ export interface WalletState {
   sgtVerified?: boolean;        // Seeker Genesis Token verified
 }
 
-// Camera attestation payload (sent with photo submission)
+// Camera attestation payload (sent with photo submission).
+// 'tee' has been removed pending the Seeker Camera SDK ship — re-add when ready.
 export interface AttestationPayload {
-  type: 'standard' | 'tee';
+  type: 'standard';
   photoHash: string;
   timestamp: number;
   deviceModel?: string;
-  teeSignature?: string;
-  teeCertificate?: string;
-  teeNonce?: string;
 }
 
 // Navigation types

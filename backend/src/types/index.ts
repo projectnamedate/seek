@@ -21,11 +21,14 @@ export const TIER_DURATIONS: Record<Tier, number> = {
   3: 60,  // 1 minute
 };
 
-// Per-tier AI confidence thresholds (higher stakes = higher bar)
+// Per-tier AI confidence thresholds (higher stakes = higher bar).
+// Tuned 2026-04-23 for $1k launch vault — bias hard toward rejection,
+// since false negatives cost a fraction of a bet but false positives
+// cost 3-10% of vault per win. Relax once vault > $20k.
 export const TIER_CONFIDENCE_THRESHOLDS: Record<Tier, number> = {
-  1: 0.80, // 80% for tier 1
-  2: 0.85, // 85% for tier 2
-  3: 0.90, // 90% for tier 3
+  1: 0.88,
+  2: 0.92,
+  3: 0.95,
 };
 
 // Bounty status
@@ -54,7 +57,7 @@ export interface ActiveBounty {
   bountyPda: string; // On-chain PDA address
   transactionSignature?: string;
   sgtVerified?: boolean; // Seeker Genesis Token verified
-  attestationType?: 'none' | 'standard' | 'tee'; // Camera attestation type used
+  attestationType?: 'none' | 'standard'; // Camera attestation type used
 }
 
 // Photo submission for validation

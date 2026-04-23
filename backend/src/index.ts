@@ -10,6 +10,7 @@ import healthRoutes from './routes/health.routes';
 import skrRoutes from './routes/skr.routes';
 import sgtRoutes from './routes/sgt.routes';
 import { startFinalizationWorker, stopFinalizationWorker } from './services/finalizer.service';
+import { startBountyWorkers, stopBountyWorkers } from './services/bounty.service';
 import { initSentry, setupSentryErrorHandler } from './services/sentry.service';
 import { logger } from './services/logger.service';
 
@@ -149,14 +150,16 @@ const server = app.listen(PORT, HOST, () => {
     'Seek backend listening'
   );
 
-  // Start finalization worker for challenge period processing
+  // Start background workers (cleanly stopped on SIGTERM)
   startFinalizationWorker();
+  startBountyWorkers();
 });
 
 // Graceful shutdown
 function shutdown(signal: string) {
   logger.info({ signal }, 'Shutting down gracefully');
   stopFinalizationWorker();
+  stopBountyWorkers();
   server.close(() => {
     logger.info('Server closed cleanly');
     process.exit(0);

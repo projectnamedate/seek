@@ -4,14 +4,17 @@ Step-by-step to take Seek from the devnet hackathon state to a live mainnet
 deployment with Ledger-backed cold authority + Railway-hosted backend.
 
 Prereqs (user-side):
-- Ledger hardware wallet with the Solana app installed
-- ~5 SOL mainnet for program deploy + rent
-- $SKR tokens for house vault (10M recommended starter ≈ $170k at $0.017)
+- **Cold authority Ledger** (Ledger #1) with Solana app installed — used for admin ops (fund_house, set_hot_authority, set_treasury, propose/accept_authority_transfer, resolve_dispute) AND program upgrade authority by default
+- **Fees wallet Ledger** (Ledger #2): `Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr` — separate Ledger that owns the SKR ATA receiving the 10% rake. Signs nothing on-chain in the Seek protocol; rake accumulates as SKR, user periodically swaps to USDC/SOL on a DEX (Ledger-signed) and off-ramps to fiat. Operating expenses are funded separately, not paid from this wallet. **Rotatable** post-init via `admin.ts set-treasury` (cold-signed) — not locked forever.
+- ~5 SOL mainnet on cold Ledger for program deploy + rent
+- $SKR tokens for house vault (**launch starter ~58,824 SKR ≈ $1000 at $0.017** — intentionally small; mission pool + AI thresholds tuned for ruin avoidance)
 - Release keystore generated per `mobile/android/SIGNING.md`
 - Railway account + project provisioned
 - Upstash Redis instance
 - Sentry project DSN
-- Domain (seek.app or chosen alt) DNS-ready to point to Railway
+- Domain `api.seek.mythx.art` DNS-ready to CNAME → Railway
+
+**House vault is NOT an EOA.** It is a PDA token account; win payouts are PDA-signed CPIs from the protocol — no human ever signs payouts, so no "hot" wallet for the house is needed.
 
 ## 1. Build the mainnet contract binary
 
@@ -103,6 +106,9 @@ export SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 export SOLANA_NETWORK=mainnet-beta
 export SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
 export SEEK_PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
+# Fees wallet — receives the 10% protocol-treasury cut from every loss.
+# LOCKED ON-CHAIN at initialize_singularity_vault. Triple-check before init.
+export FEES_WALLET=Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr
 # IMPORTANT: initialize-protocol.ts expects an env keypair today — if you
 # want to sign with the Ledger, you'll need to refactor it to take a
 # signer. For a one-off init, it's acceptable to use an interim hot
@@ -113,9 +119,9 @@ npx ts-node scripts/initialize-protocol.ts
 
 This creates:
 - `GlobalState` PDA (owner = authority)
-- `house_vault` PDA token account (SKR)
-- `singularity_vault` PDA token account (SKR)
-- `protocol_treasury` (pass a pre-created token account — see script)
+- `house_vault` PDA token account (SKR) — owned by global_state PDA, payouts are PDA-signed
+- `singularity_vault` PDA token account (SKR) — same pattern as house_vault
+- `protocol_treasury` — the SKR ATA owned by `FEES_WALLET` (Ledger #2). Cold authority pays the ATA rent. **Rotatable post-init** via `admin.ts set-treasury <new_wallet_pubkey>` (cold-signed). The contract has no `withdraw_treasury` instruction (removed 2026-04-23) — under FEES_WALLET-owned-ATA, the Ledger swaps SKR for USDC on a DEX directly and off-ramps to fiat.
 
 ## 7. Set hot authority on-chain
 
@@ -124,6 +130,18 @@ export AUTHORITY_PRIVATE_KEY=<cold keypair that ran init>
 cd backend
 npx ts-node scripts/admin.ts set-hot <HOT_AUTHORITY_PUBKEY>
 ```
+
+### 7b. (Optional) Rotate fees wallet later
+
+If FEES_WALLET keys are ever compromised, lost, or need to change for operational reasons:
+
+```bash
+# Cold-authority signed. Derives the new ATA, creates it if missing
+# (cold authority pays rent), then calls set_treasury on-chain.
+npx ts-node scripts/admin.ts set-treasury <NEW_FEES_WALLET_PUBKEY>
+```
+
+All future protocol-treasury inflows redirect to the new ATA. Funds already in the old ATA stay under the old wallet's control — sweep them separately via the old Ledger if recoverable.
 
 ## 8. Rotate cold authority to Ledger
 
@@ -164,13 +182,15 @@ reasonable interim. Track in task #5.)*
 
 ## 10. Fund house vault
 
+**Launch starter is ~58,824 SKR (≈ $1000)** — intentionally small. Do NOT seed at $170k; the mission pool + AI thresholds + 8-12% target win rate are designed for a small float that grows organically. See `tasks/roadmap.md § B7` and `memory/project_economic_model.md`.
+
 ```bash
 # First, transfer your SKR holdings to the cold authority's ATA
-spl-token transfer SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3 10000000 \
+spl-token transfer SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3 58824 \
   <COLD_AUTHORITY_PUBKEY> --fund-recipient --url mainnet-beta
 
 # Then fund the on-chain house vault via the fund_house instruction
-npx ts-node scripts/admin.ts fund 10000000    # 10M SKR
+npx ts-node scripts/admin.ts fund 58824    # ~$1k starter
 ```
 
 Verify:
@@ -198,7 +218,7 @@ railway variables set REDIS_URL=<upstash redis URL>
 railway variables set SENTRY_DSN=<your sentry DSN>
 railway variables set NODE_ENV=production
 
-# Add custom domain (api.seek.app) — Railway handles SSL automatically
+# Add custom domain (api.seek.mythx.art) — Railway handles SSL automatically
 ```
 
 ## 12. Update mobile app + build release APK

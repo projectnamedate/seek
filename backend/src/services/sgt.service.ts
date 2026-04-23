@@ -8,15 +8,22 @@
  *
  * Docs: https://docs.solanamobile.com/marketing/engaging-seeker-users
  */
-import { Connection, PublicKey } from '@solana/web3.js';
+import { PublicKey } from '@solana/web3.js';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes } from 'crypto';
 import { config } from '../config';
 import { getConnection } from './solana.service';
+import { getRedis, RK, redisConsumeNonce } from './redis.service';
+import { withTimeout } from '../utils/timeout';
+import { childLogger } from './logger.service';
+
+const log = childLogger('sgt');
+
+const HELIUS_TIMEOUT_MS = 15_000;
+const SGT_VERIFICATION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30d — re-prove monthly
 
 // SGT on-chain constants
-const SGT_MINT_AUTHORITY = 'GT2zuHVaZQYZSyQMgJPLzvkmyztfyXg2NJunqFp4p3A4';
 const SGT_GROUP_ADDRESS = 'GT22s89nU4iWFkNXj1Bw6uYhJJWDRPpShHt4Bk8f99Te';
 const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
 
@@ -40,19 +47,32 @@ export interface SIWSMessage {
   issuedAt: string;
 }
 
-// In-memory stores (production: use Redis/DB)
+// In-memory caches in front of Redis. Both wipe on restart and rebuild from
+// Redis on the next read; Redis is the source of truth.
 const verifiedWallets = new Map<string, SGTVerificationResult>();
 const sgtMintToWallet = new Map<string, string>(); // anti-sybil: mint → first wallet
 const activeNonces = new Map<string, { createdAt: number; walletAddress: string }>();
 
 const NONCE_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
+const NONCE_EXPIRY_SECONDS = Math.floor(NONCE_EXPIRY_MS / 1000);
 
 /**
- * Generate a SIWS nonce for wallet verification
+ * Generate a SIWS nonce for wallet verification.
+ * Persisted to Redis (with TTL) so multi-instance backends share state and
+ * a restart between nonce-issue and nonce-consume doesn't break verification.
  */
-export function generateSIWSNonce(walletAddress: string): string {
+export async function generateSIWSNonce(walletAddress: string): Promise<string> {
   const nonce = randomBytes(32).toString('base64url');
   activeNonces.set(nonce, { createdAt: Date.now(), walletAddress });
+
+  const r = await getRedis();
+  if (r) {
+    await r.set(
+      RK.sgtNonce(nonce),
+      JSON.stringify({ walletAddress, createdAt: Date.now() }),
+      { EX: NONCE_EXPIRY_SECONDS },
+    );
+  }
   return nonce;
 }
 
@@ -61,10 +81,10 @@ export function generateSIWSNonce(walletAddress: string): string {
  */
 export function buildSIWSMessage(walletAddress: string, nonce: string): SIWSMessage {
   return {
-    domain: 'seek.app',
+    domain: 'seek.mythx.art',
     address: walletAddress,
     statement: 'Verify Seeker device ownership for Seek Protocol',
-    uri: 'https://seek.app',
+    uri: 'https://seek.mythx.art',
     version: '1',
     chainId: config.solana.network === 'mainnet-beta' ? 'solana:mainnet' : 'solana:devnet',
     nonce,
@@ -93,39 +113,67 @@ function serializeSIWSMessage(message: SIWSMessage): string {
 /**
  * Verify a SIWS signature
  */
-export function verifySIWSSignature(
+export async function verifySIWSSignature(
   message: SIWSMessage,
   signatureBase58: string
-): boolean {
+): Promise<boolean> {
   try {
-    // Check nonce validity
-    const nonceData = activeNonces.get(message.nonce);
+    // Domain / URI / chainId binding — prevents cross-domain phishing replay.
+    const expectedDomain = 'seek.mythx.art';
+    const expectedUri = 'https://seek.mythx.art';
+    const expectedChainId = config.solana.network === 'mainnet-beta' ? 'solana:mainnet' : 'solana:devnet';
+    if (message.domain !== expectedDomain) return false;
+    if (message.uri !== expectedUri) return false;
+    if (message.chainId !== expectedChainId) return false;
+
+    // Nonce check via Redis (multi-instance + restart safe), with in-memory
+    // cache for warm-path latency.
+    let nonceData = activeNonces.get(message.nonce);
+    if (!nonceData) {
+      const r = await getRedis();
+      if (r) {
+        const raw = await r.get(RK.sgtNonce(message.nonce));
+        if (raw) {
+          try {
+            nonceData = JSON.parse(raw);
+            if (nonceData) activeNonces.set(message.nonce, nonceData);
+          } catch { /* corrupt nonce entry */ }
+        }
+      }
+    }
     if (!nonceData) return false;
 
-    // Check nonce expiry
     if (Date.now() - nonceData.createdAt > NONCE_EXPIRY_MS) {
       activeNonces.delete(message.nonce);
+      const r = await getRedis();
+      if (r) await r.del(RK.sgtNonce(message.nonce));
       return false;
     }
 
-    // Check nonce was issued for this wallet
     if (nonceData.walletAddress !== message.address) return false;
 
-    // Verify ed25519 signature
     const messageBytes = new TextEncoder().encode(serializeSIWSMessage(message));
     const signatureBytes = bs58.decode(signatureBase58);
     const publicKeyBytes = bs58.decode(message.address);
 
     const valid = nacl.sign.detached.verify(messageBytes, signatureBytes, publicKeyBytes);
 
-    // Consume nonce (one-time use)
+    // Consume nonce atomically. If the SETNX-equivalent fails the same nonce
+    // was concurrently used by another instance — reject this verification.
     if (valid) {
+      const r = await getRedis();
+      if (r) {
+        const reservedKey = `${RK.sgtNonce(message.nonce)}:consumed`;
+        const consumeOk = await redisConsumeNonce(reservedKey, NONCE_EXPIRY_SECONDS);
+        if (!consumeOk) return false;
+        await r.del(RK.sgtNonce(message.nonce));
+      }
       activeNonces.delete(message.nonce);
     }
 
     return valid;
   } catch (error) {
-    console.error('[SGT] SIWS verification error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'SIWS verification error');
     return false;
   }
 }
@@ -148,7 +196,7 @@ export async function checkSGTOwnership(
     // Fallback: direct RPC query for Token-2022 accounts
     return await checkSGTViaRPC(walletAddress);
   } catch (error) {
-    console.error('[SGT] Ownership check error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'ownership check error');
     return { hasSGT: false, mintAddress: null };
   }
 }
@@ -161,18 +209,27 @@ async function checkSGTViaHelius(
 ): Promise<{ hasSGT: boolean; mintAddress: string | null }> {
   const url = `https://mainnet.helius-rpc.com/?api-key=${config.sgt.heliusApiKey}`;
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 'sgt-check',
-      method: 'getAssetsByOwner',
-      params: {
-        ownerAddress: walletAddress,
-        displayOptions: { showFungible: false, showNativeBalance: false },
-      },
+  const controller = new AbortController();
+  const response = await withTimeout(
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 'sgt-check',
+        method: 'getAssetsByOwner',
+        params: {
+          ownerAddress: walletAddress,
+          displayOptions: { showFungible: false, showNativeBalance: false },
+        },
+      }),
+      signal: controller.signal,
     }),
+    HELIUS_TIMEOUT_MS,
+    'helius-getAssetsByOwner',
+  ).catch((err) => {
+    controller.abort();
+    throw err;
   });
 
   const data: any = await response.json();
@@ -209,7 +266,7 @@ async function checkSGTViaRPC(
   // In a full implementation, we'd decode the Token-2022 extensions
   // to verify the group membership. For now, check if any Token-2022
   // token account has a balance of 1 (SGT is a unique NFT).
-  for (const { pubkey, account } of accounts.value) {
+  for (const { account } of accounts.value) {
     // Token accounts have a standard layout; amount is at offset 64 (8 bytes LE)
     const data = account.data;
     if (data.length >= 72) {
@@ -235,7 +292,7 @@ export async function verifySGTForWallet(
   message: SIWSMessage
 ): Promise<SGTVerificationResult> {
   // Step 1: Verify SIWS signature
-  const sigValid = verifySIWSSignature(message, signatureBase58);
+  const sigValid = await verifySIWSSignature(message, signatureBase58);
   if (!sigValid) {
     return {
       verified: false,
@@ -258,8 +315,14 @@ export async function verifySGTForWallet(
     };
   }
 
-  // Step 3: Anti-sybil — ensure this SGT mint hasn't been claimed by another wallet
-  const existingOwner = sgtMintToWallet.get(mintAddress);
+  // Step 3: Anti-sybil — Redis-backed mint→wallet mapping. Check Redis first
+  // (source of truth across instances + restarts), fall back to in-memory.
+  const r = await getRedis();
+  let existingOwner: string | null = sgtMintToWallet.get(mintAddress) ?? null;
+  if (!existingOwner && r) {
+    existingOwner = await r.get(RK.sgtMintOwner(mintAddress));
+    if (existingOwner) sgtMintToWallet.set(mintAddress, existingOwner);
+  }
   if (existingOwner && existingOwner !== walletAddress) {
     return {
       verified: false,
@@ -278,19 +341,49 @@ export async function verifySGTForWallet(
     verifiedAt: new Date(),
   };
 
-  // Cache result
+  // Persist to Redis (no TTL on anti-sybil mapping; TTL on the verification
+  // itself so users re-prove ownership periodically).
   verifiedWallets.set(walletAddress, result);
   sgtMintToWallet.set(mintAddress, walletAddress);
+  if (r) {
+    await r.set(
+      RK.sgtVerified(walletAddress),
+      JSON.stringify({ ...result, verifiedAt: result.verifiedAt?.toISOString() }),
+      { EX: SGT_VERIFICATION_TTL_SECONDS },
+    );
+    // Anti-sybil mapping must NEVER expire — once an SGT is bound to a
+    // wallet, no other wallet can claim it (until the user explicitly
+    // releases it via a future endpoint).
+    await r.set(RK.sgtMintOwner(mintAddress), walletAddress);
+  }
 
-  console.log(`[SGT] Wallet ${walletAddress} verified | Mint: ${mintAddress}`);
+  log.info({ walletAddress, mintAddress }, 'wallet verified');
   return result;
 }
 
 /**
- * Check if a wallet has been SGT-verified (from cache)
+ * Check if a wallet has been SGT-verified.
+ * Reads from in-memory cache first, falls back to Redis (rebuilds the cache).
  */
-export function isWalletSGTVerified(walletAddress: string): SGTVerificationResult | null {
-  return verifiedWallets.get(walletAddress) || null;
+export async function isWalletSGTVerified(walletAddress: string): Promise<SGTVerificationResult | null> {
+  const cached = verifiedWallets.get(walletAddress);
+  if (cached) return cached;
+
+  const r = await getRedis();
+  if (!r) return null;
+  const raw = await r.get(RK.sgtVerified(walletAddress));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const result: SGTVerificationResult = {
+      ...parsed,
+      verifiedAt: parsed.verifiedAt ? new Date(parsed.verifiedAt) : null,
+    };
+    verifiedWallets.set(walletAddress, result);
+    return result;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -317,7 +410,7 @@ export function cleanupExpiredNonces(): void {
     }
   }
   if (removed > 0) {
-    console.log(`[SGT] Cleaned up ${removed} expired nonces`);
+    log.info({ removed }, 'cleaned up expired nonces');
   }
 }
 

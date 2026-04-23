@@ -8,7 +8,10 @@ import {
   getSGTStats,
 } from '../services/sgt.service';
 import { validate } from '../middleware/validate.middleware';
+import { childLogger } from '../services/logger.service';
 import { config } from '../config';
+
+const log = childLogger('sgt-routes');
 
 const router = Router();
 
@@ -39,12 +42,12 @@ const verifySchema = z.object({
  * POST /api/sgt/nonce
  * Get a SIWS nonce + message for SGT verification
  */
-router.post('/nonce', validate(nonceSchema), (req: Request, res: Response) => {
+router.post('/nonce', validate(nonceSchema), async (req: Request, res: Response) => {
   try {
     const { walletAddress } = req.body;
 
     // Check if already verified
-    const existing = isWalletSGTVerified(walletAddress);
+    const existing = await isWalletSGTVerified(walletAddress);
     if (existing?.verified) {
       return res.status(200).json({
         success: true,
@@ -56,7 +59,7 @@ router.post('/nonce', validate(nonceSchema), (req: Request, res: Response) => {
     }
 
     // Generate nonce and build SIWS message
-    const nonce = generateSIWSNonce(walletAddress);
+    const nonce = await generateSIWSNonce(walletAddress);
     const message = buildSIWSMessage(walletAddress, nonce);
 
     return res.status(200).json({
@@ -64,7 +67,7 @@ router.post('/nonce', validate(nonceSchema), (req: Request, res: Response) => {
       data: { nonce, message },
     });
   } catch (error) {
-    console.error('[SGT] Nonce error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'nonce error');
     return res.status(500).json({
       success: false,
       error: 'Failed to generate verification nonce',
@@ -92,7 +95,7 @@ router.post('/verify', validate(verifySchema), async (req: Request, res: Respons
       },
     });
   } catch (error) {
-    console.error('[SGT] Verify error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'verify error');
     return res.status(500).json({
       success: false,
       error: 'Verification failed',
@@ -104,7 +107,7 @@ router.post('/verify', validate(verifySchema), async (req: Request, res: Respons
  * GET /api/sgt/status/:wallet
  * Check cached SGT verification status (no network calls)
  */
-router.get('/status/:wallet', (req: Request, res: Response) => {
+router.get('/status/:wallet', async (req: Request, res: Response) => {
   const { wallet } = req.params;
 
   if (!base58Pattern.test(wallet)) {
@@ -114,7 +117,7 @@ router.get('/status/:wallet', (req: Request, res: Response) => {
     });
   }
 
-  const result = isWalletSGTVerified(wallet);
+  const result = await isWalletSGTVerified(wallet);
 
   return res.status(200).json({
     success: true,

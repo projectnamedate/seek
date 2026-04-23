@@ -14,6 +14,7 @@ import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TierNumber, TIERS } from '../types';
 import walletService from '../services/wallet.service';
 import { useApp } from '../context/AppContext';
+import { formatTimeHuman as formatTime } from '../utils/format';
 
 const APP_VERSION = '1.0.0';
 
@@ -342,12 +343,6 @@ export default function HomeScreen({ navigation }: Props) {
   );
 }
 
-
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return secs > 0 ? `${mins}m ${secs}s` : `${mins} min`;
-}
 
 const styles = StyleSheet.create({
   container: {

@@ -152,7 +152,8 @@
         {
           "name": "player_token_account",
           "docs": [
-            "Player's SKR token account"
+            "Player's SKR token account — pinned to the canonical ATA.",
+            "Prevents passing a delegated/frozen/alt-ATA that could reroute winnings."
           ],
           "writable": true
         },
@@ -336,7 +337,7 @@
         {
           "name": "player_token_account",
           "docs": [
-            "Player's token account for refund"
+            "Player's token account for refund — pinned to canonical ATA."
           ],
           "writable": true
         },
@@ -380,8 +381,11 @@
     {
       "name": "close_bounty",
       "docs": [
-        "Close a bounty account after it reaches a terminal state",
-        "Refunds rent to the player. Only works for Won/Lost/Cancelled bounties."
+        "Close a bounty account after it reaches a terminal state + 24h cooldown.",
+        "Refunds rent to the player. The cooldown prevents PDA reuse races — the",
+        "bounty PDA seed is [b\"bounty\", player, timestamp] so after close, the",
+        "same (player, timestamp) can be re-init'd. 24h is plenty of slack for",
+        "any in-flight finalizer retries or downstream indexer catch-up."
       ],
       "discriminator": [
         90,
@@ -475,7 +479,7 @@
         {
           "name": "player_token_account",
           "docs": [
-            "Player's token account for stake"
+            "Player's token account for stake — pinned to canonical ATA."
           ],
           "writable": true
         },
@@ -1199,7 +1203,7 @@
         {
           "name": "player_token_account",
           "docs": [
-            "Player's token account for refund (if player wins)"
+            "Player's token account for refund — pinned to canonical ATA."
           ],
           "writable": true
         },
@@ -1420,35 +1424,32 @@
       ]
     },
     {
-      "name": "withdraw_treasury",
+      "name": "set_treasury",
       "docs": [
-        "Withdraw from protocol treasury - authority only",
-        "Used to pay for operational costs (API, infra, team)"
+        "Rotate the protocol_treasury recipient. Cold authority only.",
+        "Used when the fees-wallet key is compromised, lost, or operationally rotated.",
+        "`new_treasury` must be a TokenAccount of SKR_MINT (validated in the",
+        "account context). Only redirects FUTURE inflows — funds already in the",
+        "old treasury stay under that account's owner."
       ],
       "discriminator": [
-        40,
-        63,
-        122,
-        158,
-        144,
-        216,
-        83,
-        96
+        57,
+        97,
+        196,
+        95,
+        195,
+        206,
+        106,
+        136
       ],
       "accounts": [
         {
           "name": "authority",
-          "docs": [
-            "Authority withdrawing funds"
-          ],
-          "writable": true,
           "signer": true
         },
         {
           "name": "global_state",
-          "docs": [
-            "Global state PDA"
-          ],
+          "writable": true,
           "pda": {
             "seeds": [
               {
@@ -1472,33 +1473,14 @@
           }
         },
         {
-          "name": "protocol_treasury",
-          "docs": [
-            "Protocol treasury (source)"
-          ],
-          "writable": true
+          "name": "new_treasury"
         },
         {
-          "name": "authority_token_account",
-          "docs": [
-            "Authority's token account (destination)"
-          ],
-          "writable": true
-        },
-        {
-          "name": "token_program",
-          "docs": [
-            "Token program"
-          ],
-          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+          "name": "skr_mint",
+          "address": "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3"
         }
       ],
-      "args": [
-        {
-          "name": "amount",
-          "type": "u64"
-        }
-      ]
+      "args": []
     }
   ],
   "accounts": [
@@ -1674,16 +1656,16 @@
       ]
     },
     {
-      "name": "TreasuryWithdrawn",
+      "name": "TreasuryRotated",
       "discriminator": [
-        143,
-        181,
-        157,
-        169,
-        87,
-        155,
-        170,
-        46
+        121,
+        248,
+        251,
+        228,
+        57,
+        238,
+        42,
+        233
       ]
     }
   ],
@@ -1760,33 +1742,23 @@
     },
     {
       "code": 6014,
-      "name": "DisputeWindowExpired",
-      "msg": "Dispute window has expired"
-    },
-    {
-      "code": 6015,
       "name": "AlreadyDisputed",
       "msg": "Bounty already disputed"
     },
     {
-      "code": 6016,
-      "name": "InvalidDisputeStake",
-      "msg": "Invalid dispute stake amount"
-    },
-    {
-      "code": 6017,
+      "code": 6015,
       "name": "NotDisputed",
       "msg": "Bounty not in disputed state"
     },
     {
-      "code": 6018,
-      "name": "StillInChallengePeriod",
-      "msg": "Bounty is still in challenge period"
-    },
-    {
-      "code": 6019,
+      "code": 6016,
       "name": "InvalidTimestamp",
       "msg": "Timestamp is too far from current time"
+    },
+    {
+      "code": 6017,
+      "name": "BountyCooldown",
+      "msg": "Bounty close cooldown has not elapsed (24h after creation)"
     }
   ],
   "types": [
@@ -2233,8 +2205,8 @@
           {
             "name": "authority",
             "docs": [
-              "Cold authority. Signs admin ops: withdraw_treasury, fund_house,",
-              "set_hot_authority, propose_authority_transfer, resolve_dispute.",
+              "Cold authority. Signs admin ops: fund_house, set_hot_authority,",
+              "set_treasury, propose/accept/cancel_authority_transfer, resolve_dispute.",
               "Should be a hardware wallet (Ledger) on mainnet."
             ],
             "type": "pubkey"
@@ -2388,9 +2360,9 @@
       }
     },
     {
-      "name": "TreasuryWithdrawn",
+      "name": "TreasuryRotated",
       "docs": [
-        "Emitted when authority withdraws from treasury"
+        "Emitted when the protocol treasury recipient is rotated by the cold authority."
       ],
       "type": {
         "kind": "struct",
@@ -2400,11 +2372,11 @@
             "type": "pubkey"
           },
           {
-            "name": "amount",
-            "type": "u64"
+            "name": "old_treasury",
+            "type": "pubkey"
           },
           {
-            "name": "destination",
+            "name": "new_treasury",
             "type": "pubkey"
           }
         ]

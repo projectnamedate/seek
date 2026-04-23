@@ -1,7 +1,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveBounty, Tier, BountyStatus, ENTRY_AMOUNTS, TIER_DURATIONS } from '../types';
 import { getRandomMission, getMissionById } from '../data/missions';
-import { getRedis, RK } from './redis.service';
+import { getRedis, RK, redisAcquireLock, redisReleaseLock } from './redis.service';
+import { childLogger } from './logger.service';
+
+const log = childLogger('bounty');
 
 // In-memory fallback for when Redis is unavailable. On mainnet, REDIS_URL must
 // be set — otherwise a backend restart drops every in-flight bounty and
@@ -15,28 +18,39 @@ const bountyByPlayer = new Map<string, string>();
 // Mirrored to Redis so restart doesn't lose them (without them we can't reveal on-chain).
 const missionSecrets = new Map<string, { missionIdBytes: Buffer; salt: Buffer }>();
 
-// Mutex locks for race condition prevention
-const walletLocks = new Set<string>();  // Per-wallet lock for bounty creation
-const bountyLocks = new Set<string>();  // Per-bounty lock for submission
+// Distributed locks live in Redis (multi-instance + crash-resistant via TTL).
+// In-memory Set is the dev fallback when REDIS_URL is unset; the redis helpers
+// auto-fallback to "always acquire" when no Redis client is configured, so
+// the local Set guards a single-process run.
+const walletLocks = new Set<string>();
+const bountyLocks = new Set<string>();
+const WALLET_LOCK_TTL_SECONDS = 60;
+const BOUNTY_LOCK_TTL_SECONDS = 120; // submit handler can run > 60s with Claude Vision
 
-export function acquireWalletLock(wallet: string): boolean {
+export async function acquireWalletLock(wallet: string): Promise<boolean> {
   if (walletLocks.has(wallet)) return false;
+  const got = await redisAcquireLock(RK.walletLock(wallet), WALLET_LOCK_TTL_SECONDS);
+  if (!got) return false;
   walletLocks.add(wallet);
   return true;
 }
 
-export function releaseWalletLock(wallet: string): void {
+export async function releaseWalletLock(wallet: string): Promise<void> {
   walletLocks.delete(wallet);
+  await redisReleaseLock(RK.walletLock(wallet));
 }
 
-export function acquireBountyLock(bountyId: string): boolean {
+export async function acquireBountyLock(bountyId: string): Promise<boolean> {
   if (bountyLocks.has(bountyId)) return false;
+  const got = await redisAcquireLock(RK.bountyLock(bountyId), BOUNTY_LOCK_TTL_SECONDS);
+  if (!got) return false;
   bountyLocks.add(bountyId);
   return true;
 }
 
-export function releaseBountyLock(bountyId: string): void {
+export async function releaseBountyLock(bountyId: string): Promise<void> {
   bountyLocks.delete(bountyId);
+  await redisReleaseLock(RK.bountyLock(bountyId));
 }
 
 // Store prepared bounty data (from /prepare endpoint, before on-chain tx)
@@ -103,7 +117,7 @@ export function createBounty(
   activeBounties.set(bounty.id, bounty);
   bountyByPlayer.set(playerWallet, bounty.id);
 
-  console.log(`[Bounty] Created: ${bounty.id} | Player: ${playerWallet} | Mission: ${mission.description}`);
+  log.info({ bountyId: bounty.id, playerWallet, mission: mission.description }, 'bounty created');
 
   return { bounty, missionDescription: mission.description };
 }
@@ -144,7 +158,7 @@ export function updateBountyStatus(
     bounty.transactionSignature = transactionSignature;
   }
 
-  console.log(`[Bounty] Updated: ${bountyId} | Status: ${status}`);
+  log.info({ bountyId, status }, 'bounty updated');
 
   return bounty;
 }
@@ -278,21 +292,63 @@ export function markBountyValidating(bountyId: string): boolean {
 }
 
 /**
- * Expire old bounties (call periodically)
+ * For every Pending bounty whose timer has lapsed, call propose_resolution(false)
+ * on chain. CRITICAL for the economic model — without this, a player can wait
+ * out the timer (3min) + 1h cancel grace period and reclaim their FULL entry
+ * via cancel_bounty, driving the loss rate to 0% and bleeding the house.
+ *
+ * Idempotent: bounty lock + status guard prevents double-processing if a player
+ * happens to /submit just as expiration kicks in.
  */
-export function expireOldBounties(): number {
+export async function expireAndResolveOldBounties(): Promise<number> {
   const now = new Date();
-  let expiredCount = 0;
+  let resolvedCount = 0;
 
+  // Lazy-import to avoid module-init order issues
+  const { resolveBountyOnChain } = await import('./solana.service');
+
+  const candidates: Array<{ id: string; bountyPda: string; playerWallet: string }> = [];
   for (const [id, bounty] of activeBounties) {
     if (bounty.status === 'pending' && now > bounty.expiresAt) {
-      bounty.status = 'expired';
-      expiredCount++;
-      console.log(`[Bounty] Expired: ${id}`);
+      candidates.push({ id, bountyPda: bounty.bountyPda, playerWallet: bounty.playerWallet });
     }
   }
 
-  return expiredCount;
+  for (const { id, bountyPda, playerWallet } of candidates) {
+    if (!(await acquireBountyLock(id))) continue; // skip — submit handler is already running
+    try {
+      const bounty = activeBounties.get(id);
+      if (!bounty || bounty.status !== 'pending' || now <= bounty.expiresAt) continue;
+
+      const secrets = await getMissionSecrets(id);
+      if (!secrets) {
+        log.error({ bountyId: id }, 'expirer: missing mission secrets — cannot reveal/propose. Marking expired locally only.');
+        bounty.status = 'expired';
+        continue;
+      }
+
+      bounty.status = 'validating'; // prevent submit handler from racing in
+      const { signature } = await resolveBountyOnChain(
+        bountyPda,
+        playerWallet,
+        false, // forced loss for timer expiry
+        secrets.missionIdBytes,
+        secrets.salt,
+      );
+      updateBountyStatus(id, 'lost', signature);
+      resolvedCount++;
+      log.info({ bountyId: id, signature }, 'expirer: bounty timed out → propose_resolution(false)');
+    } catch (err) {
+      log.error({ err: err instanceof Error ? err.message : err, bountyId: id }, 'expirer: failed to resolve expired bounty');
+      // leave as-is for next cycle to retry
+      const bounty = activeBounties.get(id);
+      if (bounty && bounty.status === 'validating') bounty.status = 'pending';
+    } finally {
+      await releaseBountyLock(id);
+    }
+  }
+
+  return resolvedCount;
 }
 
 /**
@@ -359,17 +415,40 @@ export function cleanupOldBounties(maxAgeHours: number = 24): number {
   }
 
   if (removedCount > 0) {
-    console.log(`[Bounty] Cleaned up ${removedCount} old bounties`);
+    log.info({ removedCount }, 'cleaned up old bounties');
   }
 
   return removedCount;
 }
 
-// Start periodic cleanup
-setInterval(() => {
-  expireOldBounties();
-}, 30000); // Check every 30 seconds
+// Periodic interval handles managed by scheduler.service — start/stop are
+// wired into the server lifecycle so SIGTERM cleanly tears them down.
+let expirerHandle: NodeJS.Timeout | null = null;
+let cleanupHandle: NodeJS.Timeout | null = null;
 
-setInterval(() => {
-  cleanupOldBounties(24);
-}, 60 * 60 * 1000); // Cleanup every hour
+export function startBountyWorkers(): void {
+  if (expirerHandle || cleanupHandle) return;
+  // Expirer — 30s cadence keeps the cancel_bounty exploit window short
+  expirerHandle = setInterval(() => {
+    expireAndResolveOldBounties().catch(err =>
+      log.error({ err: err instanceof Error ? err.message : err }, 'expirer tick failed')
+    );
+  }, 30_000);
+  // Old-bounty memory cleanup (terminal-state only) every hour
+  cleanupHandle = setInterval(() => {
+    cleanupOldBounties(24);
+  }, 60 * 60 * 1000);
+  log.info('bounty workers started');
+}
+
+export function stopBountyWorkers(): void {
+  if (expirerHandle) {
+    clearInterval(expirerHandle);
+    expirerHandle = null;
+  }
+  if (cleanupHandle) {
+    clearInterval(cleanupHandle);
+    cleanupHandle = null;
+  }
+  log.info('bounty workers stopped');
+}

@@ -11,10 +11,11 @@
  *
  * The challenge period is 5 minutes (300 seconds on-chain).
  */
-import { PublicKey } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import {
   getProgram,
   getHotAuthorityKeypair,
+  getConnection,
   deriveGlobalStatePda,
   deriveHouseVaultPda,
   deriveSingularityVaultPda,
@@ -24,6 +25,12 @@ import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../config';
 import { getRedis, RK } from './redis.service';
 import { childLogger } from './logger.service';
+import { captureException } from './sentry.service';
+import { withTimeout } from '../utils/timeout';
+
+const RPC_TIMEOUT_MS = 30_000;
+const HOT_WALLET_LOW_THRESHOLD_SOL = 0.1;
+const HOT_WALLET_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const log = childLogger('finalizer');
 
@@ -49,17 +56,20 @@ const MAX_ATTEMPTS = 10;
 const POLL_INTERVAL = Math.max(2_000, Math.floor(config.protocol.challengePeriodSeconds * 1000 / 5));
 
 let intervalHandle: NodeJS.Timeout | null = null;
+let hotWalletCheckHandle: NodeJS.Timeout | null = null;
 
 /**
  * Queue a bounty for finalization after its challenge period ends.
- * Persists to Redis (sorted set + metadata hash) when available so the
- * queue survives backend restarts.
+ * Awaits the Redis persist before returning — closes the crash window
+ * between propose_resolution succeeding on-chain and the queue entry
+ * being durable. Without this, a process crash here strands the bounty
+ * in ChallengeWon/ChallengeLost state with no finalizer record.
  */
-export function queueFinalization(
+export async function queueFinalization(
   bountyPda: string,
   playerWallet: string,
   challengeEndsAt: number
-): void {
+): Promise<void> {
   if (pendingFinalizations.has(bountyPda)) {
     log.info({ bountyPda: bountyPda.slice(0, 8) }, 'bounty already queued');
     return;
@@ -75,10 +85,15 @@ export function queueFinalization(
 
   pendingFinalizations.set(bountyPda, entry);
 
-  // Persist to Redis (fire-and-forget; in-memory copy keeps working if Redis is slow/down)
-  void persistQueueEntry(entry).catch((err) =>
-    log.error({ err, bountyPda: bountyPda.slice(0, 8) }, 'redis persist failed')
-  );
+  // Await Redis persist (closes the propose→persist race window).
+  // If Redis is unavailable, persistQueueEntry early-returns; in-memory copy
+  // is the only record until restart (dev fallback only — production must
+  // have REDIS_URL set per config validation).
+  try {
+    await persistQueueEntry(entry);
+  } catch (err) {
+    log.error({ err, bountyPda: bountyPda.slice(0, 8) }, 'redis persist failed — bounty in queue is in-memory only');
+  }
 
   log.info(
     {
@@ -211,21 +226,53 @@ async function finalizeSingleBounty(pending: PendingFinalization): Promise<strin
   const globalState = await (program.account as any).globalState.fetch(globalStatePda);
   const protocolTreasury = globalState.protocolTreasury as PublicKey;
 
-  const signature = await program.methods
-    .finalizeBounty()
-    .accounts({
-      caller: caller.publicKey,
-      globalState: globalStatePda,
-      bounty: new PublicKey(pending.bountyPda),
-      playerTokenAccount,
-      houseVault: houseVaultPda,
-      singularityVault: singularityVaultPda,
-      protocolTreasury,
-      tokenProgram: TOKEN_PROGRAM_ID,
-    })
-    .rpc();
+  const signature = await withTimeout(
+    program.methods
+      .finalizeBounty()
+      .accounts({
+        caller: caller.publicKey,
+        globalState: globalStatePda,
+        bounty: new PublicKey(pending.bountyPda),
+        playerTokenAccount,
+        houseVault: houseVaultPda,
+        singularityVault: singularityVaultPda,
+        protocolTreasury,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .rpc(),
+    RPC_TIMEOUT_MS,
+    'finalize_bounty',
+  );
 
   return signature;
+}
+
+/**
+ * Periodic hot-wallet SOL balance check. Hot key burns ~5000 lamports per
+ * finalize call; depletion stalls the entire finalizer pipeline. Page the
+ * operator (via Sentry) before that happens. Top up via:
+ *   solana transfer <HOT_PUBKEY> 1 --keypair usb://ledger --url mainnet-beta
+ */
+async function checkHotWalletBalance(): Promise<void> {
+  try {
+    const conn = getConnection();
+    const hot = getHotAuthorityKeypair();
+    const lamports = await withTimeout(
+      conn.getBalance(hot.publicKey, 'confirmed'),
+      RPC_TIMEOUT_MS,
+      'getBalance(hot)',
+    );
+    const sol = lamports / LAMPORTS_PER_SOL;
+    if (sol < HOT_WALLET_LOW_THRESHOLD_SOL) {
+      const msg = `Hot wallet SOL balance LOW: ${sol.toFixed(4)} SOL (< ${HOT_WALLET_LOW_THRESHOLD_SOL}). Finalizer will stall.`;
+      log.warn({ pubkey: hot.publicKey.toBase58(), sol }, msg);
+      captureException(new Error(msg));
+    } else {
+      log.debug({ sol }, 'hot wallet balance ok');
+    }
+  } catch (err) {
+    log.error({ err }, 'hot wallet balance check failed');
+  }
 }
 
 /**
@@ -247,6 +294,12 @@ export function startFinalizationWorker(): void {
       log.error({ err: err.message }, 'worker error');
     });
   }, POLL_INTERVAL);
+
+  // Periodic hot-wallet balance check + immediate first run.
+  void checkHotWalletBalance();
+  hotWalletCheckHandle = setInterval(() => {
+    void checkHotWalletBalance();
+  }, HOT_WALLET_CHECK_INTERVAL_MS);
 }
 
 /**
@@ -256,8 +309,12 @@ export function stopFinalizationWorker(): void {
   if (intervalHandle) {
     clearInterval(intervalHandle);
     intervalHandle = null;
-    log.info('worker stopped');
   }
+  if (hotWalletCheckHandle) {
+    clearInterval(hotWalletCheckHandle);
+    hotWalletCheckHandle = null;
+  }
+  log.info('worker stopped');
 }
 
 /**

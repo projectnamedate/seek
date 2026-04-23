@@ -62,6 +62,21 @@ function loadConfig() {
     );
   }
 
+  // Safety: on mainnet, hot and cold keys must be DIFFERENT. Operator could
+  // accidentally paste the same value into both env slots, silently breaking
+  // the hot/cold split (hot key compromise = full treasury drain).
+  if (
+    parsed.data.SOLANA_NETWORK === 'mainnet-beta' &&
+    parsed.data.HOT_AUTHORITY_PRIVATE_KEY &&
+    parsed.data.HOT_AUTHORITY_PRIVATE_KEY === parsed.data.AUTHORITY_PRIVATE_KEY
+  ) {
+    throw new Error(
+      'HOT_AUTHORITY_PRIVATE_KEY must be DIFFERENT from AUTHORITY_PRIVATE_KEY on mainnet. ' +
+      'They are the same — backup deploy mistake. Generate a fresh hot keypair: ' +
+      '`solana-keygen new --outfile ./seek-hot.json` and use its base58 secret.'
+    );
+  }
+
   return {
     server: {
       port: parseInt(parsed.data.PORT, 10),

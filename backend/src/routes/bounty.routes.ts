@@ -3,12 +3,10 @@ import multer from 'multer';
 import { z } from 'zod';
 import {
   ApiResponse,
-  StartBountyRequest,
   StartBountyResponse,
   SubmitPhotoResponse,
   Tier,
   ENTRY_AMOUNTS,
-  SKR_MULTIPLIER,
   TIER_CONFIDENCE_THRESHOLDS,
 } from '../types';
 import {
@@ -36,8 +34,12 @@ import { PublicKey } from '@solana/web3.js';
 import { isWalletSGTVerified } from '../services/sgt.service';
 import { attestationService, AttestationPayload } from '../services/attestation.service';
 import { validate } from '../middleware/validate.middleware';
+import { requireWalletAuth } from '../middleware/auth.middleware';
 import { bountyPrepareLimiter, bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
+import { childLogger } from '../services/logger.service';
 import { config } from '../config';
+
+const log = childLogger('bounty-routes');
 
 const router = Router();
 
@@ -71,23 +73,17 @@ const prepareBountySchema = z.object({
   playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address'),
 });
 
-// Demo mode schemas
-const startBountyDemoSchema = z.object({
-  tier: z.number().int().min(1).max(3) as z.ZodType<Tier>,
-  wallet: z.string().optional(),
-  entryAmount: z.number().optional(),
-});
-
 /**
  * POST /api/bounty/prepare
  * Prepare a bounty before on-chain transaction.
  * Returns commitment, timestamp, and bountyPda for the mobile client
  * to build the accept_bounty transaction.
- * No wallet auth required (player hasn't signed anything yet).
+ * Wallet-auth required to prevent targeted PDA-poisoning DoS by anonymous callers.
  */
-router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), async (req: Request, res: Response) => {
+router.post('/prepare', bountyPrepareLimiter, requireWalletAuth('prepare'), validate(prepareBountySchema), async (req: Request, res: Response) => {
   try {
-    const { tier, playerWallet } = req.body as { tier: Tier; playerWallet: string };
+    const { tier } = req.body as { tier: Tier };
+    const playerWallet = (req as any).verifiedWallet as string;
 
     // Check for existing active bounty
     const existing = getPlayerActiveBounty(playerWallet);
@@ -122,7 +118,7 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
       createdAt: Date.now(),
     });
 
-    console.log(`[API] Bounty prepared: PDA=${bountyPda.toBase58().slice(0, 8)}... | Tier ${tier} | ${mission.id}`);
+    log.info({ bountyPda: bountyPda.toBase58().slice(0, 8), tier, missionId: mission.id }, 'bounty prepared');
 
     return res.status(200).json({
       success: true,
@@ -134,7 +130,7 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
       },
     });
   } catch (error) {
-    console.error('[API] Prepare bounty error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'prepare bounty error');
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -146,12 +142,16 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
  * POST /api/bounty/start
  * Start a new bounty hunt
  */
+// /start does NOT require wallet-auth headers — verifyTransaction below proves
+// the player authorized the bounty by signing the on-chain accept_bounty. This
+// avoids a third MWA prompt in the BountyReveal flow (prepare auth + tx + start
+// auth would be 3 prompts). The on-chain tx is stronger proof anyway.
 router.post('/start', bountyStartLimiter, validate(startBountySchema), async (req: Request, res: Response) => {
   try {
-    const { tier, playerWallet, bountyPda, transactionSignature } = req.body;
+    const { tier, bountyPda, transactionSignature, playerWallet } = req.body;
 
-    // Acquire per-wallet lock to prevent race conditions
-    if (!acquireWalletLock(playerWallet)) {
+    // Acquire per-wallet lock (Redis-backed; multi-instance safe)
+    if (!(await acquireWalletLock(playerWallet))) {
       return res.status(409).json({
         success: false,
         error: 'Bounty creation already in progress for this wallet',
@@ -168,19 +168,25 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
-    // Verify on-chain transaction if provided
-    if (transactionSignature) {
-      const txVerified = await verifyTransaction(transactionSignature);
-      if (!txVerified) {
-        return res.status(400).json({
-          success: false,
-          error: 'Transaction not confirmed on-chain',
-        } as ApiResponse<never>);
-      }
+    // Verify on-chain transaction actually contains an accept_bounty call
+    // for THIS player against THIS bountyPda. Confirmation status alone is
+    // not enough — an attacker could paste any random confirmed tx sig.
+    if (!transactionSignature) {
+      return res.status(400).json({
+        success: false,
+        error: 'transactionSignature required',
+      } as ApiResponse<never>);
+    }
+    const txVerified = await verifyTransaction(transactionSignature, playerWallet, bountyPda);
+    if (!txVerified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction does not contain a valid accept_bounty for this player + bountyPda',
+      } as ApiResponse<never>);
     }
 
-    // Check SGT verification status
-    const sgtResult = isWalletSGTVerified(playerWallet);
+    // Check SGT verification status (Redis-backed; falls back to in-memory cache)
+    const sgtResult = await isWalletSGTVerified(playerWallet);
     const sgtVerified = sgtResult?.verified || false;
 
     // Try to use prepared bounty data (from /prepare endpoint)
@@ -226,17 +232,17 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       bountyPda: bounty.bountyPda,
     };
 
-    console.log(`[API] Bounty started: ${bounty.id} | Tier ${tier} | ${missionDescription}`);
+    log.info({ bountyId: bounty.id, tier, missionDescription }, 'bounty started');
 
     return res.status(201).json({
       success: true,
       data: response,
     } as ApiResponse<StartBountyResponse>);
     } finally {
-      releaseWalletLock(playerWallet);
+      await releaseWalletLock(playerWallet);
     }
   } catch (error) {
-    console.error('[API] Start bounty error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'start bounty error');
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -248,7 +254,7 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
  * POST /api/bounty/submit
  * Submit a photo for validation
  */
-router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: Request, res: Response) => {
+router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalletAuth('submit'), async (req: Request, res: Response) => {
   try {
     // Validate required fields
     const parsed = submitPhotoSchema.safeParse(req.body);
@@ -259,10 +265,11 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       } as ApiResponse<never>);
     }
 
-    const { bountyId, playerWallet: submitterWallet } = parsed.data;
+    const { bountyId } = parsed.data;
+    const submitterWallet = (req as any).verifiedWallet as string;
 
-    // Acquire per-bounty lock to prevent double submission
-    if (!acquireBountyLock(bountyId)) {
+    // Acquire per-bounty lock (Redis-backed; multi-instance safe)
+    if (!(await acquireBountyLock(bountyId))) {
       return res.status(409).json({
         success: false,
         error: 'Photo validation already in progress for this bounty',
@@ -341,11 +348,11 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
     // Mark as validating
     markBountyValidating(bountyId);
 
-    console.log(`[API] Validating photo for bounty: ${bountyId}`);
+    log.info({ bountyId }, 'validating photo for bounty');
 
     // Extract EXIF metadata
     const metadata = await extractExifMetadata(req.file.buffer);
-    console.log(`[API] EXIF: ${formatMetadata(metadata)}`);
+    log.info({ exif: formatMetadata(metadata) }, 'extracted exif');
 
     // Verify camera attestation (if provided)
     let attestationPayload: AttestationPayload | null = null;
@@ -356,13 +363,13 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
     }
     const attestationResult = await attestationService.verifyAttestation(attestationPayload, req.file.buffer);
     if (attestationResult.confidence !== 'none') {
-      console.log(`[API] Attestation: ${attestationResult.type} | Confidence: ${attestationResult.confidence} | Integrity: ${attestationResult.photoIntegrity}`);
+      log.info({ type: attestationResult.type, confidence: attestationResult.confidence, integrity: attestationResult.photoIntegrity }, 'attestation');
     }
 
     // Log attestation integrity (hard rejection disabled until TEE SDK ships —
     // standard hash check is unreliable across device camera pipelines)
     if (attestationPayload && attestationResult.isSeekerDevice && !attestationResult.photoIntegrity) {
-      console.log(`[API] Attestation hash mismatch for Seeker device (non-blocking) — proceeding to AI validation`);
+      log.info('attestation hash mismatch for Seeker device (non-blocking) — proceeding to AI validation');
     }
 
     // Record attestation type on the bounty for analytics
@@ -386,13 +393,13 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       const sgtBonus = config.sgt.bonusConfidenceReduction;
       const adjustedThreshold = baseThreshold - sgtBonus;
       if (validation.confidence >= adjustedThreshold) {
-        console.log(`[API] SGT bonus applied: ${validation.confidence} >= ${adjustedThreshold} (base ${baseThreshold} - ${sgtBonus})`);
+        log.info({ confidence: validation.confidence, adjustedThreshold, baseThreshold, sgtBonus }, 'SGT bonus applied');
         validation.isValid = true;
       }
     }
 
-    console.log(`[API] Validation result: ${validation.isValid ? 'PASS' : 'FAIL'} (${validation.confidence})${bounty.sgtVerified ? ' [SGT]' : ''}`);
-    console.log(`[API] Reasoning: ${validation.reasoning}`);
+    log.info({ outcome: validation.isValid ? 'PASS' : 'FAIL', confidence: validation.confidence, sgt: bounty.sgtVerified }, 'validation result');
+    log.info({ reasoning: validation.reasoning }, 'validation reasoning');
 
     // Resolve on-chain
     const success = validation.isValid;
@@ -420,160 +427,27 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       response.singularityWon = singularityWon;
 
       if (singularityWon) {
-        console.log(`[API] SINGULARITY WON! Player: ${bounty.playerWallet}`);
+        log.info({ playerWallet: bounty.playerWallet }, 'SINGULARITY WON');
       }
     }
 
-    console.log(`[API] Bounty ${bountyId} resolved: ${success ? 'WON' : 'LOST'}`);
+    log.info({ bountyId, outcome: success ? 'WON' : 'LOST' }, 'bounty resolved');
 
     return res.status(200).json({
       success: true,
       data: response,
     } as ApiResponse<SubmitPhotoResponse>);
     } finally {
-      releaseBountyLock(bountyId);
+      await releaseBountyLock(bountyId);
     }
   } catch (error) {
-    console.error('[API] Submit photo error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'submit photo error');
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
     } as ApiResponse<never>);
   }
 });
-
-// === Demo routes: only register in development ===
-if (config.server.isDev) {
-  /**
-   * POST /api/bounty/demo/start
-   * Start a bounty in demo mode (no blockchain required)
-   */
-  router.post('/demo/start', validate(startBountyDemoSchema), async (req: Request, res: Response) => {
-    try {
-      const { tier, wallet } = req.body as { tier: Tier; wallet?: string };
-      const demoWallet = wallet || 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker';
-      const demoPda = `demo-pda-${Date.now()}`;
-
-      // Create bounty without blockchain
-      const { bounty, missionDescription } = createBounty(
-        demoWallet,
-        tier,
-        demoPda,
-        undefined
-      );
-
-      console.log(`[DEMO] Bounty started: ${bounty.id} | Tier ${tier} | ${missionDescription}`);
-
-      return res.status(201).json({
-        success: true,
-        bounty: {
-          id: bounty.id,
-          tier: tier,
-          target: missionDescription.split(': ')[0] || missionDescription,
-          targetHint: missionDescription.split(': ')[1] || 'Find this object',
-          startTime: bounty.createdAt.getTime(),
-          endTime: bounty.expiresAt.getTime(),
-          status: 'hunting',
-          entryAmount: Number(ENTRY_AMOUNTS[tier] / SKR_MULTIPLIER),
-          potentialReward: Number((ENTRY_AMOUNTS[tier] * 2n) / SKR_MULTIPLIER),
-        },
-      });
-    } catch (error) {
-      console.error('[DEMO] Start bounty error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'Internal server error',
-      } as ApiResponse<never>);
-    }
-  });
-
-  /**
-   * POST /api/bounty/demo/submit
-   * Submit a photo for validation in demo mode (no blockchain required)
-   */
-  router.post('/demo/submit', upload.single('photo'), async (req: Request, res: Response) => {
-    try {
-      const { bountyId } = req.body;
-
-      if (!bountyId) {
-        return res.status(400).json({
-          success: false,
-          error: 'Bounty ID required',
-        });
-      }
-
-      if (!req.file) {
-        return res.status(400).json({
-          success: false,
-          error: 'No photo uploaded',
-        });
-      }
-
-      if (!isValidImageFormat(req.file.mimetype)) {
-        return res.status(400).json({
-          success: false,
-          error: 'Invalid image format. Supported: JPEG, PNG, WebP, HEIC',
-        });
-      }
-
-      const bounty = getBounty(bountyId);
-      if (!bounty) {
-        return res.status(404).json({
-          success: false,
-          error: 'Bounty not found',
-        });
-      }
-
-      const mission = getBountyMission(bountyId);
-      if (!mission) {
-        return res.status(500).json({
-          success: false,
-          error: 'Mission not found for bounty',
-        });
-      }
-
-      markBountyValidating(bountyId);
-
-      console.log(`[DEMO] Validating photo for bounty: ${bountyId}`);
-      console.log(`[DEMO] Mission: ${mission.description}`);
-
-      const metadata = await extractExifMetadata(req.file.buffer);
-      console.log(`[DEMO] EXIF: ${formatMetadata(metadata)}`);
-
-      const validation = await validatePhoto(
-        req.file.buffer,
-        req.file.mimetype,
-        mission,
-        metadata,
-        bounty.tier,
-        bounty.createdAt
-      );
-
-      const success = validation.isValid;
-
-      console.log(`[DEMO] AI Result: ${success ? 'PASS' : 'FAIL'} | Confidence: ${Math.round(validation.confidence * 100)}%`);
-      console.log(`[DEMO] Reasoning: ${validation.reasoning}`);
-
-      updateBountyStatus(bountyId, success ? 'won' : 'lost');
-
-      return res.status(200).json({
-        success: true,
-        validation: {
-          isValid: validation.isValid,
-          confidence: validation.confidence,
-          reasoning: validation.reasoning,
-          timestamp: Date.now(),
-        },
-      });
-    } catch (error) {
-      console.error('[DEMO] Submit photo error:', error);
-      return res.status(500).json({
-        success: false,
-        error: 'AI validation failed',
-      });
-    }
-  });
-}
 
 /**
  * GET /api/bounty/:id
@@ -603,7 +477,7 @@ router.get('/:id', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('[API] Get bounty error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'get bounty error');
     return res.status(500).json({
       success: false,
       error: 'Internal server error',
@@ -636,7 +510,7 @@ router.get('/player/:wallet', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('[API] Get player bounty error:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'get player bounty error');
     return res.status(500).json({
       success: false,
       error: 'Internal server error',

@@ -32,7 +32,7 @@ export default function App() {
       endpoint={ENDPOINT}
       identity={{
         name: 'Seek',
-        uri: 'https://seek.app',
+        uri: 'https://seek.mythx.art',
         icon: 'favicon.png',
       }}
     >

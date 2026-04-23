@@ -4,23 +4,21 @@ import {
   PublicKey,
 } from '@solana/web3.js';
 import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
-import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { config } from '../config';
 import { Tier, ENTRY_AMOUNTS, SKR_MULTIPLIER } from '../types';
 import bs58 from 'bs58';
 import { createHash, randomFillSync } from 'crypto';
 import { queueFinalization } from './finalizer.service';
+import { childLogger } from './logger.service';
 
 // Load IDL
 import idl from '../idl/seek_protocol.json';
 
+const log = childLogger('solana');
+
 // Initialize connection (singleton)
 let connection: Connection;
-
-// Cache cold authority keypair (for admin ops: withdraw_treasury, fund_house,
-// set_hot_authority, propose_authority_transfer, resolve_dispute, etc).
-// In production this should come from a KMS or a Ledger — never from .env.
-let cachedAuthority: Keypair | null = null;
 
 // Cache hot authority keypair (for reveal_mission + propose_resolution only).
 // Safe to keep on the backend; compromise is contained to hot-path scope.
@@ -38,17 +36,6 @@ export function getConnection(): Connection {
     connection = new Connection(config.solana.rpcUrl, 'confirmed');
   }
   return connection;
-}
-
-/**
- * Get cold authority keypair (admin operations).
- */
-export function getAuthorityKeypair(): Keypair {
-  if (!cachedAuthority) {
-    const privateKey = bs58.decode(config.solana.authorityPrivateKey);
-    cachedAuthority = Keypair.fromSecretKey(privateKey);
-  }
-  return cachedAuthority;
 }
 
 /**
@@ -199,7 +186,7 @@ export async function revealMissionOnChain(
     })
     .rpc();
 
-  console.log(`[Solana] Mission revealed: ${signature}`);
+  log.info({ signature }, 'mission revealed');
   return signature;
 }
 
@@ -223,55 +210,8 @@ export async function proposeResolutionOnChain(
     })
     .rpc();
 
-  console.log(`[Solana] Resolution proposed (${success ? 'WIN' : 'LOSS'}): ${signature}`);
+  log.info({ outcome: success ? 'WIN' : 'LOSS', signature }, 'resolution proposed');
   return signature;
-}
-
-/**
- * Finalize bounty on-chain (after challenge period ends)
- * Part 3 of resolution: actually executes payout or distribution
- */
-export async function finalizeBountyOnChain(
-  bountyPda: string,
-  playerWallet: string
-): Promise<{ signature: string; singularityWon?: boolean }> {
-  const program = getProgram();
-  const authority = getAuthorityKeypair();
-  const [globalStatePda] = deriveGlobalStatePda();
-  const [houseVaultPda] = deriveHouseVaultPda();
-  const [singularityVaultPda] = deriveSingularityVaultPda();
-  const playerPubkey = new PublicKey(playerWallet);
-
-  // Get player's associated token account for SKR
-  const playerTokenAccount = await getAssociatedTokenAddress(
-    SKR_MINT,
-    playerPubkey
-  );
-
-  // Get global state to find protocol treasury
-  const globalState = await (program.account as any).globalState.fetch(globalStatePda);
-  const protocolTreasury = (globalState as any).protocolTreasury as PublicKey;
-
-  const signature = await program.methods
-    .finalizeBounty()
-    .accounts({
-      caller: authority.publicKey,
-      globalState: globalStatePda,
-      bounty: new PublicKey(bountyPda),
-      playerTokenAccount,
-      houseVault: houseVaultPda,
-      singularityVault: singularityVaultPda,
-      protocolTreasury,
-      tokenProgram: TOKEN_PROGRAM_ID,
-    })
-    .rpc();
-
-  // Check if singularity was won by reading the bounty account
-  const bountyAccount = await (program.account as any).bounty.fetch(new PublicKey(bountyPda));
-  const singularityWon = (bountyAccount as any).singularityWon as boolean;
-
-  console.log(`[Solana] Bounty finalized: ${signature} | Singularity: ${singularityWon}`);
-  return { signature, singularityWon };
 }
 
 /**
@@ -298,19 +238,21 @@ export async function resolveBountyOnChain(
     // Step 2: Propose resolution (starts challenge period)
     const proposeSig = await proposeResolutionOnChain(bountyPda, success);
 
-    // Step 3: Queue finalization for after the challenge period.
-    // Must mirror the on-chain CHALLENGE_PERIOD constant (mainnet: 300s, devnet: 10s).
+    // Step 3: Queue finalization durably (awaited Redis persist) for after the
+    // challenge period. Must mirror the on-chain CHALLENGE_PERIOD const
+    // (mainnet: 300s, devnet: 10s). If this throws, we have a stuck on-chain
+    // bounty — Sentry will capture and the on-chain reconciler picks it up.
     const challengeEndsAt = Math.floor(Date.now() / 1000) + config.protocol.challengePeriodSeconds;
-    queueFinalization(bountyPda, playerWallet, challengeEndsAt);
+    await queueFinalization(bountyPda, playerWallet, challengeEndsAt);
 
-    console.log(`[Solana] Resolution proposed, finalization queued for ${new Date(challengeEndsAt * 1000).toISOString()}`);
+    log.info({ finalizeAt: new Date(challengeEndsAt * 1000).toISOString() }, 'resolution proposed, finalization queued');
 
     return {
       signature: proposeSig,
       singularityWon: false, // Will be determined at finalization
     };
   } catch (error: any) {
-    console.error(`[Solana] Resolve bounty error:`, error?.message || error);
+    log.error({ err: error?.message || error }, 'resolve bounty error');
     throw error;
   }
 }
@@ -404,14 +346,50 @@ export async function getBountyOnChain(bountyPda: string): Promise<any> {
 }
 
 /**
- * Verify a transaction signature
+ * Verify a transaction signature actually contains the expected accept_bounty
+ * call for this player + bounty PDA. Confirmation alone is not sufficient —
+ * an attacker can paste any confirmed tx signature on Solana mainnet (a Jupiter
+ * swap, a transfer, anything) and trivially bypass a status-only check.
+ *
+ * Returns true only if:
+ *   1. The tx is confirmed/finalized
+ *   2. It contains an instruction whose programId == SEEK PROGRAM_ID
+ *   3. The bountyPda appears in the instruction's account list
+ *   4. The expectedPlayer's pubkey appears in the instruction's account list
  */
-export async function verifyTransaction(signature: string): Promise<boolean> {
+export async function verifyTransaction(
+  signature: string,
+  expectedPlayer: string,
+  expectedBountyPda: string,
+): Promise<boolean> {
   try {
     const conn = getConnection();
-    const result = await conn.getSignatureStatus(signature);
-    return result?.value?.confirmationStatus === 'confirmed' ||
-           result?.value?.confirmationStatus === 'finalized';
+    const tx = await conn.getTransaction(signature, {
+      maxSupportedTransactionVersion: 0,
+      commitment: 'confirmed',
+    });
+    if (!tx || tx.meta?.err) return false;
+
+    const programIdStr = (process.env.SEEK_PROGRAM_ID ?? '').trim();
+    if (!programIdStr) return false;
+
+    const accountKeys = tx.transaction.message.getAccountKeys
+      ? tx.transaction.message.getAccountKeys().keySegments().flat()
+      : (tx.transaction.message as any).accountKeys;
+    const accountStrings = accountKeys.map((k: any) => k.toBase58());
+
+    const playerSeen = accountStrings.includes(expectedPlayer);
+    const bountyPdaSeen = accountStrings.includes(expectedBountyPda);
+    if (!playerSeen || !bountyPdaSeen) return false;
+
+    const instructions = tx.transaction.message.compiledInstructions ?? [];
+    const seekIxFound = instructions.some((ix: any) => {
+      const programIdIndex = ix.programIdIndex;
+      const ixProgram = accountStrings[programIdIndex];
+      return ixProgram === programIdStr;
+    });
+
+    return seekIxFound;
   } catch {
     return false;
   }

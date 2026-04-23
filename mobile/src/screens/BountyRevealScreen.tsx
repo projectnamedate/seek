@@ -12,11 +12,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { PublicKey } from '@solana/web3.js';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
-import { RootStackParamList, TIERS, Bounty, TierNumber } from '../types';
+import { RootStackParamList, TIERS, Bounty } from '../types';
 import apiService from '../services/api.service';
 import { buildAcceptBountyTransaction } from '../services/solana.mobile';
 import { useApp } from '../context/AppContext';
-import { DEMO_MODE } from '../config';
+import { formatTime } from '../utils/format';
 
 // Sample targets for demo fallback
 const DEMO_TARGETS: Record<number, { target: string; hint: string }[]> = {
@@ -64,37 +64,11 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // Start bounty flow
+  // Start bounty flow — DEMO_MODE.USE_DEMO_ENDPOINTS is permanently false in
+  // production builds; local demo fallback only fires if on-chain init throws.
   useEffect(() => {
-    if (DEMO_MODE.USE_DEMO_ENDPOINTS) {
-      startDemoBounty();
-    } else {
-      startOnChainBounty();
-    }
+    startOnChainBounty();
   }, [tier]);
-
-  /**
-   * Demo mode flow: just call API
-   */
-  const startDemoBounty = async () => {
-    try {
-      const result = await apiService.startBounty(
-        wallet.fullAddress || wallet.address || 'demo-wallet',
-        tier
-      );
-
-      if (result.success && result.bounty) {
-        console.log('[BountyReveal] Got bounty from API:', result.bounty);
-        setBounty(result.bounty);
-        return;
-      }
-    } catch (error) {
-      console.log('[BountyReveal] API unavailable, using local demo');
-    }
-
-    // Fallback to local demo data
-    useFallbackDemoBounty();
-  };
 
   /**
    * On-chain flow:
@@ -113,9 +87,16 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
     }
 
     try {
+      // Step 0: Sign 'prepare' auth header (one MWA prompt — operation-bound,
+      // single-use nonce on backend prevents replay against /submit etc).
+      setStatusText('Authorizing...');
+      const prepareHeaders = await apiService.getWalletAuthHeaders(signMessage, playerWallet, 'prepare');
+      // Phantom MWA gap — keep the 1500ms delay (lessons.md)
+      await new Promise(r => setTimeout(r, 1500));
+
       // Step 1: Prepare bounty (get commitment from backend)
       setStatusText('Preparing bounty...');
-      const prepResult = await apiService.prepareBounty(playerWallet, tier);
+      const prepResult = await apiService.prepareBounty(playerWallet, tier, prepareHeaders);
       if (!prepResult.success || !prepResult.data) {
         throw new Error(prepResult.error || 'Failed to prepare bounty');
       }
@@ -136,7 +117,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         bountyPdaPubkey
       );
 
-      // Step 3: Sign & send via Phantom (single wallet prompt)
+      // Step 3: Sign & send via Phantom (second + last MWA prompt for this flow)
       setStatusText('Approve in wallet...');
       let slot: number | undefined;
       try {
@@ -153,16 +134,21 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       // Brief delay after Phantom deep-link return to let network stabilize
       await new Promise(r => setTimeout(r, 1500));
 
-      // Step 4: Call /start (no auth needed — on-chain tx proves wallet ownership)
+      // Step 4: Call /start — no auth header needed; the on-chain tx signature
+      // IS the player's authorization, and backend verifyTransaction asserts
+      // (player, bountyPda, programId) all match the supplied signature.
       setStatusText('Starting mission...');
       console.log('[BountyReveal] Calling /start...');
+      if (typeof txSignature !== 'string') {
+        throw new Error('Wallet did not return a transaction signature');
+      }
       const startResult = await apiService.startBounty(
         playerWallet,
         tier,
         {
           bountyPda,
-          transactionSignature: typeof txSignature === 'string' ? txSignature : undefined,
-        }
+          transactionSignature: txSignature,
+        },
       );
 
       if (!startResult.success) {
@@ -306,7 +292,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   });
 
   // Show status while preparing on-chain tx
-  if (!bounty && !DEMO_MODE.USE_DEMO_ENDPOINTS && statusText) {
+  if (!bounty && statusText) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.statusContainer}>
@@ -419,13 +405,6 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       </View>
     </SafeAreaView>
   );
-}
-
-function formatTime(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (secs === 0) return `${mins}:00`;
-  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
 const styles = StyleSheet.create({

@@ -23,7 +23,7 @@ publisher:
   # ~0.5 SOL. BACK IT UP — losing it means losing control of the listing.
   address: PLACEHOLDER_PUBLISHER_PUBKEY
   name: Projectnamedate
-  website: https://seek.app
+  website: https://seek.mythx.art
   email: jeff@projectname.date
 
 app:
@@ -31,10 +31,10 @@ app:
   android_package: app.seek.mobile
   name: Seek
   urls:
-    license_url: https://seek.app/license
-    copyright_url: https://seek.app/license
-    privacy_policy_url: https://seek.app/privacy
-    website: https://seek.app
+    license_url: https://seek.mythx.art/license
+    copyright_url: https://seek.mythx.art/license
+    privacy_policy_url: https://seek.mythx.art/privacy
+    website: https://seek.mythx.art
 
 release:
   address: AUTO_GENERATED_AT_CREATE_TIME

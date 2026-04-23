@@ -27,6 +27,16 @@ const AUTHORITY_KEY = process.env.AUTHORITY_PRIVATE_KEY!;
 const PROGRAM_ID = new PublicKey(process.env.SEEK_PROGRAM_ID!);
 const SKR_MINT = new PublicKey(process.env.SKR_MINT!);
 
+// FEES_WALLET — receives the 10% protocol-treasury cut from every loss.
+// Locked on-chain at initialize_singularity_vault. Required.
+if (!process.env.FEES_WALLET) {
+  throw new Error(
+    'FEES_WALLET env var is required. This address is the protocol_treasury ' +
+    'recipient and is locked on-chain forever at initialize_singularity_vault.'
+  );
+}
+const FEES_WALLET = new PublicKey(process.env.FEES_WALLET);
+
 async function main() {
   console.log('=== Seek Protocol Initialization ===\n');
 
@@ -37,10 +47,11 @@ async function main() {
   const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
   const program = new Program(idl as any, provider);
 
-  console.log(`RPC:       ${RPC_URL}`);
-  console.log(`Authority: ${authority.publicKey.toBase58()}`);
-  console.log(`Program:   ${PROGRAM_ID.toBase58()}`);
-  console.log(`SKR Mint:  ${SKR_MINT.toBase58()}`);
+  console.log(`RPC:        ${RPC_URL}`);
+  console.log(`Authority:  ${authority.publicKey.toBase58()}`);
+  console.log(`Program:    ${PROGRAM_ID.toBase58()}`);
+  console.log(`SKR Mint:   ${SKR_MINT.toBase58()}`);
+  console.log(`Fees Wallet: ${FEES_WALLET.toBase58()}  (LOCKED ON-CHAIN AT INIT)`);
 
   const balance = await connection.getBalance(authority.publicKey);
   console.log(`Balance:   ${balance / 1e9} SOL\n`);
@@ -208,17 +219,18 @@ async function getOrCreateTreasury(
   connection: Connection,
   authority: Keypair
 ): Promise<PublicKey> {
-  // Use authority's ATA as the protocol treasury
-  const treasuryAta = await getAssociatedTokenAddress(SKR_MINT, authority.publicKey);
+  // Treasury is the SKR ATA owned by FEES_WALLET. Authority pays the rent
+  // to create it if needed; FEES_WALLET keeps custody of any received tokens.
+  const treasuryAta = await getAssociatedTokenAddress(SKR_MINT, FEES_WALLET);
 
   const existing = await connection.getAccountInfo(treasuryAta);
   if (!existing) {
-    console.log('Creating treasury token account (authority ATA)...');
+    console.log(`Creating treasury ATA owned by FEES_WALLET (${FEES_WALLET.toBase58()})...`);
     const tx = new Transaction().add(
       createAssociatedTokenAccountInstruction(
-        authority.publicKey,
-        treasuryAta,
-        authority.publicKey,
+        authority.publicKey, // payer
+        treasuryAta,         // ata to create
+        FEES_WALLET,         // owner
         SKR_MINT
       )
     );
@@ -226,7 +238,7 @@ async function getOrCreateTreasury(
     await connection.confirmTransaction(sig, 'confirmed');
     console.log(`  Treasury ATA created: ${treasuryAta.toBase58()}\n`);
   } else {
-    console.log(`Treasury ATA: ${treasuryAta.toBase58()}`);
+    console.log(`Treasury ATA: ${treasuryAta.toBase58()} (already exists)`);
   }
 
   return treasuryAta;

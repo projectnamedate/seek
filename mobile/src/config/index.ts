@@ -11,7 +11,7 @@ const NGROK_URL: string | null = null;
 export const API_CONFIG = {
   NGROK_URL,
   EMULATOR_URL: 'http://localhost:3001/api',  // Use with `adb reverse tcp:3001 tcp:3001` for real devices
-  PROD_URL: 'https://api.seek.app/api',
+  PROD_URL: 'https://api.seek.mythx.art/api',
   TIMEOUT: 30000,
   AI_VALIDATION_TIMEOUT: 60000,
 };
@@ -35,6 +35,18 @@ export const DEMO_MODE = {
 
 // Network toggle (mainnet is the default). Switch to 'devnet' for devnet build/testing.
 export const NETWORK: 'mainnet-beta' | 'devnet' = 'mainnet-beta';
+
+// Build-time safety net: a release APK accidentally shipped with NETWORK='devnet'
+// would point users at the devnet RPC + 9-decimal test SKR mint. Refuse to boot.
+// Override by setting EXPO_PUBLIC_ALLOW_DEVNET_RELEASE=1 if you actually want to
+// ship a devnet release build for QA distribution.
+if (!__DEV__ && (NETWORK as string) !== 'mainnet-beta' && !process.env.EXPO_PUBLIC_ALLOW_DEVNET_RELEASE) {
+  throw new Error(
+    `Release build NETWORK is "${NETWORK}", expected "mainnet-beta". ` +
+    `Set NETWORK in mobile/src/config/index.ts before building, or set ` +
+    `EXPO_PUBLIC_ALLOW_DEVNET_RELEASE=1 to acknowledge.`
+  );
+}
 
 // Game Settings
 export const GAME_CONFIG = {
@@ -88,7 +100,7 @@ export const PROGRAM_ID = 'DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v';
 
 // Links
 export const LINKS = {
-  WEBSITE: 'https://seek.app',
+  WEBSITE: 'https://seek.mythx.art',
   GITHUB: 'https://github.com/seek-protocol/seek',
   TWITTER: 'https://twitter.com/seekprotocol',
   DISCORD: 'https://discord.gg/seekprotocol',

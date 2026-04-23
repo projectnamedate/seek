@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { colors, spacing, fontSize, borderRadius } from '../theme';
+import { formatTime } from '../utils/format';
 
 interface TimerProps {
   endTime: number;
@@ -57,12 +58,6 @@ export default function Timer({
       return () => pulse.stop();
     }
   }, [timeLeft <= warningThreshold]);
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
 
   const isWarning = showWarning && timeLeft <= warningThreshold;
   const timerColor = isWarning ? colors.error : colors.cyan;

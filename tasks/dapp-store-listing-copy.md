@@ -11,9 +11,9 @@ Review + edit before submission. All fields referenced in the dApp Store
 - **Category:** `GAME_ACTION` (primary) / `GAME_ADVENTURE` (secondary)
 - **Developer name:** Projectnamedate LLC
 - **Support email:** jeff@projectname.date  *(verify before submit)*
-- **Website:** https://seek.app  *(pending domain purchase)*
-- **Privacy policy URL:** https://seek.app/privacy  *(host the in-app privacy policy content on web)*
-- **Terms of service URL:** https://seek.app/terms  *(host the in-app ToS content on web)*
+- **Website:** https://seek.mythx.art
+- **Privacy policy URL:** https://seek.mythx.art/privacy  *(host the in-app privacy policy content on web)*
+- **Terms of service URL:** https://seek.mythx.art/terms  *(host the in-app ToS content on web)*
 - **Age rating:** 18+  *(economic staking triggers this)*
 
 ## Short description (≤ 80 chars, NO emoji)

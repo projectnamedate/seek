@@ -1,5 +1,8 @@
 import { Router, Request, Response } from 'express';
 import skrService from '../services/skr.service';
+import { childLogger } from '../services/logger.service';
+
+const log = childLogger('skr-routes');
 
 const router = Router();
 
@@ -29,7 +32,7 @@ router.post('/resolve-address', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('[SKR Route] Error resolving address:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'error resolving address');
     res.status(500).json({
       success: false,
       error: 'Failed to resolve address',
@@ -63,7 +66,7 @@ router.post('/resolve-domain', async (req: Request, res: Response) => {
       },
     });
   } catch (error) {
-    console.error('[SKR Route] Error resolving domain:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'error resolving domain');
     res.status(500).json({
       success: false,
       error: 'Failed to resolve domain',
@@ -121,7 +124,7 @@ router.get('/lookup/:input', async (req: Request, res: Response) => {
       });
     }
   } catch (error) {
-    console.error('[SKR Route] Error in lookup:', error);
+    log.error({ err: error instanceof Error ? error.message : error }, 'error in lookup');
     res.status(500).json({
       success: false,
       error: 'Failed to lookup',

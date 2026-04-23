@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
+use anchor_spl::associated_token::get_associated_token_address;
 
 declare_id!("DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v");
 
@@ -49,9 +50,9 @@ pub const TIER_1_DURATION: i64 = 180;  // 3 minutes
 pub const TIER_2_DURATION: i64 = 120;  // 2 minutes
 pub const TIER_3_DURATION: i64 = 60;   // 1 minute
 
-/// Dispute parameters.
+/// Dispute parameters. (Window enforced via bounty.challenge_ends_at; no
+/// separate post-resolution dispute window.)
 pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original entry to dispute
-pub const DISPUTE_WINDOW: i64 = 600;         // 10 minutes to file dispute after resolution
 
 /// Validate entry amount and return tier
 pub fn validate_entry_amount(entry_amount: u64) -> Result<u8> {
@@ -120,30 +121,24 @@ pub enum SeekError {
     #[msg("Challenge period has ended")]
     ChallengePeriodEnded,
 
-    #[msg("Dispute window has expired")]
-    DisputeWindowExpired,
-
     #[msg("Bounty already disputed")]
     AlreadyDisputed,
-
-    #[msg("Invalid dispute stake amount")]
-    InvalidDisputeStake,
 
     #[msg("Bounty not in disputed state")]
     NotDisputed,
 
-    #[msg("Bounty is still in challenge period")]
-    StillInChallengePeriod,
-
     #[msg("Timestamp is too far from current time")]
     InvalidTimestamp,
+
+    #[msg("Bounty close cooldown has not elapsed (24h after creation)")]
+    BountyCooldown,
 }
 
 /// Global protocol state - tracks all protocol-wide metrics
 #[account]
 pub struct GlobalState {
-    /// Cold authority. Signs admin ops: withdraw_treasury, fund_house,
-    /// set_hot_authority, propose_authority_transfer, resolve_dispute.
+    /// Cold authority. Signs admin ops: fund_house, set_hot_authority,
+    /// set_treasury, propose/accept/cancel_authority_transfer, resolve_dispute.
     /// Should be a hardware wallet (Ledger) on mainnet.
     pub authority: Pubkey,
 
@@ -384,12 +379,12 @@ pub struct BountyFinalized {
     pub final_status: u8, // 0 = lost, 1 = won
 }
 
-/// Emitted when authority withdraws from treasury
+/// Emitted when the protocol treasury recipient is rotated by the cold authority.
 #[event]
-pub struct TreasuryWithdrawn {
+pub struct TreasuryRotated {
     pub authority: Pubkey,
-    pub amount: u64,
-    pub destination: Pubkey,
+    pub old_treasury: Pubkey,
+    pub new_treasury: Pubkey,
 }
 
 /// Emitted when a bounty is cancelled by the player after expiry
@@ -1126,52 +1121,6 @@ pub mod seek_protocol {
         Ok(())
     }
 
-    /// Withdraw from protocol treasury - authority only
-    /// Used to pay for operational costs (API, infra, team)
-    pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
-        let global_state = &ctx.accounts.global_state;
-
-        // Verify authority (also checked in account constraint but belt-and-suspenders)
-        require!(
-            ctx.accounts.authority.key() == global_state.authority,
-            SeekError::Unauthorized
-        );
-
-        // Verify treasury has enough actual tokens
-        require!(
-            ctx.accounts.protocol_treasury.amount >= amount,
-            SeekError::InsufficientHouseFunds
-        );
-
-        // Transfer from treasury to authority's wallet
-        let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
-        let signer_seeds = &[&seeds[..]];
-
-        let transfer_ctx = CpiContext::new_with_signer(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.protocol_treasury.to_account_info(),
-                to: ctx.accounts.authority_token_account.to_account_info(),
-                authority: ctx.accounts.global_state.to_account_info(),
-            },
-            signer_seeds,
-        );
-        token::transfer(transfer_ctx, amount)?;
-
-        emit!(TreasuryWithdrawn {
-            authority: ctx.accounts.authority.key(),
-            amount,
-            destination: ctx.accounts.authority_token_account.key(),
-        });
-
-        msg!("Treasury withdrawn: {} SKR | Remaining: {} SKR",
-            amount / DECIMALS_MULTIPLIER,
-            (ctx.accounts.protocol_treasury.amount - amount) / DECIMALS_MULTIPLIER
-        );
-
-        Ok(())
-    }
-
     /// Cancel a bounty - player can reclaim entry after expiry + grace period
     /// Only works if bounty is still in Pending or Submitted state (not resolved)
     pub fn cancel_bounty(ctx: Context<CancelBounty>) -> Result<()> {
@@ -1314,10 +1263,42 @@ pub mod seek_protocol {
         Ok(())
     }
 
-    /// Close a bounty account after it reaches a terminal state
-    /// Refunds rent to the player. Only works for Won/Lost/Cancelled bounties.
-    pub fn close_bounty(_ctx: Context<CloseBounty>) -> Result<()> {
-        // Account closing is handled by Anchor's `close` attribute
+    /// Rotate the protocol_treasury recipient. Cold authority only.
+    /// Used when the fees-wallet key is compromised, lost, or operationally rotated.
+    /// `new_treasury` must be a TokenAccount of SKR_MINT (validated in the
+    /// account context). Only redirects FUTURE inflows — funds already in the
+    /// old treasury stay under that account's owner.
+    pub fn set_treasury(ctx: Context<SetTreasury>) -> Result<()> {
+        let global_state = &mut ctx.accounts.global_state;
+        let old_treasury = global_state.protocol_treasury;
+        let new_treasury = ctx.accounts.new_treasury.key();
+
+        require!(new_treasury != old_treasury, SeekError::Unauthorized);
+
+        global_state.protocol_treasury = new_treasury;
+
+        emit!(TreasuryRotated {
+            authority: ctx.accounts.authority.key(),
+            old_treasury,
+            new_treasury,
+        });
+
+        msg!("Protocol treasury rotated: {} -> {}", old_treasury, new_treasury);
+        Ok(())
+    }
+
+    /// Close a bounty account after it reaches a terminal state + 24h cooldown.
+    /// Refunds rent to the player. The cooldown prevents PDA reuse races — the
+    /// bounty PDA seed is [b"bounty", player, timestamp] so after close, the
+    /// same (player, timestamp) can be re-init'd. 24h is plenty of slack for
+    /// any in-flight finalizer retries or downstream indexer catch-up.
+    pub fn close_bounty(ctx: Context<CloseBounty>) -> Result<()> {
+        let now = Clock::get()?.unix_timestamp;
+        let bounty = &ctx.accounts.bounty;
+        require!(
+            now >= bounty.created_at.saturating_add(86_400),
+            SeekError::BountyCooldown
+        );
         msg!("Bounty account closed, rent refunded to player");
         Ok(())
     }
@@ -1437,11 +1418,11 @@ pub struct AcceptBounty<'info> {
     )]
     pub bounty: Box<Account<'info, Bounty>>,
 
-    /// Player's SKR token account
+    /// Player's SKR token account — pinned to the canonical ATA.
+    /// Prevents passing a delegated/frozen/alt-ATA that could reroute winnings.
     #[account(
         mut,
-        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
-        constraint = player_token_account.owner == player.key() @ SeekError::Unauthorized
+        constraint = player_token_account.key() == get_associated_token_address(&player.key(), &SKR_MINT) @ SeekError::Unauthorized
     )]
     pub player_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -1538,11 +1519,7 @@ pub struct FinalizeBounty<'info> {
     /// Player's token account for payout (on win)
     #[account(
         mut,
-        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
-        constraint = player_token_account.owner == bounty.player @ SeekError::Unauthorized,
-        constraint = player_token_account.key() != house_vault.key() @ SeekError::Unauthorized,
-        constraint = player_token_account.key() != singularity_vault.key() @ SeekError::Unauthorized,
-        constraint = player_token_account.key() != protocol_treasury.key() @ SeekError::Unauthorized
+        constraint = player_token_account.key() == get_associated_token_address(&bounty.player, &SKR_MINT) @ SeekError::Unauthorized
     )]
     pub player_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -1615,41 +1592,6 @@ pub struct FundHouse<'info> {
 }
 
 #[derive(Accounts)]
-pub struct WithdrawTreasury<'info> {
-    /// Authority withdrawing funds
-    #[account(
-        mut,
-        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
-    )]
-    pub authority: Signer<'info>,
-
-    /// Global state PDA
-    #[account(
-        seeds = [b"global_state"],
-        bump = global_state.bump
-    )]
-    pub global_state: Account<'info, GlobalState>,
-
-    /// Protocol treasury (source)
-    #[account(
-        mut,
-        constraint = protocol_treasury.key() == global_state.protocol_treasury
-    )]
-    pub protocol_treasury: Account<'info, TokenAccount>,
-
-    /// Authority's token account (destination)
-    #[account(
-        mut,
-        constraint = authority_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
-        constraint = authority_token_account.owner == authority.key() @ SeekError::Unauthorized
-    )]
-    pub authority_token_account: Account<'info, TokenAccount>,
-
-    /// Token program
-    pub token_program: Program<'info, Token>,
-}
-
-#[derive(Accounts)]
 pub struct DisputeBounty<'info> {
     /// Player disputing the bounty
     #[account(
@@ -1673,11 +1615,10 @@ pub struct DisputeBounty<'info> {
     )]
     pub bounty: Box<Account<'info, Bounty>>,
 
-    /// Player's token account for stake
+    /// Player's token account for stake — pinned to canonical ATA.
     #[account(
         mut,
-        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
-        constraint = player_token_account.owner == player.key() @ SeekError::Unauthorized
+        constraint = player_token_account.key() == get_associated_token_address(&player.key(), &SKR_MINT) @ SeekError::Unauthorized
     )]
     pub player_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -1717,11 +1658,10 @@ pub struct ResolveDispute<'info> {
     )]
     pub bounty: Box<Account<'info, Bounty>>,
 
-    /// Player's token account for refund (if player wins)
+    /// Player's token account for refund — pinned to canonical ATA.
     #[account(
         mut,
-        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
-        constraint = player_token_account.owner == bounty.player @ SeekError::Unauthorized
+        constraint = player_token_account.key() == get_associated_token_address(&bounty.player, &SKR_MINT) @ SeekError::Unauthorized
     )]
     pub player_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -1779,11 +1719,10 @@ pub struct CancelBounty<'info> {
     )]
     pub bounty: Box<Account<'info, Bounty>>,
 
-    /// Player's token account for refund
+    /// Player's token account for refund — pinned to canonical ATA.
     #[account(
         mut,
-        constraint = player_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
-        constraint = player_token_account.owner == player.key() @ SeekError::Unauthorized
+        constraint = player_token_account.key() == get_associated_token_address(&player.key(), &SKR_MINT) @ SeekError::Unauthorized
     )]
     pub player_token_account: Box<Account<'info, TokenAccount>>,
 
@@ -1863,6 +1802,33 @@ pub struct SetHotAuthority<'info> {
         bump = global_state.bump
     )]
     pub global_state: Box<Account<'info, GlobalState>>,
+}
+
+/// Rotate the protocol treasury recipient. Cold authority only.
+/// `new_treasury` must be an existing SKR TokenAccount (the rent-paying
+/// caller pre-creates the ATA off-chain — this instruction just records
+/// the new recipient on `GlobalState`).
+#[derive(Accounts)]
+pub struct SetTreasury<'info> {
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+
+    #[account(
+        token::mint = skr_mint,
+    )]
+    pub new_treasury: Box<Account<'info, TokenAccount>>,
+
+    #[account(address = SKR_MINT @ SeekError::InvalidMint)]
+    pub skr_mint: Box<Account<'info, Mint>>,
 }
 
 #[derive(Accounts)]

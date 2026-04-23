@@ -3,6 +3,12 @@ import { z } from 'zod';
 import { config } from '../config';
 import { Mission, ValidationResult, PhotoMetadata, Tier, TIER_CONFIDENCE_THRESHOLDS } from '../types';
 import { isLikelyScreenshot, isPhotoRecent } from './exif.service';
+import { withTimeout } from '../utils/timeout';
+import { childLogger } from './logger.service';
+
+const log = childLogger('ai');
+
+const CLAUDE_VISION_TIMEOUT_MS = 45_000;
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
@@ -141,38 +147,42 @@ export async function validatePhoto(
       return preCheckResult.result;
     }
   } else {
-    console.log('[AI] Dev mode: skipping strict metadata pre-checks');
+    log.info('dev mode: skipping strict metadata pre-checks');
   }
 
   try {
     const base64Image = imageBuffer.toString('base64');
     const mediaType = getMediaType(mimeType);
 
-    console.log(`[AI] Validating photo for target: "${mission.description}"`);
+    log.info({ target: mission.description }, 'validating photo');
 
-    const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6-20251001',
-      max_tokens: 500,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType,
-                data: base64Image,
+    const response = await withTimeout(
+      anthropic.messages.create({
+        model: 'claude-sonnet-4-6-20251001',
+        max_tokens: 500,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mediaType,
+                  data: base64Image,
+                },
               },
-            },
-            {
-              type: 'text',
-              text: buildValidationPrompt(mission),
-            },
-          ],
-        },
-      ],
-    });
+              {
+                type: 'text',
+                text: buildValidationPrompt(mission),
+              },
+            ],
+          },
+        ],
+      }),
+      CLAUDE_VISION_TIMEOUT_MS,
+      'claude-vision',
+    );
 
     const content = response.content[0];
     if (content.type !== 'text') {
@@ -195,11 +205,11 @@ export async function validatePhoto(
       result.isValid = false;
     }
 
-    console.log(`[AI] Validation: ${result.isValid ? 'PASS' : 'FAIL'} (${Math.round(result.confidence * 100)}%)`);
+    log.info({ outcome: result.isValid ? 'PASS' : 'FAIL', confidencePct: Math.round(result.confidence * 100) }, 'validation complete');
 
     return result;
   } catch (error) {
-    console.error('[AI] Validation error:', config.server.isDev ? error : (error instanceof Error ? error.message : 'unknown'));
+    log.error({ err: config.server.isDev ? error : (error instanceof Error ? error.message : 'unknown') }, 'validation error');
 
     return {
       isValid: false,

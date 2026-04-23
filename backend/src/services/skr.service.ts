@@ -1,6 +1,9 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { TldParser } from '@onsol/tldparser';
 import { config } from '../config';
+import { childLogger } from './logger.service';
+
+const log = childLogger('skr');
 
 // Demo .skr names for testing
 const DEMO_SKR_NAMES: Record<string, string> = {
@@ -42,7 +45,7 @@ class SkrService {
     try {
       // Demo mode - return mock data
       if (this.isDemoMode()) {
-        console.log('[SKR] Demo mode - checking mock data for:', walletAddress);
+        log.info({ walletAddress }, 'demo mode - checking mock data');
         const demoName = DEMO_SKR_NAMES[walletAddress];
         if (demoName) {
           return `${demoName}.skr`;
@@ -55,7 +58,7 @@ class SkrService {
       }
 
       // Production mode - real resolution
-      console.log('[SKR] Resolving address to .skr:', walletAddress);
+      log.info({ walletAddress }, 'resolving address to .skr');
       const parser = await this.getParser();
       const pubkey = new PublicKey(walletAddress);
 
@@ -63,14 +66,14 @@ class SkrService {
 
       if (domains && domains.length > 0) {
         const skrName = `${domains[0].domain}.skr`;
-        console.log('[SKR] Found .skr name:', skrName);
+        log.info({ skrName }, 'found .skr name');
         return skrName;
       }
 
-      console.log('[SKR] No .skr domain found for address');
+      log.info('no .skr domain found for address');
       return null;
     } catch (error) {
-      console.error('[SKR] Error resolving address:', error);
+      log.error({ err: error instanceof Error ? error.message : error }, 'error resolving address');
       return null;
     }
   }
@@ -87,7 +90,7 @@ class SkrService {
 
       // Demo mode - return mock data
       if (this.isDemoMode()) {
-        console.log('[SKR] Demo mode - looking up domain:', domainName);
+        log.info({ domainName }, 'demo mode - looking up domain');
         // Reverse lookup in demo data
         for (const [address, name] of Object.entries(DEMO_SKR_NAMES)) {
           if (name === domainName) {
@@ -99,21 +102,21 @@ class SkrService {
       }
 
       // Production mode - real resolution
-      console.log('[SKR] Resolving .skr to address:', domainName);
+      log.info({ domainName }, 'resolving .skr to address');
       const parser = await this.getParser();
 
       const owner = await parser.getOwnerFromDomainTld(`${domainName}.skr`);
 
       if (owner) {
         const address = typeof owner === 'string' ? owner : owner.toBase58();
-        console.log('[SKR] Found address:', address);
+        log.info({ address }, 'found address');
         return address;
       }
 
-      console.log('[SKR] No address found for .skr domain');
+      log.info('no address found for .skr domain');
       return null;
     } catch (error) {
-      console.error('[SKR] Error resolving .skr domain:', error);
+      log.error({ err: error instanceof Error ? error.message : error }, 'error resolving .skr domain');
       return null;
     }
   }

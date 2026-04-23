@@ -9,8 +9,8 @@
  *   npx ts-node scripts/admin.ts status                           Protocol state
  *   npx ts-node scripts/admin.ts balances                         All vault balances
  *   npx ts-node scripts/admin.ts fund <amount>                    Fund house vault (SKR)
- *   npx ts-node scripts/admin.ts withdraw <amount>                Withdraw from treasury (SKR)
  *   npx ts-node scripts/admin.ts set-hot <pubkey>                 Rotate hot authority
+ *   npx ts-node scripts/admin.ts set-treasury <wallet_pubkey>     Rotate fees wallet (cold-signed)
  *   npx ts-node scripts/admin.ts propose-transfer <pubkey>        Propose cold-auth rotation
  *   npx ts-node scripts/admin.ts accept-transfer                  Accept a pending transfer (run AS the new authority)
  *   npx ts-node scripts/admin.ts cancel-transfer                  Cancel a pending transfer
@@ -195,30 +195,6 @@ async function fundHouse(amountSkr: number) {
   console.log(`House vault balance: ${formatSkr(BigInt(newBalance.value.amount), s.decimals)}`);
 }
 
-async function withdrawTreasury(amountSkr: number) {
-  const s = await setup();
-  const amountLamports = new BN(Math.round(amountSkr * s.multiplier));
-
-  console.log(`Withdrawing ${amountSkr} SKR from treasury...\n`);
-
-  const state = await (s.program.account as any).globalState.fetch(s.globalStatePda);
-  const protocolTreasury = state.protocolTreasury as PublicKey;
-  const authorityAta = await getAssociatedTokenAddress(SKR_MINT, s.authority.publicKey);
-
-  const sig = await (s.program.methods as any)
-    .withdrawTreasury(amountLamports)
-    .accounts({
-      authority: s.authority.publicKey,
-      globalState: s.globalStatePda,
-      protocolTreasury,
-      authorityTokenAccount: authorityAta,
-      tokenProgram: TOKEN_PROGRAM_ID,
-    })
-    .rpc();
-
-  console.log(`Withdrawn! TX: ${sig}`);
-}
-
 async function setHotAuthority(newHot: string) {
   const s = await setup();
   const newHotPk = new PublicKey(newHot);
@@ -235,6 +211,54 @@ async function setHotAuthority(newHot: string) {
 
   console.log(`Rotated! TX: ${sig}`);
   console.log('Remember to update HOT_AUTHORITY_PRIVATE_KEY in the backend env.');
+}
+
+// Rotate the protocol_treasury recipient (i.e. the FEES_WALLET).
+// Takes the new wallet pubkey, derives its SKR ATA, creates the ATA
+// if it doesn't exist yet (cold authority pays the rent), then calls
+// set_treasury on-chain. Cold authority signed.
+async function setTreasury(newWallet: string) {
+  const s = await setup();
+  const newWalletPk = new PublicKey(newWallet);
+  const newAta = await getAssociatedTokenAddress(SKR_MINT, newWalletPk);
+
+  console.log(`New fees wallet: ${newWalletPk.toBase58()}`);
+  console.log(`Derived SKR ATA: ${newAta.toBase58()}`);
+
+  const existing = await s.connection.getAccountInfo(newAta);
+  if (!existing) {
+    console.log('ATA does not exist — creating it (cold authority pays rent)...');
+    const createIx = createAssociatedTokenAccountInstruction(
+      s.authority.publicKey,
+      newAta,
+      newWalletPk,
+      SKR_MINT,
+    );
+    const tx = new Transaction().add(createIx);
+    const createSig = await s.connection.sendTransaction(tx, [s.authority]);
+    await s.connection.confirmTransaction(createSig, 'confirmed');
+    console.log(`  ATA created. TX: ${createSig}`);
+  } else {
+    console.log('ATA already exists.');
+  }
+
+  const currentState = await (s.program.account as any).globalState.fetch(s.globalStatePda);
+  const oldTreasury = currentState.protocolTreasury as PublicKey;
+  console.log(`Old treasury: ${oldTreasury.toBase58()}`);
+
+  const sig = await (s.program.methods as any)
+    .setTreasury()
+    .accounts({
+      authority: s.authority.publicKey,
+      globalState: s.globalStatePda,
+      newTreasury: newAta,
+      skrMint: SKR_MINT,
+    })
+    .rpc();
+
+  console.log(`Rotated! TX: ${sig}`);
+  console.log('All future protocol-treasury inflows will go to the new ATA.');
+  console.log('Funds already in the old treasury are unaffected — sweep them separately if needed.');
 }
 
 async function proposeAuthorityTransfer(newAuth: string) {
@@ -377,19 +401,21 @@ switch (command) {
     }
     fundHouse(Number(arg)).catch(console.error);
     break;
-  case 'withdraw':
-    if (!arg || isNaN(Number(arg))) {
-      console.error('Usage: npx ts-node scripts/admin.ts withdraw <amount_in_skr>');
-      process.exit(1);
-    }
-    withdrawTreasury(Number(arg)).catch(console.error);
-    break;
   case 'set-hot':
     if (!arg) {
       console.error('Usage: npx ts-node scripts/admin.ts set-hot <new_hot_pubkey>');
       process.exit(1);
     }
     setHotAuthority(arg).catch(console.error);
+    break;
+  case 'set-treasury':
+    if (!arg) {
+      console.error('Usage: npx ts-node scripts/admin.ts set-treasury <new_fees_wallet_pubkey>');
+      console.error('  Rotates the protocol_treasury recipient. Cold-authority signed.');
+      console.error('  Pass the WALLET pubkey (not an ATA) — the script derives the ATA.');
+      process.exit(1);
+    }
+    setTreasury(arg).catch(console.error);
     break;
   case 'propose-transfer':
     if (!arg) {
@@ -433,8 +459,8 @@ switch (command) {
     console.log('  status                    Show protocol state and stats');
     console.log('  balances                  Show all vault balances');
     console.log('  fund <amount>             Fund house vault (SKR)');
-    console.log('  withdraw <amt>            Withdraw from treasury (SKR)');
     console.log('  set-hot <pubkey>          Rotate hot authority');
+    console.log('  set-treasury <pubkey>     Rotate fees wallet (protocol_treasury recipient)');
     console.log('  propose-transfer <pubkey> Propose cold-auth rotation');
     console.log('  accept-transfer           Accept pending transfer (AS new authority)');
     console.log('  cancel-transfer           Cancel pending transfer');

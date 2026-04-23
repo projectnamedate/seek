@@ -7,6 +7,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { API_BASE_URL } from '../config';
+import { encodeBase58 } from '../utils/bs58';
 
 const log = (...args: any[]) => __DEV__ && console.log(...args);
 
@@ -88,15 +89,7 @@ export async function verifySGT(
 
     const messageBytes = new TextEncoder().encode(messageString);
     const signatureBytes = await signMessage(messageBytes);
-
-    // Convert signature to base58
-    const bs58Chars = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-    let signatureBase58 = '';
-    let num = BigInt('0x' + Array.from(signatureBytes).map(b => b.toString(16).padStart(2, '0')).join(''));
-    while (num > 0n) {
-      signatureBase58 = bs58Chars[Number(num % 58n)] + signatureBase58;
-      num = num / 58n;
-    }
+    const signatureBase58 = encodeBase58(signatureBytes);
 
     // Step 3: Submit to backend
     const verifyRes = await axios.post(`${API_BASE_URL}/sgt/verify`, {
