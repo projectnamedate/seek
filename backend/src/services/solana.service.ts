@@ -3,7 +3,7 @@ import {
   Keypair,
   PublicKey,
 } from '@solana/web3.js';
-import { AnchorProvider, Program, Wallet, BN } from '@coral-xyz/anchor';
+import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../config';
 import { Tier, ENTRY_AMOUNTS } from '../types';
@@ -17,10 +17,17 @@ import idl from '../idl/seek_protocol.json';
 // Initialize connection (singleton)
 let connection: Connection;
 
-// Cache authority keypair (decode once, not on every call)
+// Cache cold authority keypair (for admin ops: withdraw_treasury, fund_house,
+// set_hot_authority, propose_authority_transfer, resolve_dispute, etc).
+// In production this should come from a KMS or a Ledger — never from .env.
 let cachedAuthority: Keypair | null = null;
 
-// Cache Anchor program instance
+// Cache hot authority keypair (for reveal_mission + propose_resolution only).
+// Safe to keep on the backend; compromise is contained to hot-path scope.
+let cachedHotAuthority: Keypair | null = null;
+
+// Cache Anchor program instance (signs with hot authority by default — hot-path
+// ops dominate traffic; cold-path ops build + sign their own tx).
 let cachedProgram: Program | null = null;
 
 /**
@@ -34,7 +41,7 @@ export function getConnection(): Connection {
 }
 
 /**
- * Get authority keypair from private key (cached)
+ * Get cold authority keypair (admin operations).
  */
 export function getAuthorityKeypair(): Keypair {
   if (!cachedAuthority) {
@@ -45,13 +52,29 @@ export function getAuthorityKeypair(): Keypair {
 }
 
 /**
- * Get Anchor program instance (cached)
+ * Get hot authority keypair (reveal_mission + propose_resolution).
+ * Falls back to the cold authority when HOT_AUTHORITY_PRIVATE_KEY is unset
+ * (dev/devnet convenience). On mainnet, always set HOT_AUTHORITY_PRIVATE_KEY.
+ */
+export function getHotAuthorityKeypair(): Keypair {
+  if (!cachedHotAuthority) {
+    const hotPk = config.solana.hotAuthorityPrivateKey || config.solana.authorityPrivateKey;
+    const privateKey = bs58.decode(hotPk);
+    cachedHotAuthority = Keypair.fromSecretKey(privateKey);
+  }
+  return cachedHotAuthority;
+}
+
+/**
+ * Get Anchor program instance (cached). Signs with the hot authority —
+ * cold-path operations that need the cold authority should build/sign their
+ * own tx via connection.sendTransaction with the cold keypair.
  */
 export function getProgram(): Program {
   if (!cachedProgram) {
     const conn = getConnection();
-    const authority = getAuthorityKeypair();
-    const wallet = new Wallet(authority);
+    const hotAuthority = getHotAuthorityKeypair();
+    const wallet = new Wallet(hotAuthority);
     const provider = new AnchorProvider(conn, wallet, {
       commitment: 'confirmed',
     });
@@ -170,7 +193,7 @@ export async function revealMissionOnChain(
       Array.from(salt) as any
     )
     .accounts({
-      authority: getAuthorityKeypair().publicKey,
+      hotAuthority: getHotAuthorityKeypair().publicKey,
       globalState: globalStatePda,
       bounty: new PublicKey(bountyPda),
     })
@@ -194,7 +217,7 @@ export async function proposeResolutionOnChain(
   const signature = await program.methods
     .proposeResolution(success)
     .accounts({
-      authority: getAuthorityKeypair().publicKey,
+      hotAuthority: getHotAuthorityKeypair().publicKey,
       globalState: globalStatePda,
       bounty: new PublicKey(bountyPda),
     })
@@ -275,10 +298,9 @@ export async function resolveBountyOnChain(
     // Step 2: Propose resolution (starts challenge period)
     const proposeSig = await proposeResolutionOnChain(bountyPda, success);
 
-    // Step 3: Queue finalization for after the challenge period
-    // The on-chain challenge period is 10 seconds (devnet demo).
-    // The finalization worker will pick this up and finalize when ready.
-    const challengeEndsAt = Math.floor(Date.now() / 1000) + 10; // 10s for devnet
+    // Step 3: Queue finalization for after the challenge period.
+    // Must mirror the on-chain CHALLENGE_PERIOD constant (mainnet: 300s, devnet: 10s).
+    const challengeEndsAt = Math.floor(Date.now() / 1000) + config.protocol.challengePeriodSeconds;
     queueFinalization(bountyPda, playerWallet, challengeEndsAt);
 
     console.log(`[Solana] Resolution proposed, finalization queued for ${new Date(challengeEndsAt * 1000).toISOString()}`);

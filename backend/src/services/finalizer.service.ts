@@ -14,14 +14,15 @@
 import { PublicKey } from '@solana/web3.js';
 import {
   getProgram,
-  getAuthorityKeypair,
+  getHotAuthorityKeypair,
   deriveGlobalStatePda,
   deriveHouseVaultPda,
   deriveSingularityVaultPda,
   SKR_MINT,
-  getConnection,
 } from './solana.service';
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
+import { config } from '../config';
+import { getRedis, RK } from './redis.service';
 
 // Track bounties pending finalization: bountyPda → { playerWallet, challengeEndsAt, attempts }
 interface PendingFinalization {
@@ -32,18 +33,24 @@ interface PendingFinalization {
   addedAt: number;
 }
 
+// In-memory mirror. On Redis-backed deploys this is a cache of the sorted set
+// + hash in Redis; on plain dev it's the sole source of truth. Either way the
+// public API (queueFinalization / processPendingFinalizations) is the same.
 const pendingFinalizations = new Map<string, PendingFinalization>();
 
 // Max retry attempts before giving up
 const MAX_ATTEMPTS = 10;
 
-// How often to poll (ms)
-const POLL_INTERVAL = 10_000; // 10 seconds (matches devnet challenge period)
+// How often to poll (ms). ~1/5 of the challenge period keeps latency low without
+// hammering the RPC (mainnet 300s → 60s poll; devnet 10s → 2s poll).
+const POLL_INTERVAL = Math.max(2_000, Math.floor(config.protocol.challengePeriodSeconds * 1000 / 5));
 
 let intervalHandle: NodeJS.Timeout | null = null;
 
 /**
- * Queue a bounty for finalization after its challenge period ends
+ * Queue a bounty for finalization after its challenge period ends.
+ * Persists to Redis (sorted set + metadata hash) when available so the
+ * queue survives backend restarts.
  */
 export function queueFinalization(
   bountyPda: string,
@@ -55,18 +62,76 @@ export function queueFinalization(
     return;
   }
 
-  pendingFinalizations.set(bountyPda, {
+  const entry: PendingFinalization = {
     bountyPda,
     playerWallet,
     challengeEndsAt,
     attempts: 0,
     addedAt: Date.now(),
-  });
+  };
+
+  pendingFinalizations.set(bountyPda, entry);
+
+  // Persist to Redis (fire-and-forget; in-memory copy keeps working if Redis is slow/down)
+  void persistQueueEntry(entry).catch((err) =>
+    console.error(`[Finalizer] Redis persist failed for ${bountyPda.slice(0, 8)}...:`, err)
+  );
 
   console.log(
     `[Finalizer] Queued bounty ${bountyPda.slice(0, 8)}... ` +
     `(finalizes after ${new Date(challengeEndsAt * 1000).toISOString()})`
   );
+}
+
+async function persistQueueEntry(entry: PendingFinalization): Promise<void> {
+  const r = await getRedis();
+  if (!r) return;
+  await r.zAdd(RK.finalizerQueue(), { score: entry.challengeEndsAt, value: entry.bountyPda });
+  await r.set(
+    RK.finalizerMeta(entry.bountyPda),
+    JSON.stringify(entry),
+    { EX: 24 * 60 * 60 } // 24h — plenty for any realistic dispute + retry cycle
+  );
+}
+
+async function removeQueueEntry(bountyPda: string): Promise<void> {
+  const r = await getRedis();
+  if (!r) return;
+  await r.zRem(RK.finalizerQueue(), bountyPda);
+  await r.del(RK.finalizerMeta(bountyPda));
+}
+
+/**
+ * On startup, hydrate the in-memory queue from Redis. Ensures bounties queued
+ * by a previous backend instance get finalized after a restart.
+ */
+async function hydrateFromRedis(): Promise<void> {
+  const r = await getRedis();
+  if (!r) return;
+  try {
+    const bountyPdas = await r.zRange(RK.finalizerQueue(), 0, -1);
+    if (bountyPdas.length === 0) return;
+
+    let restored = 0;
+    for (const bountyPda of bountyPdas) {
+      if (pendingFinalizations.has(bountyPda)) continue;
+      const raw = await r.get(RK.finalizerMeta(bountyPda));
+      if (!raw) continue;
+      try {
+        const entry = JSON.parse(raw) as PendingFinalization;
+        pendingFinalizations.set(bountyPda, entry);
+        restored++;
+      } catch {
+        // Bad payload — drop the queue entry to avoid loop
+        await r.zRem(RK.finalizerQueue(), bountyPda);
+      }
+    }
+    if (restored > 0) {
+      console.log(`[Finalizer] Restored ${restored} pending finalizations from Redis`);
+    }
+  } catch (err) {
+    console.error('[Finalizer] Redis hydration failed:', err);
+  }
 }
 
 /**
@@ -92,9 +157,13 @@ async function processPendingFinalizations(): Promise<void> {
     try {
       await finalizeSingleBounty(pending);
       pendingFinalizations.delete(pending.bountyPda);
+      await removeQueueEntry(pending.bountyPda);
       console.log(`[Finalizer] Finalized bounty ${pending.bountyPda.slice(0, 8)}...`);
     } catch (error: any) {
       pending.attempts++;
+      // Persist attempt count so retries survive restart
+      void persistQueueEntry(pending).catch(() => { /* non-critical */ });
+
       console.error(
         `[Finalizer] Failed to finalize ${pending.bountyPda.slice(0, 8)}... ` +
         `(attempt ${pending.attempts}/${MAX_ATTEMPTS}): ${error.message}`
@@ -102,6 +171,7 @@ async function processPendingFinalizations(): Promise<void> {
 
       if (pending.attempts >= MAX_ATTEMPTS) {
         pendingFinalizations.delete(pending.bountyPda);
+        await removeQueueEntry(pending.bountyPda);
         console.error(
           `[Finalizer] Giving up on ${pending.bountyPda.slice(0, 8)}... after ${MAX_ATTEMPTS} attempts`
         );
@@ -115,7 +185,9 @@ async function processPendingFinalizations(): Promise<void> {
  */
 async function finalizeSingleBounty(pending: PendingFinalization): Promise<string> {
   const program = getProgram();
-  const authority = getAuthorityKeypair();
+  // finalize_bounty is permissionless — anyone can crank. We use the hot
+  // authority because it's already the program's default signer.
+  const caller = getHotAuthorityKeypair();
   const [globalStatePda] = deriveGlobalStatePda();
   const [houseVaultPda] = deriveHouseVaultPda();
   const [singularityVaultPda] = deriveSingularityVaultPda();
@@ -130,7 +202,7 @@ async function finalizeSingleBounty(pending: PendingFinalization): Promise<strin
   const signature = await program.methods
     .finalizeBounty()
     .accounts({
-      caller: authority.publicKey,
+      caller: caller.publicKey,
       globalState: globalStatePda,
       bounty: new PublicKey(pending.bountyPda),
       playerTokenAccount,
@@ -154,6 +226,9 @@ export function startFinalizationWorker(): void {
   }
 
   console.log(`[Finalizer] Starting worker (polling every ${POLL_INTERVAL / 1000}s)`);
+
+  // Restore queue from Redis first (no-op if Redis disabled)
+  void hydrateFromRedis().catch((err) => console.error('[Finalizer] Hydrate error:', err));
 
   intervalHandle = setInterval(() => {
     processPendingFinalizations().catch((err) => {

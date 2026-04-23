@@ -8,11 +8,15 @@ import healthRoutes from './routes/health.routes';
 import skrRoutes from './routes/skr.routes';
 import sgtRoutes from './routes/sgt.routes';
 import { startFinalizationWorker, stopFinalizationWorker } from './services/finalizer.service';
+import { initSentry, setupSentryErrorHandler } from './services/sentry.service';
+
+// Initialize Sentry FIRST — auto-instruments http + express via OpenTelemetry.
+initSentry();
 
 // Create Express app
 const app = express();
 
-// Trust proxy (needed for Cloudflare tunnel / ngrok)
+// Trust proxy (needed for Cloudflare tunnel / ngrok / Railway proxy)
 app.set('trust proxy', 1);
 
 // Security headers
@@ -38,10 +42,13 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Global rate limit: 100 requests per 15 minutes per IP
+// Global rate limit: 300 requests per 15 minutes per IP.
+// Tighter per-wallet limits on /start + /submit live in rateLimiter.middleware.ts.
+// A single app session easily hits ~20 requests (balance + sgt + prepare + start +
+// poll + submit) so keep the global budget friendly for users behind carrier NAT.
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 300,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests, please try again later' },
@@ -91,6 +98,9 @@ app.use((req, res) => {
     error: 'Endpoint not found',
   });
 });
+
+// Sentry error handler (must come BEFORE our own error handler).
+setupSentryErrorHandler(app);
 
 // Global error handler — no stack traces or internal paths in production
 app.use((err: Error, req: express.Request, res: express.Response, next: express.NextFunction) => {

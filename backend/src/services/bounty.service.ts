@@ -1,15 +1,18 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ActiveBounty, Tier, BountyStatus, ENTRY_AMOUNTS, TIER_DURATIONS } from '../types';
 import { getRandomMission, getMissionById } from '../data/missions';
+import { getRedis, RK } from './redis.service';
 
-// In-memory store for active bounties (would use Redis/DB in production)
+// In-memory fallback for when Redis is unavailable. On mainnet, REDIS_URL must
+// be set — otherwise a backend restart drops every in-flight bounty and
+// horizontal scale-outs desync. See config.redis.url.
 const activeBounties = new Map<string, ActiveBounty>();
 
 // Index by player wallet for quick lookup
 const bountyByPlayer = new Map<string, string>();
 
-// Store mission commitment secrets for commit-reveal
-// Keyed by bountyId → { missionIdBytes, salt }
+// Mission commitment secrets for commit-reveal (bountyId → { missionIdBytes, salt }).
+// Mirrored to Redis so restart doesn't lose them (without them we can't reveal on-chain).
 const missionSecrets = new Map<string, { missionIdBytes: Buffer; salt: Buffer }>();
 
 // Mutex locks for race condition prevention
@@ -51,11 +54,6 @@ export interface PreparedBounty {
 }
 const preparedBounties = new Map<string, PreparedBounty>();
 
-// Logging helper
-function log(message: string, data?: any) {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] [Bounty] ${message}`, data ? JSON.stringify(data) : '');
-}
 
 /**
  * Create a new bounty for a player
@@ -169,40 +167,103 @@ export function getBountyMission(bountyId: string) {
 }
 
 /**
- * Store mission commitment secrets for commit-reveal
+ * Store mission commitment secrets for commit-reveal. Mirrors to Redis when
+ * available so backend restart doesn't orphan in-flight bounties.
  */
-export function storeMissionSecrets(
+export async function storeMissionSecrets(
   bountyId: string,
   missionIdBytes: Buffer,
   salt: Buffer
-): void {
+): Promise<void> {
   missionSecrets.set(bountyId, { missionIdBytes, salt });
+  const r = await getRedis();
+  if (r) {
+    await r.set(
+      RK.missionSecrets(bountyId),
+      JSON.stringify({
+        m: missionIdBytes.toString('base64'),
+        s: salt.toString('base64'),
+      }),
+      { EX: 24 * 60 * 60 } // keep for 24h — plenty for dispute + finalize windows
+    );
+  }
 }
 
 /**
- * Get mission commitment secrets for commit-reveal
+ * Get mission commitment secrets for commit-reveal. Falls back to Redis on
+ * memory miss (recovers from backend restart mid-bounty).
  */
-export function getMissionSecrets(
+export async function getMissionSecrets(
   bountyId: string
-): { missionIdBytes: Buffer; salt: Buffer } | undefined {
-  return missionSecrets.get(bountyId);
+): Promise<{ missionIdBytes: Buffer; salt: Buffer } | undefined> {
+  const cached = missionSecrets.get(bountyId);
+  if (cached) return cached;
+
+  const r = await getRedis();
+  if (!r) return undefined;
+  const raw = await r.get(RK.missionSecrets(bountyId));
+  if (!raw) return undefined;
+
+  try {
+    const { m, s } = JSON.parse(raw) as { m: string; s: string };
+    const secrets = {
+      missionIdBytes: Buffer.from(m, 'base64'),
+      salt: Buffer.from(s, 'base64'),
+    };
+    missionSecrets.set(bountyId, secrets); // repopulate in-memory cache
+    return secrets;
+  } catch {
+    return undefined;
+  }
 }
 
 /**
- * Store prepared bounty data (from /prepare, before on-chain tx)
+ * Store prepared bounty data (from /prepare, before on-chain tx).
+ * Mirrored to Redis with 5-min TTL so restart doesn't break /start.
  */
-export function storePreparedBounty(bountyPda: string, data: PreparedBounty): void {
+export async function storePreparedBounty(bountyPda: string, data: PreparedBounty): Promise<void> {
   preparedBounties.set(bountyPda, data);
-  // Auto-expire prepared bounties after 5 minutes
   setTimeout(() => preparedBounties.delete(bountyPda), 5 * 60 * 1000);
+
+  const r = await getRedis();
+  if (r) {
+    // Serialize buffers as base64 for JSON round-trip.
+    const serialized = JSON.stringify({
+      ...data,
+      missionIdBytes: data.missionIdBytes.toString('base64'),
+      salt: data.salt.toString('base64'),
+      commitment: data.commitment.toString('base64'),
+    });
+    await r.set(RK.preparedBounty(bountyPda), serialized, { EX: 5 * 60 });
+  }
 }
 
 /**
  * Get prepared bounty data (non-destructive for retry safety).
- * Data auto-expires via setTimeout in storePreparedBounty.
+ * Data auto-expires via setTimeout in storePreparedBounty + Redis TTL.
  */
-export function getPreparedBounty(bountyPda: string): PreparedBounty | undefined {
-  return preparedBounties.get(bountyPda);
+export async function getPreparedBounty(bountyPda: string): Promise<PreparedBounty | undefined> {
+  const cached = preparedBounties.get(bountyPda);
+  if (cached) return cached;
+
+  const r = await getRedis();
+  if (!r) return undefined;
+  const raw = await r.get(RK.preparedBounty(bountyPda));
+  if (!raw) return undefined;
+
+  try {
+    const parsed = JSON.parse(raw);
+    const prepared: PreparedBounty = {
+      ...parsed,
+      missionIdBytes: Buffer.from(parsed.missionIdBytes, 'base64'),
+      salt: Buffer.from(parsed.salt, 'base64'),
+      commitment: Buffer.from(parsed.commitment, 'base64'),
+    };
+    preparedBounties.set(bountyPda, prepared); // repopulate in-memory cache
+    return prepared;
+  } catch {
+    return undefined;
+  }
 }
 
 /**

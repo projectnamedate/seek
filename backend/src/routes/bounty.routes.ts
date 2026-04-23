@@ -110,7 +110,7 @@ router.post('/prepare', validate(prepareBountySchema), async (req: Request, res:
     const [bountyPda] = deriveBountyPda(playerPubkey, timestamp);
 
     // Store prepared bounty data (keyed by bountyPda) so /start can retrieve it
-    storePreparedBounty(bountyPda.toBase58(), {
+    await storePreparedBounty(bountyPda.toBase58(), {
       tier,
       playerWallet,
       timestamp: Number(timestamp),
@@ -184,7 +184,7 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
     const sgtVerified = sgtResult?.verified || false;
 
     // Try to use prepared bounty data (from /prepare endpoint)
-    const prepared = getPreparedBounty(bountyPda);
+    const prepared = await getPreparedBounty(bountyPda);
 
     if (!prepared) {
       // No prepared data means commitment mismatch — reject
@@ -213,7 +213,7 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
     );
 
     // Store prepared mission secrets (must match on-chain commitment)
-    storeMissionSecrets(bounty.id, prepared.missionIdBytes, prepared.salt);
+    await storeMissionSecrets(bounty.id, prepared.missionIdBytes, prepared.salt);
 
     // Return response
     const response: StartBountyResponse = {
@@ -396,7 +396,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
 
     // Resolve on-chain
     const success = validation.isValid;
-    const secrets = getMissionSecrets(bountyId);
+    const secrets = await getMissionSecrets(bountyId);
     const { signature, singularityWon } = await resolveBountyOnChain(
       bounty.bountyPda,
       bounty.playerWallet,

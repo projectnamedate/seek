@@ -14,6 +14,9 @@ const envSchema = z.object({
   SOLANA_RPC_URL: z.string().url(),
   SOLANA_NETWORK: z.enum(['devnet', 'mainnet-beta', 'localnet']).default('devnet'),
   AUTHORITY_PRIVATE_KEY: z.string().min(1),
+  // Hot authority used for reveal_mission + propose_resolution. If unset, falls
+  // back to AUTHORITY_PRIVATE_KEY (dev only — mainnet must set this).
+  HOT_AUTHORITY_PRIVATE_KEY: z.string().optional(),
 
   // Program IDs
   SEEK_PROGRAM_ID: z.string().min(32),
@@ -29,6 +32,10 @@ const envSchema = z.object({
   // SGT Verification (optional)
   HELIUS_API_KEY: z.string().optional(),
   SGT_BONUS_CONFIDENCE_REDUCTION: z.string().default('0.05'),
+
+  // Observability + persistence (optional; production strongly recommended)
+  SENTRY_DSN: z.string().optional(),
+  REDIS_URL: z.string().optional(),
 });
 
 // Parse and validate environment
@@ -46,6 +53,15 @@ function loadConfig() {
     throw new Error('Cannot run in development mode on mainnet-beta. Set NODE_ENV=production.');
   }
 
+  // Safety: on mainnet, require separate hot authority (limits blast radius).
+  if (parsed.data.SOLANA_NETWORK === 'mainnet-beta' && !parsed.data.HOT_AUTHORITY_PRIVATE_KEY) {
+    throw new Error(
+      'HOT_AUTHORITY_PRIVATE_KEY is required on mainnet-beta. ' +
+      'Set it to a dedicated hot keypair (reveal/propose only) so backend compromise ' +
+      'cannot rotate authority or drain treasury.'
+    );
+  }
+
   return {
     server: {
       port: parseInt(parsed.data.PORT, 10),
@@ -57,6 +73,7 @@ function loadConfig() {
       rpcUrl: parsed.data.SOLANA_RPC_URL,
       network: parsed.data.SOLANA_NETWORK,
       authorityPrivateKey: parsed.data.AUTHORITY_PRIVATE_KEY,
+      hotAuthorityPrivateKey: parsed.data.HOT_AUTHORITY_PRIVATE_KEY,
     },
     program: {
       seekProgramId: parsed.data.SEEK_PROGRAM_ID,
@@ -72,6 +89,17 @@ function loadConfig() {
     sgt: {
       heliusApiKey: parsed.data.HELIUS_API_KEY || '',
       bonusConfidenceReduction: parseFloat(parsed.data.SGT_BONUS_CONFIDENCE_REDUCTION),
+    },
+    // Protocol parameters — must match the on-chain CHALLENGE_PERIOD constant
+    // in the contract (300s on mainnet, 10s on devnet).
+    protocol: {
+      challengePeriodSeconds: parsed.data.SOLANA_NETWORK === 'mainnet-beta' ? 300 : 10,
+    },
+    sentry: {
+      dsn: parsed.data.SENTRY_DSN || '',
+    },
+    redis: {
+      url: parsed.data.REDIS_URL || '',
     },
   };
 }

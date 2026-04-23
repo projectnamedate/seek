@@ -9,12 +9,68 @@
   },
   "instructions": [
     {
+      "name": "accept_authority_transfer",
+      "docs": [
+        "Step 2 of two-step authority transfer. The pending authority signs to",
+        "accept, atomically swapping `authority` and clearing `pending_authority`."
+      ],
+      "discriminator": [
+        239,
+        248,
+        177,
+        2,
+        206,
+        97,
+        46,
+        255
+      ],
+      "accounts": [
+        {
+          "name": "new_authority",
+          "docs": [
+            "The pending authority (must match global_state.pending_authority)"
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "accept_bounty",
       "docs": [
-        "Accept a bounty - player submits their entry and starts the hunt",
-        "entry_amount must be exactly 1000, 2000, or 3000 SKR (with 9 decimals)",
-        "mission_commitment is hash(mission_id || salt) for commit-reveal",
-        "timestamp must be within 60 seconds of current time (for PDA derivation)"
+        "Accept a bounty - player submits their entry and starts the hunt.",
+        "entry_amount must be exactly TIER_1_ENTRY / TIER_2_ENTRY / TIER_3_ENTRY",
+        "(1000 / 2000 / 3000 SKR in base units — multiplier depends on SKR_DECIMALS).",
+        "mission_commitment is hash(mission_id || salt) for commit-reveal.",
+        "timestamp must be within 60 seconds of current time (for PDA derivation)."
       ],
       "discriminator": [
         165,
@@ -132,7 +188,7 @@
           "docs": [
             "The SKR token mint"
           ],
-          "address": "u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF"
+          "address": "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3"
         },
         {
           "name": "system_program",
@@ -168,6 +224,54 @@
           }
         }
       ]
+    },
+    {
+      "name": "cancel_authority_transfer",
+      "docs": [
+        "Cancel an in-flight authority transfer. Current authority only."
+      ],
+      "discriminator": [
+        94,
+        131,
+        125,
+        184,
+        183,
+        24,
+        125,
+        229
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
     },
     {
       "name": "cancel_bounty",
@@ -792,7 +896,7 @@
         },
         {
           "name": "skr_mint",
-          "address": "u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF"
+          "address": "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3"
         },
         {
           "name": "system_program",
@@ -890,7 +994,7 @@
         },
         {
           "name": "skr_mint",
-          "address": "u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF"
+          "address": "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3"
         },
         {
           "name": "system_program",
@@ -902,6 +1006,67 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "propose_authority_transfer",
+      "docs": [
+        "Step 1 of two-step authority transfer. Current authority proposes a new",
+        "authority; no state changes until the new authority signs `accept_authority_transfer`.",
+        "Overwrites any previously pending transfer."
+      ],
+      "discriminator": [
+        57,
+        206,
+        225,
+        129,
+        35,
+        111,
+        174,
+        145
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Current authority"
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "new_authority",
+          "type": "pubkey"
+        }
+      ]
     },
     {
       "name": "propose_resolution",
@@ -923,9 +1088,9 @@
       ],
       "accounts": [
         {
-          "name": "authority",
+          "name": "hot_authority",
           "docs": [
-            "Authority proposing the resolution"
+            "Hot authority proposing the resolution (backend-held)"
           ],
           "signer": true
         },
@@ -1138,9 +1303,9 @@
       ],
       "accounts": [
         {
-          "name": "authority",
+          "name": "hot_authority",
           "docs": [
-            "Authority revealing the mission"
+            "Hot authority revealing the mission (backend-held)"
           ],
           "signer": true
         },
@@ -1201,34 +1366,28 @@
       ]
     },
     {
-      "name": "transfer_authority",
+      "name": "set_hot_authority",
       "docs": [
-        "Transfer authority to a new address (two-step: propose + accept)",
-        "Step 1: Current authority proposes a new authority"
+        "Rotate the hot authority (used for reveal_mission + propose_resolution).",
+        "Cold authority only. Used when the backend keypair is compromised or rotated."
       ],
       "discriminator": [
-        48,
-        169,
-        76,
-        72,
-        229,
-        180,
-        55,
-        161
+        134,
+        121,
+        133,
+        142,
+        205,
+        213,
+        243,
+        2
       ],
       "accounts": [
         {
           "name": "authority",
-          "docs": [
-            "Current authority"
-          ],
           "signer": true
         },
         {
           "name": "global_state",
-          "docs": [
-            "Global state PDA"
-          ],
           "writable": true,
           "pda": {
             "seeds": [
@@ -1255,7 +1414,7 @@
       ],
       "args": [
         {
-          "name": "new_authority",
+          "name": "new_hot",
           "type": "pubkey"
         }
       ]
@@ -2074,7 +2233,26 @@
           {
             "name": "authority",
             "docs": [
-              "Authority who can manage the protocol"
+              "Cold authority. Signs admin ops: withdraw_treasury, fund_house,",
+              "set_hot_authority, propose_authority_transfer, resolve_dispute.",
+              "Should be a hardware wallet (Ledger) on mainnet."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "hot_authority",
+            "docs": [
+              "Hot authority. Signs hot-path ops: reveal_mission, propose_resolution.",
+              "Backend-held. Compromise is contained: cannot drain treasury or rotate authority."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "pending_authority",
+            "docs": [
+              "Pending authority for two-step transfer. `Pubkey::default()` = no transfer in-flight.",
+              "Set by `propose_authority_transfer`, cleared by `accept_authority_transfer`",
+              "or `cancel_authority_transfer`."
             ],
             "type": "pubkey"
           },
