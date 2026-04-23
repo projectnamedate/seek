@@ -3,34 +3,53 @@ use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v");
 
-/// The $SKR token mint address
-/// Mainnet: SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
-/// Devnet test token (swap back for mainnet deploy):
+// ─── Feature-gated cluster constants ─────────────────────────────────────────
+// Build mainnet (default): `anchor build`
+// Build devnet:           `anchor build --no-default-features --features devnet`
+//
+// The mainnet SKR mint has 6 decimals; the devnet test mint has 9.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// The $SKR token mint (official Solana Mobile ecosystem token on mainnet).
+#[cfg(feature = "mainnet")]
+pub const SKR_MINT: Pubkey = pubkey!("SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3");
+#[cfg(feature = "devnet")]
 pub const SKR_MINT: Pubkey = pubkey!("u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF");
 
-/// Entry amounts in lamports (with 9 decimals)
-/// Tier 1: 1000 $SKR = 1_000_000_000_000
-/// Tier 2: 2000 $SKR = 2_000_000_000_000
-/// Tier 3: 3000 $SKR = 3_000_000_000_000
-pub const TIER_1_ENTRY: u64 = 1_000_000_000_000;
-pub const TIER_2_ENTRY: u64 = 2_000_000_000_000;
-pub const TIER_3_ENTRY: u64 = 3_000_000_000_000;
+/// SKR decimals (mainnet token is 6, devnet test token is 9).
+#[cfg(feature = "mainnet")]
+pub const SKR_DECIMALS: u32 = 6;
+#[cfg(feature = "devnet")]
+pub const SKR_DECIMALS: u32 = 9;
 
-/// Distribution percentages (basis points, 10000 = 100%)
+/// 10^SKR_DECIMALS - multiplier to convert whole SKR to base units.
+pub const DECIMALS_MULTIPLIER: u64 = 10u64.pow(SKR_DECIMALS);
+
+/// Challenge period (300s on mainnet, 10s on devnet for demo).
+#[cfg(feature = "mainnet")]
+pub const CHALLENGE_PERIOD: i64 = 300;
+#[cfg(feature = "devnet")]
+pub const CHALLENGE_PERIOD: i64 = 10;
+
+/// Entry amounts: 1000 / 2000 / 3000 SKR (in base units).
+pub const TIER_1_ENTRY: u64 = 1000 * DECIMALS_MULTIPLIER;
+pub const TIER_2_ENTRY: u64 = 2000 * DECIMALS_MULTIPLIER;
+pub const TIER_3_ENTRY: u64 = 3000 * DECIMALS_MULTIPLIER;
+
+/// Distribution percentages on loss (basis points, 10000 = 100%).
 pub const HOUSE_SHARE_BPS: u64 = 7000;      // 70% stays in house
 pub const SINGULARITY_SHARE_BPS: u64 = 2000; // 20% to jackpot pool
 pub const PROTOCOL_SHARE_BPS: u64 = 1000;    // 10% to protocol treasury
 
-/// Jackpot odds: 1 in 500 chance on every win
+/// Jackpot odds: 1 in 500 chance on every win.
 pub const SINGULARITY_ODDS: u64 = 500;
 
-/// Timer durations in seconds
+/// Per-tier hunt timer durations (seconds).
 pub const TIER_1_DURATION: i64 = 180;  // 3 minutes
 pub const TIER_2_DURATION: i64 = 120;  // 2 minutes
 pub const TIER_3_DURATION: i64 = 60;   // 1 minute
 
-/// Trust-minimization constants
-pub const CHALLENGE_PERIOD: i64 = 10;        // 10 seconds for devnet demo
+/// Dispute parameters.
 pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original entry to dispute
 pub const DISPUTE_WINDOW: i64 = 600;         // 10 minutes to file dispute after resolution
 
@@ -44,13 +63,14 @@ pub fn validate_entry_amount(entry_amount: u64) -> Result<u8> {
     }
 }
 
-/// Get timer duration for a tier
-pub fn get_tier_duration(tier: u8) -> i64 {
+/// Get timer duration for a tier. Error if tier is not 1/2/3 (unreachable in
+/// practice because validate_entry_amount filters first, but defensive).
+pub fn get_tier_duration(tier: u8) -> Result<i64> {
     match tier {
-        1 => TIER_1_DURATION,
-        2 => TIER_2_DURATION,
-        3 => TIER_3_DURATION,
-        _ => TIER_1_DURATION, // Default fallback
+        1 => Ok(TIER_1_DURATION),
+        2 => Ok(TIER_2_DURATION),
+        3 => Ok(TIER_3_DURATION),
+        _ => Err(SeekError::InvalidEntryAmount.into()),
     }
 }
 
@@ -122,8 +142,19 @@ pub enum SeekError {
 /// Global protocol state - tracks all protocol-wide metrics
 #[account]
 pub struct GlobalState {
-    /// Authority who can manage the protocol
+    /// Cold authority. Signs admin ops: withdraw_treasury, fund_house,
+    /// set_hot_authority, propose_authority_transfer, resolve_dispute.
+    /// Should be a hardware wallet (Ledger) on mainnet.
     pub authority: Pubkey,
+
+    /// Hot authority. Signs hot-path ops: reveal_mission, propose_resolution.
+    /// Backend-held. Compromise is contained: cannot drain treasury or rotate authority.
+    pub hot_authority: Pubkey,
+
+    /// Pending authority for two-step transfer. `Pubkey::default()` = no transfer in-flight.
+    /// Set by `propose_authority_transfer`, cleared by `accept_authority_transfer`
+    /// or `cancel_authority_transfer`.
+    pub pending_authority: Pubkey,
 
     /// House vault token account (PDA-owned)
     pub house_vault: Pubkey,
@@ -160,8 +191,16 @@ pub struct GlobalState {
 }
 
 impl GlobalState {
-    /// Account size: 8 (discriminator) + 32*4 (pubkeys) + 8*7 (u64s) + 1 (bump)
-    pub const SIZE: usize = 8 + 32 * 4 + 8 * 7 + 1;
+    /// Account size:
+    ///   8 (discriminator)
+    /// + 32 * 6 (authority, hot_authority, pending_authority, house_vault,
+    ///          singularity_vault, protocol_treasury)
+    /// + 8 * 7  (house_fund_balance, singularity_balance, total_burned,
+    ///          total_bounties_created, total_bounties_won, total_bounties_lost,
+    ///          total_singularity_wins)
+    /// + 1       (bump)
+    /// = 8 + 192 + 56 + 1 = 257
+    pub const SIZE: usize = 8 + 32 * 6 + 8 * 7 + 1;
 }
 
 /// Bounty status enum
@@ -380,6 +419,12 @@ pub mod seek_protocol {
         // Set authority (vault addresses set in initialize_vaults)
         global_state.authority = ctx.accounts.authority.key();
 
+        // Default hot_authority to the same key; rotate later via set_hot_authority.
+        global_state.hot_authority = ctx.accounts.authority.key();
+
+        // No pending authority transfer initially.
+        global_state.pending_authority = Pubkey::default();
+
         // Initialize counters to zero
         global_state.house_fund_balance = 0;
         global_state.singularity_balance = 0;
@@ -394,6 +439,7 @@ pub mod seek_protocol {
 
         msg!("Seek Protocol global state initialized!");
         msg!("Authority: {}", global_state.authority);
+        msg!("Hot authority: {} (rotate via set_hot_authority)", global_state.hot_authority);
 
         Ok(())
     }
@@ -420,10 +466,11 @@ pub mod seek_protocol {
         Ok(())
     }
 
-    /// Accept a bounty - player submits their entry and starts the hunt
-    /// entry_amount must be exactly 1000, 2000, or 3000 SKR (with 9 decimals)
-    /// mission_commitment is hash(mission_id || salt) for commit-reveal
-    /// timestamp must be within 60 seconds of current time (for PDA derivation)
+    /// Accept a bounty - player submits their entry and starts the hunt.
+    /// entry_amount must be exactly TIER_1_ENTRY / TIER_2_ENTRY / TIER_3_ENTRY
+    /// (1000 / 2000 / 3000 SKR in base units — multiplier depends on SKR_DECIMALS).
+    /// mission_commitment is hash(mission_id || salt) for commit-reveal.
+    /// timestamp must be within 60 seconds of current time (for PDA derivation).
     pub fn accept_bounty(
         ctx: Context<AcceptBounty>,
         entry_amount: u64,
@@ -444,7 +491,7 @@ pub mod seek_protocol {
         );
 
         // Calculate expiration based on tier
-        let duration = get_tier_duration(tier);
+        let duration = get_tier_duration(tier)?;
         let expires_at = current_time
             .checked_add(duration)
             .ok_or(SeekError::MathOverflow)?;
@@ -515,7 +562,7 @@ pub mod seek_protocol {
 
         msg!("Bounty accepted!");
         msg!("Player: {}", bounty.player);
-        msg!("Entry: {} SKR (Tier {})", entry_amount / 1_000_000_000, tier);
+        msg!("Entry: {} SKR (Tier {})", entry_amount / DECIMALS_MULTIPLIER, tier);
         msg!("Expires at: {}", expires_at);
 
         Ok(())
@@ -679,10 +726,34 @@ pub mod seek_protocol {
                 .saturating_sub(bounty.payout_amount);
 
             // === SINGULARITY JACKPOT ROLL ===
-            // Use (slot + timestamp) % 500 for randomness
-            let slot = clock.slot;
-            let timestamp = clock.unix_timestamp as u64;
-            let roll = (slot.checked_add(timestamp).ok_or(SeekError::MathOverflow)?)
+            // Entropy sources (stacked by hardness for a grinding attacker):
+            //   1. bounty.mission_commitment  - 32-byte hash(mission_id || salt) fixed at accept_bounty
+            //   2. bounty.key()               - PDA derived from player + timestamp
+            //   3. clock.slot                 - current slot (manipulable by slot leader)
+            //   4. clock.unix_timestamp       - best-effort wall clock
+            //
+            // A slot leader at finalize time can still grind by choosing which finalize_bounty
+            // transactions to include in their slot, but they must match both a specific
+            // mission_commitment AND a specific bounty PDA, which sharply limits the attack's
+            // expected value unless the jackpot pool dwarfs a slot's block production revenue.
+            //
+            // TODO (post-launch): migrate to Switchboard On-Demand VRF once the Singularity
+            // jackpot pool exceeds ~$50k USD equivalent — grinding ROI threshold. See
+            // tasks/audit-2026-04-22.md section C-2 and task #3.
+            let slot_bytes = clock.slot.to_le_bytes();
+            let ts_bytes = (clock.unix_timestamp as u64).to_le_bytes();
+            let bounty_key_bytes = bounty.key().to_bytes();
+
+            let mut seed = Vec::with_capacity(32 + 32 + 8 + 8);
+            seed.extend_from_slice(&bounty.mission_commitment);
+            seed.extend_from_slice(&bounty_key_bytes);
+            seed.extend_from_slice(&slot_bytes);
+            seed.extend_from_slice(&ts_bytes);
+
+            let digest = anchor_lang::solana_program::hash::hash(&seed);
+            let mut rng_u64 = [0u8; 8];
+            rng_u64.copy_from_slice(&digest.to_bytes()[..8]);
+            let roll = u64::from_le_bytes(rng_u64)
                 .checked_rem(SINGULARITY_ODDS)
                 .ok_or(SeekError::MathOverflow)?;
 
@@ -711,7 +782,7 @@ pub mod seek_protocol {
                     .checked_add(1)
                     .ok_or(SeekError::MathOverflow)?;
 
-                msg!("SINGULARITY WON! Jackpot: {} SKR", jackpot_won / 1_000_000_000);
+                msg!("SINGULARITY WON! Jackpot: {} SKR", jackpot_won / DECIMALS_MULTIPLIER);
             }
 
             bounty.status = BountyStatus::Won;
@@ -729,7 +800,7 @@ pub mod seek_protocol {
                 singularity_amount: jackpot_won,
             });
 
-            msg!("Bounty WON! Payout: {} SKR", bounty.payout_amount / 1_000_000_000);
+            msg!("Bounty WON! Payout: {} SKR", bounty.payout_amount / DECIMALS_MULTIPLIER);
         } else {
             // === LOSS PATH ===
             // Distribute entry: 70% house, 20% singularity, 10% protocol
@@ -813,9 +884,9 @@ pub mod seek_protocol {
             });
 
             msg!("Bounty LOST. Distribution:");
-            msg!("  House: {} SKR (70%)", house_share / 1_000_000_000);
-            msg!("  Singularity: {} SKR (20%)", singularity_share / 1_000_000_000);
-            msg!("  Protocol: {} SKR (10%)", protocol_share / 1_000_000_000);
+            msg!("  House: {} SKR (70%)", house_share / DECIMALS_MULTIPLIER);
+            msg!("  Singularity: {} SKR (20%)", singularity_share / DECIMALS_MULTIPLIER);
+            msg!("  Protocol: {} SKR (10%)", protocol_share / DECIMALS_MULTIPLIER);
         }
 
         // Emit finalized event
@@ -855,8 +926,8 @@ pub mod seek_protocol {
             new_balance: global_state.house_fund_balance,
         });
 
-        msg!("House funded with {} SKR", amount / 1_000_000_000);
-        msg!("New balance: {} SKR", global_state.house_fund_balance / 1_000_000_000);
+        msg!("House funded with {} SKR", amount / DECIMALS_MULTIPLIER);
+        msg!("New balance: {} SKR", global_state.house_fund_balance / DECIMALS_MULTIPLIER);
 
         Ok(())
     }
@@ -920,7 +991,7 @@ pub mod seek_protocol {
             dispute_stake,
         });
 
-        msg!("Bounty disputed! Stake: {} SKR", dispute_stake / 1_000_000_000);
+        msg!("Bounty disputed! Stake: {} SKR", dispute_stake / DECIMALS_MULTIPLIER);
 
         Ok(())
     }
@@ -975,7 +1046,7 @@ pub mod seek_protocol {
                 .checked_add(1)
                 .ok_or(SeekError::MathOverflow)?;
 
-            msg!("Dispute resolved: PLAYER WINS | Refund: {} SKR", total_refund / 1_000_000_000);
+            msg!("Dispute resolved: PLAYER WINS | Refund: {} SKR", total_refund / DECIMALS_MULTIPLIER);
         } else {
             // Player loses dispute: stake forfeited, distribute entry (70/20/10)
             // Dispute stake already tracked in house_fund_balance (from dispute_bounty)
@@ -1094,8 +1165,8 @@ pub mod seek_protocol {
         });
 
         msg!("Treasury withdrawn: {} SKR | Remaining: {} SKR",
-            amount / 1_000_000_000,
-            (ctx.accounts.protocol_treasury.amount - amount) / 1_000_000_000
+            amount / DECIMALS_MULTIPLIER,
+            (ctx.accounts.protocol_treasury.amount - amount) / DECIMALS_MULTIPLIER
         );
 
         Ok(())
@@ -1151,18 +1222,58 @@ pub mod seek_protocol {
             refund_amount: bounty.entry_amount,
         });
 
-        msg!("Bounty cancelled! Refund: {} SKR", bounty.entry_amount / 1_000_000_000);
+        msg!("Bounty cancelled! Refund: {} SKR", bounty.entry_amount / DECIMALS_MULTIPLIER);
 
         Ok(())
     }
 
-    /// Transfer authority to a new address (two-step: propose + accept)
-    /// Step 1: Current authority proposes a new authority
-    pub fn transfer_authority(ctx: Context<TransferAuthority>, new_authority: Pubkey) -> Result<()> {
+    /// Step 1 of two-step authority transfer. Current authority proposes a new
+    /// authority; no state changes until the new authority signs `accept_authority_transfer`.
+    /// Overwrites any previously pending transfer.
+    pub fn propose_authority_transfer(
+        ctx: Context<ProposeAuthorityTransfer>,
+        new_authority: Pubkey,
+    ) -> Result<()> {
+        // Guard against accidentally proposing the zero address (= cancel, not a transfer)
+        require!(
+            new_authority != Pubkey::default(),
+            SeekError::Unauthorized
+        );
+
         let global_state = &mut ctx.accounts.global_state;
+        global_state.pending_authority = new_authority;
+
+        msg!(
+            "Authority transfer proposed: {} -> {} (awaiting acceptance)",
+            global_state.authority,
+            new_authority
+        );
+
+        Ok(())
+    }
+
+    /// Step 2 of two-step authority transfer. The pending authority signs to
+    /// accept, atomically swapping `authority` and clearing `pending_authority`.
+    pub fn accept_authority_transfer(ctx: Context<AcceptAuthorityTransfer>) -> Result<()> {
+        let global_state = &mut ctx.accounts.global_state;
+
+        // Must have a pending transfer
+        require!(
+            global_state.pending_authority != Pubkey::default(),
+            SeekError::Unauthorized
+        );
+
+        // Only the pending authority can accept
+        require!(
+            ctx.accounts.new_authority.key() == global_state.pending_authority,
+            SeekError::Unauthorized
+        );
+
         let old_authority = global_state.authority;
+        let new_authority = global_state.pending_authority;
 
         global_state.authority = new_authority;
+        global_state.pending_authority = Pubkey::default();
 
         emit!(AuthorityTransferred {
             old_authority,
@@ -1171,6 +1282,35 @@ pub mod seek_protocol {
 
         msg!("Authority transferred from {} to {}", old_authority, new_authority);
 
+        Ok(())
+    }
+
+    /// Cancel an in-flight authority transfer. Current authority only.
+    pub fn cancel_authority_transfer(ctx: Context<CancelAuthorityTransfer>) -> Result<()> {
+        let global_state = &mut ctx.accounts.global_state;
+
+        require!(
+            global_state.pending_authority != Pubkey::default(),
+            SeekError::Unauthorized
+        );
+
+        let cancelled = global_state.pending_authority;
+        global_state.pending_authority = Pubkey::default();
+
+        msg!("Authority transfer to {} cancelled", cancelled);
+        Ok(())
+    }
+
+    /// Rotate the hot authority (used for reveal_mission + propose_resolution).
+    /// Cold authority only. Used when the backend keypair is compromised or rotated.
+    pub fn set_hot_authority(ctx: Context<SetHotAuthority>, new_hot: Pubkey) -> Result<()> {
+        require!(new_hot != Pubkey::default(), SeekError::Unauthorized);
+
+        let global_state = &mut ctx.accounts.global_state;
+        let old_hot = global_state.hot_authority;
+        global_state.hot_authority = new_hot;
+
+        msg!("Hot authority rotated: {} -> {}", old_hot, new_hot);
         Ok(())
     }
 
@@ -1331,11 +1471,11 @@ pub struct AcceptBounty<'info> {
 
 #[derive(Accounts)]
 pub struct RevealMission<'info> {
-    /// Authority revealing the mission
+    /// Hot authority revealing the mission (backend-held)
     #[account(
-        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+        constraint = hot_authority.key() == global_state.hot_authority @ SeekError::Unauthorized
     )]
-    pub authority: Signer<'info>,
+    pub hot_authority: Signer<'info>,
 
     /// Global state PDA
     #[account(
@@ -1354,11 +1494,11 @@ pub struct RevealMission<'info> {
 
 #[derive(Accounts)]
 pub struct ProposeResolution<'info> {
-    /// Authority proposing the resolution
+    /// Hot authority proposing the resolution (backend-held)
     #[account(
-        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+        constraint = hot_authority.key() == global_state.hot_authority @ SeekError::Unauthorized
     )]
-    pub authority: Signer<'info>,
+    pub hot_authority: Signer<'info>,
 
     /// Global state PDA
     #[account(
@@ -1660,8 +1800,9 @@ pub struct CancelBounty<'info> {
     pub token_program: Program<'info, Token>,
 }
 
+/// Step 1 of authority rotation: current authority proposes a new authority.
 #[derive(Accounts)]
-pub struct TransferAuthority<'info> {
+pub struct ProposeAuthorityTransfer<'info> {
     /// Current authority
     #[account(
         constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
@@ -1669,6 +1810,53 @@ pub struct TransferAuthority<'info> {
     pub authority: Signer<'info>,
 
     /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+}
+
+/// Step 2 of authority rotation: pending authority signs to accept.
+#[derive(Accounts)]
+pub struct AcceptAuthorityTransfer<'info> {
+    /// The pending authority (must match global_state.pending_authority)
+    pub new_authority: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+}
+
+/// Cancel an in-flight authority transfer. Current authority only.
+#[derive(Accounts)]
+pub struct CancelAuthorityTransfer<'info> {
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+}
+
+/// Rotate the hot authority. Cold authority only.
+#[derive(Accounts)]
+pub struct SetHotAuthority<'info> {
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
     #[account(
         mut,
         seeds = [b"global_state"],

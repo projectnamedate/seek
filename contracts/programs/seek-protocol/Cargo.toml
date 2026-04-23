@@ -15,7 +15,11 @@ no-entrypoint = []
 no-idl = []
 no-log-ix-name = []
 cpi = ["no-entrypoint"]
-default = []
+# Default build is mainnet. For devnet testing:
+#   anchor build --no-default-features --features devnet
+default = ["mainnet"]
+mainnet = []
+devnet = []
 idl-build = ["anchor-lang/idl-build", "anchor-spl/idl-build"]
 
 [dependencies]
