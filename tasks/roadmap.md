@@ -113,6 +113,38 @@ Railway default `*.up.railway.app` for v1.
 graphic (1200×630), app icon (512×512 — may reuse `mobile/assets/icon.png`).
 **Unblocks:** `dapp-store-publishing/config.yaml` final fill + release NFT mint.
 
+### B7. Mission pool difficulty audit — HOUSE-EDGE CRITICAL
+**Target:** 15-18% player win rate = 20-30% house edge per bet. Anything
+above ~26% and the house pool bleeds. See
+[memory/project_economic_model.md](../../.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_economic_model.md)
+for the full math.
+
+**Scope:**
+- Walk all 300 missions in `backend/src/data/missions.ts`; rate each for
+  realistic completion probability within its tier's timer (180s / 120s / 60s).
+- Rebalance so ~20% of each tier is *intentionally near-impossible*
+  within the time window (obscure combinations, specific brand/attribute
+  requirements, unusual conditions).
+- Remaining ~80% should be hard-but-doable — require specificity or
+  scarcity that raises the realistic pass bar to ~30% per attempt.
+- If the mission set alone can't hit target win rate, shorten timers
+  and/or raise `TIER_CONFIDENCE_THRESHOLDS` in `backend/src/types/index.ts`
+  (current 0.80 / 0.85 / 0.90 → suggested 0.85 / 0.90 / 0.93).
+
+**Do in this order pre-launch:**
+1. Categorize every mission by realistic completion rate (trivial /
+   moderate / hard / near-impossible).
+2. Prune + replace until the distribution matches target.
+3. Recompile expected win rate; compare to target.
+4. Tune AI thresholds + timers to close any remaining gap.
+5. Post-launch, monitor actual win rate weekly via
+   `GlobalState.total_bounties_won / total_bounties_created`. Alert if
+   weekly win rate drifts above 22%.
+
+**Blocks:** launch. A too-easy mission pool = immediate capital loss.
+The house vault funding is irreversible once deposited, so we audit
+before we fund, not after.
+
 ---
 
 ## Phase C — Mainnet launch (sequential, ≤1 day once B complete)
