@@ -1,5 +1,12 @@
 # Real Android Device Demo (Hybrid Mode)
 
+> **Historical document.** This is the hackathon-era device demo plan
+> (Feb 2026). The "Code Changes" section is all done. The "Manual Steps"
+> section is superseded by the production deploy runbook at
+> [`../../backend/scripts/DEPLOY_MAINNET.md`](../../backend/scripts/DEPLOY_MAINNET.md).
+> For the current roadmap, see [`../roadmap.md`](../roadmap.md).
+
+
 ## Code Changes - DONE
 - [x] Centralize config: `NGROK_URL`, `API_BASE_URL`, hybrid `DEMO_MODE` in `mobile/src/config/index.ts`
 - [x] `api.service.ts`: import from config, use `DEMO_MODE.USE_DEMO_ENDPOINTS`

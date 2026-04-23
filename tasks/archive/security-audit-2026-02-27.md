@@ -1,5 +1,13 @@
 # Seek Protocol Security Audit — 2026-02-27
 
+> **Historical document.** This is the Feb 2026 hackathon-era audit. Most
+> CRITICAL/HIGH items listed below were resolved in commit `5beb5b1`
+> (pre-mainnet security hardening) or in the 2026-04-22 mainnet readiness
+> pass. For the current audit, see
+> [`../audit-2026-04-22.md`](../audit-2026-04-22.md). For current roadmap
+> status, see [`../roadmap.md`](../roadmap.md).
+
+
 ## Smart Contract Findings
 
 | ID | Severity | Finding | Status |

@@ -192,65 +192,38 @@ ANTHROPIC_API_KEY=sk-ant-your-api-key
 
 ## Security
 
-Full security audit completed (contract + backend). See `tasks/security-audit.md` for details.
+Full audit trail in [`tasks/audit-2026-04-22.md`](tasks/audit-2026-04-22.md)
+(mainnet readiness) and
+[`tasks/archive/security-audit-2026-02-27.md`](tasks/archive/security-audit-2026-02-27.md)
+(historical hackathon audit).
 
-**Implemented:**
+**Hardening implemented as of 2026-04-22:**
 - [x] Commit-reveal mission assignment (prevents front-running)
-- [x] Rate limiting (IP-based)
-- [x] Transaction verification on bounty start
-- [x] Wallet ownership validation on photo submit
-- [x] Race condition locks (per-wallet + per-bounty mutex)
-- [x] Player cancel after expiry (reclaim stuck funds)
+- [x] Two-step authority transfer (propose → accept, prevents typo-induced loss)
+- [x] Hot/cold authority split (backend-held `hot_authority` scoped to reveal + propose only; cold `authority` for admin ops + treasury)
+- [x] 300-second challenge window with optimistic resolve + dispute stake
+- [x] Player `cancel_bounty` after expiry + 1h grace period
 - [x] Dispute accounting with proper loss distribution
-- [x] Authority key rotation
 - [x] Bounty account closing (rent reclaim)
 - [x] Actual vault balance checks (not tracked balance)
-- [x] Duplicate account guards
-- [x] Treasury mint + balance constraints
+- [x] Strengthened jackpot RNG (`hash(mission_commitment || bounty_pda || slot || ts) % 500`)
+- [x] Feature-gated SKR mint + decimals (mainnet 6 / devnet 9) — no accidental constant bleed
+- [x] Per-IP rate limiting on `/prepare`, `/start`, `/submit`
+- [x] Magic-byte image validation + Claude Vision prompt-injection resistance
+- [x] Wallet ownership validation + on-chain transaction verification in `/start`
+- [x] Race condition locks (per-wallet + per-bounty mutex, Redis-backed)
+- [x] Redis-persisted mission secrets + prepared bounties + finalizer queue (survive backend restart)
+- [x] Sentry error tracking + pino structured logging with request-ID correlation
+- [x] HTTPS-only Android release builds, hardened manifest, R8 minification
 
-**Mainnet Roadmap:**
-- [ ] **VRF Randomness** — Switchboard or Orao VRF for provably fair jackpot
-- [ ] **Persistence Layer** — Redis/database to survive backend restarts
-- [ ] **Authority Multisig** — Timelock/multisig for treasury operations
+## Roadmap
 
-## Roadmap to Mainnet
-
-### Phase 1: Smart Contract Hardening
-- [ ] Integrate VRF (Switchboard/Orao) for provably fair jackpot rolls — replaces current `slot + timestamp % 500`
-- [ ] Deploy authority multisig (Squads Protocol) for treasury and admin operations
-- [ ] Increase challenge period from 10s (devnet) to 300s (mainnet)
-- [ ] External smart contract audit by a specialized firm
-- [ ] Redeploy program to mainnet with verified build
-
-### Phase 2: Backend Production Infrastructure
-- [ ] Replace in-memory storage (JavaScript Maps) with Redis or PostgreSQL for persistence across restarts
-- [ ] Set up production hosting (Railway, Fly.io, or AWS) — replace Cloudflare tunnel
-- [ ] Configure production domain and SSL (`api.seek.app`)
-- [ ] Add error tracking (Sentry) and monitoring (Datadog/Prometheus)
-- [ ] Enable Proguard/R8 minification for release builds
-- [ ] Rate limiting tuning for production traffic
-
-### Phase 3: Token & Economics
-- [ ] Fund house vault with initial liquidity
-- [ ] Set up protocol treasury wallet
-
-### Phase 4: Release Signing & APK
-- [ ] Generate production release keystore (store securely, back up passphrase)
-- [ ] Configure Gradle release signing with environment-based credentials
-- [ ] Build production-signed APK
-- [ ] Increment versionCode for each release
-
-### Phase 5: Solana dApp Store Submission
-- [ ] Register as a Solana dApp Store publisher
-- [ ] Create dApp Store listing (description, screenshots, logo)
-- [ ] Submit APK for review
-- [ ] Implement any feedback from dApp Store review team
-
-### Phase 6: Post-Launch
-- [ ] Integrate Seeker Camera SDK (TEE attestation) when available from Solana Mobile
-- [ ] Add leaderboard and player stats
-- [ ] Expand mission pool beyond 300 bounties
-- [ ] Community-created missions
+Authoritative roadmap at [`tasks/roadmap.md`](tasks/roadmap.md) — tracks:
+- Phase A (complete) — hardening pass landed in 12 commits on 2026-04-22
+- Phase B (blocked on user) — release keystore, domain, Ledger, SKR holdings, publisher wallet, visual assets
+- Phase C — mainnet deploy runbook: [`backend/scripts/DEPLOY_MAINNET.md`](backend/scripts/DEPLOY_MAINNET.md)
+- Phase D — dApp Store submission: [`dapp-store-publishing/README.md`](dapp-store-publishing/README.md)
+- Phase E (post-launch) — Switchboard VRF, full integration tests, horizontal scale, Seeker Camera SDK, leaderboard, mission pool expansion, GPS super hunts
 
 ## License
 

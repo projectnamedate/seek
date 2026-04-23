@@ -134,8 +134,29 @@ Switch `NETWORK` in `mobile/src/config/index.ts` to swap mainnet/devnet ($SKR mi
 - **Release APK signing**: dApp Store rejects debug-signed APKs. Use `mobile/android/SIGNING.md` flow. Lost keystore = permanently locked out of updates.
 
 ## Current state (2026-04-22 mainnet-readiness snapshot)
-**Done**: SKR mint/decimals fixed (feature-gated), challenge period 300s, two-step auth, hot/cold split, Claude Sonnet 4.6, Sentry wired, Redis-backed critical state, Android manifest hardened + R8 enabled + release signing wired, Dockerfile + railway.json, strengthened jackpot RNG.
 
-**Gated on user**: seek.app domain purchase, Ledger pubkey share, release keystore generation (`keytool` flow in SIGNING.md), SKR house-vault funding, mainnet program deploy, dApp Store publisher NFT mint, APK submission.
+**Authoritative roadmap:** [tasks/roadmap.md](tasks/roadmap.md).
 
-**Deferred (post-launch)**: Switchboard On-Demand VRF (task #3), Postgres analytics, horizontal-scale Redis migration for `activeBounties`/locks.
+**Done in this hardening pass:**
+- Contract: SKR mint + decimals feature-gated, 300s challenge, two-step + hot/cold auth, strengthened jackpot RNG, `get_tier_duration` returns Result, 19 client-side unit tests
+- Backend: Claude 4.6 upgrade, Sentry + pino + request correlation, Redis-backed critical state + finalizer hydration, hot/cold keypair split with mainnet guard, /prepare rate limiter, magic-byte image validation, Claude prompt injection hardening, `/api/health/ready` probe, decimals-aware admin CLI with auth commands
+- Mobile: release signing env vars, R8 + shrinkResources enabled, AndroidManifest hardened, network_security_config + data_extraction_rules, `seek://` deep-link scheme, @sentry/react-native JS init, NETWORK toggle drives cluster constants, `getFullAddress` bug fixed, dead demo wallet code removed
+- Infra: Dockerfile + railway.json, GitHub Actions CI (typecheck backend + mobile, cargo check both features, cargo clippy, contract unit tests)
+- Docs: audit, mainnet plan, dApp Store checklist + listing copy, deploy runbook, SIGNING guide, SENTRY guide, dapp-store-publishing scaffold, lessons updated, historical docs archived
+
+**Gated on user:**
+- Release keystore generation (mobile/android/SIGNING.md)
+- Production domain purchase + DNS → Railway
+- Ledger pubkey share + ~5 SOL mainnet funding
+- SKR holdings → house vault funding (10M SKR ≈ $170k at $0.017)
+- Publisher wallet + 0.5 SOL for dApp Store NFT flow
+- Screenshots + feature graphic for dApp Store listing
+
+**Deferred post-launch** (see [tasks/roadmap.md](tasks/roadmap.md) § Phase E):
+- Switchboard On-Demand VRF (when jackpot pool > ~$50k USD)
+- Full Anchor integration tests (needs SKR_MINT runtime override or local-validator mint clone)
+- Remaining Redis migration for `activeBounties`/locks
+- Full pino migration across remaining service/route files
+- Ledger signing wired into `admin.ts` + `initialize-protocol.ts`
+- Seeker Camera SDK / TEE attestation (awaiting Solana Mobile)
+- Leaderboard, mission pool expansion, community missions, GPS super hunts
