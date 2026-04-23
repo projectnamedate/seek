@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Seek Protocol Solana smart contract tests",
   "scripts": {
-    "test": "anchor test",
+    "test": "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts",
+    "test:integration": "anchor test",
     "build": "anchor build",
     "deploy:devnet": "anchor deploy --provider.cluster devnet"
   },
@@ -15,6 +16,7 @@
   "devDependencies": {
     "@types/chai": "^4.3.0",
     "@types/mocha": "^10.0.0",
+    "@types/node": "^22.0.0",
     "chai": "^4.3.0",
     "mocha": "^10.0.0",
     "ts-mocha": "^10.0.0",
