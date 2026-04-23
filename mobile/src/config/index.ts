@@ -33,11 +33,15 @@ export const DEMO_MODE = {
   INITIAL_BALANCE: 50000,
 };
 
+// Network toggle (mainnet is the default). Switch to 'devnet' for devnet build/testing.
+export const NETWORK: 'mainnet-beta' | 'devnet' = 'mainnet-beta';
+
 // Game Settings
 export const GAME_CONFIG = {
   MIN_CONFIDENCE: 0.70, // 70% AI confidence required
   SINGULARITY_ODDS: 500, // 1 in 500 chance
-  CHALLENGE_PERIOD: 10, // 10 seconds (devnet)
+  // Must match the on-chain CHALLENGE_PERIOD (contract: 300s mainnet, 10s devnet).
+  CHALLENGE_PERIOD: NETWORK === 'mainnet-beta' ? 300 : 10,
 };
 
 // Tier Configuration - Solana Mobile colors
@@ -63,15 +67,23 @@ export const TIERS = {
 } as const;
 
 // Token Info
-export const TOKEN = {
-  NAME: 'Seek',
-  SYMBOL: 'SKR',
-  // Devnet test token (mainnet: SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3)
-  MINT: 'u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF',
-  DECIMALS: 9,
-};
+// Mainnet SKR = official Solana Mobile ecosystem token (6 decimals, 10B supply).
+// Devnet test SKR = internal 9-decimal mint used during hackathon demo.
+export const TOKEN = NETWORK === 'mainnet-beta'
+  ? {
+      NAME: 'Seek',
+      SYMBOL: 'SKR',
+      MINT: 'SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3',
+      DECIMALS: 6,
+    }
+  : {
+      NAME: 'Seek',
+      SYMBOL: 'SKR',
+      MINT: 'u3BkoKjVYYPt24Dto1VPwAzqeQg9ffaxnCVhTAYbAFF',
+      DECIMALS: 9,
+    };
 
-// Program ID
+// Program ID (same keypair deployed to both clusters; separate on-chain state per cluster)
 export const PROGRAM_ID = 'DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v';
 
 // Links

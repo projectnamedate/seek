@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ data extraction policy. We exclude everything from backup /
+  device-transfer to avoid exfiltration of wallet state or cached photos.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root"/>
+        <exclude domain="database"/>
+        <exclude domain="sharedpref"/>
+        <exclude domain="external"/>
+        <exclude domain="file"/>
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root"/>
+        <exclude domain="database"/>
+        <exclude domain="sharedpref"/>
+        <exclude domain="external"/>
+        <exclude domain="file"/>
+    </device-transfer>
+</data-extraction-rules>

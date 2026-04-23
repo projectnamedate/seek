@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Network security policy: HTTPS only for release builds.
+  Debug builds allow cleartext so local tunnels (Cloudflare / ngrok) work.
+-->
+<network-security-config>
+    <!-- Release: cleartext traffic forbidden across all domains. -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+    <!-- Debug-only overrides (Cloudflare tunnel / local dev). These are stripped
+         from release by Android Studio if placed under src/debug/res/xml instead,
+         but as a belt-and-suspenders we keep them behind a dedicated debug config. -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

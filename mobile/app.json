@@ -3,6 +3,7 @@
     "name": "Seek",
     "slug": "seek",
     "version": "1.0.0",
+    "scheme": "seek",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -28,8 +29,10 @@
       "package": "app.seek.mobile",
       "permissions": [
         "android.permission.CAMERA",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.INTERNET",
+        "android.permission.VIBRATE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED"
       ],
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false
