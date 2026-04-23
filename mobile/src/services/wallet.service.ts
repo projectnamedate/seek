@@ -111,54 +111,6 @@ export function getFullAddress(): string | null {
 }
 
 /**
- * Deduct entry amount (demo mode - just updates local state)
- */
-export async function deductEntry(amount: number): Promise<boolean> {
-  if (!walletState.connected) {
-    logError('[Wallet] Cannot deduct: wallet not connected');
-    return false;
-  }
-
-  if (walletState.balance < amount) {
-    logError('[Wallet] Insufficient balance');
-    return false;
-  }
-
-  // Simulate transaction delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  walletState = {
-    ...walletState,
-    balance: walletState.balance - amount,
-  };
-
-  notifyListeners();
-  log(`[Wallet] Deducted ${amount} SKR. New balance: ${walletState.balance}`);
-  return true;
-}
-
-/**
- * Add winnings (demo mode - just updates local state)
- */
-export async function addWinnings(amount: number): Promise<void> {
-  if (!walletState.connected) {
-    logError('[Wallet] Cannot add: wallet not connected');
-    return;
-  }
-
-  // Simulate transaction delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
-
-  walletState = {
-    ...walletState,
-    balance: walletState.balance + amount,
-  };
-
-  notifyListeners();
-  log(`[Wallet] Added ${amount} SKR. New balance: ${walletState.balance}`);
-}
-
-/**
  * Check if wallet has sufficient balance
  */
 export function hasSufficientBalance(amount: number): boolean {
@@ -212,8 +164,6 @@ export default {
   disconnectWallet,
   getWalletState,
   getFullAddress,
-  deductEntry,
-  addWinnings,
   hasSufficientBalance,
   formatBalance,
   fetchRealBalance,

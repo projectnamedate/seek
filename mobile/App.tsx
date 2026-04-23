@@ -5,10 +5,14 @@ import { clusterApiUrl } from '@solana/web3.js';
 import Navigation from './src/navigation';
 import { AppProvider } from './src/context';
 import SplashScreen from './src/screens/SplashScreen';
+import { NETWORK } from './src/config';
+import { initSentry } from './src/services/sentry.service';
 
-// Solana network configuration
-const SOLANA_NETWORK = 'devnet';
-const ENDPOINT = clusterApiUrl(SOLANA_NETWORK);
+// Solana cluster endpoint — follows NETWORK toggle in src/config/index.ts
+const ENDPOINT = clusterApiUrl(NETWORK === 'mainnet-beta' ? 'mainnet-beta' : 'devnet');
+
+// Initialize Sentry as early as possible (no-op if SENTRY_DSN not set)
+initSentry();
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -24,7 +28,7 @@ export default function App() {
 
   return (
     <MobileWalletProvider
-      chain={`solana:${SOLANA_NETWORK}`}
+      chain={`solana:${NETWORK}`}
       endpoint={ENDPOINT}
       identity={{
         name: 'Seek',
