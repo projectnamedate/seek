@@ -84,6 +84,10 @@ roadmap previously misclaimed "green" without actually checking the runs.
 These items need user hardware/funds/decisions. Work queued; once unblocked
 I can execute each in ≤10 minutes except the deploy itself.
 
+**📋 Execution playbook:** [tasks/phase-b-execution.md](phase-b-execution.md) —
+sequenced sub-items B0-B9 with parallelization plan, hard dependencies,
+and Phase C/D follow-on. Read that first when starting launch work.
+
 ### B1. Release keystore generation
 **Runbook:** [mobile/android/SIGNING.md](../mobile/android/SIGNING.md).
 **Needs:** `keytool` on user's laptop + 1Password backup + paper backup.
