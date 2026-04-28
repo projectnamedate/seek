@@ -33,9 +33,21 @@ export function initSentry(): void {
         const h = event.request.headers as Record<string, string>;
         delete h['authorization'];
         delete h['x-wallet-signature'];
+        delete h['x-wallet-address'];
+        delete h['x-wallet-message'];
+        delete h['x-wallet-timestamp'];
       }
       // Never send request bodies — they can contain photo base64 + wallet addrs
       if (event.request) event.request.data = undefined;
+      // Wallet addresses appear in URL paths (/api/bounty/player/:wallet,
+      // /api/sgt/status/:wallet, /api/skr/lookup/:input). Strip the dynamic
+      // segment so wallet pubkeys don't leak into Sentry breadcrumbs.
+      if (event.request?.url) {
+        event.request.url = event.request.url
+          .replace(/(\/(?:player|status|lookup)\/)[^?#]+/g, '$1<wallet>');
+      }
+      // Don't ship IP either — wallet + IP together is a fingerprint.
+      if (event.user) event.user.ip_address = undefined;
       return event;
     },
   });

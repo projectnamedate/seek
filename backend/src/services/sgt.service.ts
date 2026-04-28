@@ -414,5 +414,24 @@ export function cleanupExpiredNonces(): void {
   }
 }
 
-// Periodic nonce cleanup every 5 minutes
-setInterval(cleanupExpiredNonces, NONCE_EXPIRY_MS);
+// Worker handle managed by start/stop hooks. Nonces also live in Redis with
+// EX TTL — the in-memory map is a single-instance cache; this cleanup just
+// trims memory. No setInterval at module load (would block shutdown).
+let nonceCleanupHandle: ReturnType<typeof setInterval> | null = null;
+
+export function startSGTWorkers(): void {
+  if (nonceCleanupHandle) {
+    log.info('worker already running');
+    return;
+  }
+  nonceCleanupHandle = setInterval(cleanupExpiredNonces, NONCE_EXPIRY_MS);
+  log.info('worker started');
+}
+
+export function stopSGTWorkers(): void {
+  if (nonceCleanupHandle) {
+    clearInterval(nonceCleanupHandle);
+    nonceCleanupHandle = null;
+  }
+  log.info('worker stopped');
+}

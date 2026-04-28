@@ -22,17 +22,6 @@ export const API_BASE_URL = NGROK_URL
   ? `${NGROK_URL}/api`
   : (__DEV__ ? API_CONFIG.EMULATOR_URL : API_CONFIG.PROD_URL);
 
-// Hybrid Demo Mode:
-//   - Uses demo bounty endpoints (no on-chain tx for start/submit)
-//   - But connects real MWA wallet + fetches real SKR balance
-//   - Set USE_DEMO_ENDPOINTS=false to use full on-chain flow
-export const DEMO_MODE = {
-  ENABLED: __DEV__ ?? false,           // Master switch (tied to __DEV__)
-  USE_DEMO_ENDPOINTS: false,           // false = real on-chain flow via MWA
-  WALLET_ADDRESS: 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker',
-  INITIAL_BALANCE: 50000,
-};
-
 // Network toggle (mainnet is the default). Switch to 'devnet' for devnet build/testing.
 export const NETWORK: 'mainnet-beta' | 'devnet' = 'mainnet-beta';
 

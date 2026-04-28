@@ -13,7 +13,9 @@ docs are linked inline.
 
 ## Phase A — Hardening (✅ COMPLETE)
 
-Finished 2026-04-22. 12 commits on `master`. CI green.
+Finished 2026-04-22. 12 commits on `master`. CI was added in this phase but
+turned out to be red on every push until 2026-04-27 (see Phase B9 below) —
+roadmap previously misclaimed "green" without actually checking the runs.
 
 ### Contract (`contracts/programs/seek-protocol/`)
 - [x] Feature-gated SKR_MINT + SKR_DECIMALS + CHALLENGE_PERIOD (mainnet default, `--features devnet` for devnet)
@@ -55,7 +57,7 @@ Finished 2026-04-22. 12 commits on `master`. CI green.
 - [x] `network_security_config.xml` + `data_extraction_rules.xml`
 - [x] `seek://` deep-link scheme (production)
 - [x] `app.json` android.permissions trimmed + top-level `scheme: "seek"`
-- [x] Dead demo wallet functions removed (`deductEntry`, `addWinnings`)
+- [~] Demo wallet functions partially removed — `deductEntry` only. `addWinnings`, `DEMO_TARGETS`, `DEMO_WALLET`, `DEMO_MODE.INITIAL_BALANCE` fallback, `useFallbackDemoBounty`, `isDemoMode` badge all still shipped until B9 fully stripped them on 2026-04-27.
 - [x] `getFullAddress` bug fixed — now returns real wallet addr, not demo constant
 
 ### Infrastructure
@@ -255,11 +257,62 @@ Three parallel sub-agent audits (security / simplify / architecture) ran across 
 - [x] **B8-11** TEE provider stub collapsed — `AttestationService` is now a single class with one `verifyAttestation` method. `AttestationProvider` interface, `TEEAttestationProvider`, providers Map all deleted. Type narrowed to `'none' | 'standard'`.
 - [x] **B8-12** Mobile dedupe — single `mobile/src/utils/bs58.ts` source of truth (replaces hand-rolled encoders in api.service.ts + sgt.service.ts). `formatTime` consolidated in `utils/format.ts`. `BountyRevealScreen` uses shared utils.
 - [x] **B8-13** setInterval shutdown hooks — `bounty.service.ts` exports `startBountyWorkers()` / `stopBountyWorkers()` managing `expirerHandle` + `cleanupHandle`. Wired into `index.ts` listen + shutdown. No more module-load intervals.
-- [x] **B8-14** DEMO_MODE collapse + dead wallet code — `startDemoBounty`, `deductEntry`, `addWinnings`, demo branches in BountyRevealScreen all removed. `getFullAddress` returns real wallet only.
+- [~] **B8-14** DEMO_MODE collapse + dead wallet code — `startDemoBounty`, `deductEntry`, demo branches in `BountyRevealScreen` removed. `getFullAddress` returns real wallet. **However:** `addWinnings`, `DEMO_TARGETS`, `DEMO_WALLET`, `DEMO_MODE.INITIAL_BALANCE` fallback, `useFallbackDemoBounty`, `isDemoMode` UI badge survived this pass and were not closed until B9 (2026-04-27). The original B8 claim of "complete" was wrong.
 - [x] **B8-15** Single source of truth for tier constants — `mobile/src/types/index.ts` re-exports `TIERS` from `config/index.ts`. `AttestationPayload.type` narrowed to `'standard'`.
 
 ### Result
 Backend `tsc --noEmit` clean. Contract `cargo check` + `cargo test` pass (1 unit test, 28 unrelated cfg warnings). Mobile typecheck clean apart from pre-existing `@sentry/react-native` types not yet installed. ~150 lines net deletion across the three layers.
+
+---
+
+## Phase B9 — Pre-mainnet re-audit + remediation (2026-04-27 — ✅ COMPLETE)
+
+Independent re-audit (parallel sub-agents on contract / backend / mobile +
+mission pool + economic-model alignment) found **15 new CRIT/HIGH items**
+that B8 missed. All fixed in this pass.
+
+### CRIT — fixed
+- [x] **B9-1 `cancel_bounty` Submitted-state exploit** — accepted both `Pending` and `Submitted` with 1h grace. If backend stopped cranking `propose_resolution` for >1h (Anthropic outage, Helius outage, deploy gap), every Submitted bounty became refundable → 100% win rate during outage. Contract now requires `Pending` only; recovery for stuck Submitted bounties flows through dispute / admin path.
+- [x] **B9-2 `initialize` permissionless** — bot watching mainnet mempool could front-run the legitimate Ledger init by 1 block and become `global_state.authority`. Added `EXPECTED_INITIAL_AUTHORITY` constant + `is_expected_initial_authority` constraint, gated behind `cfg(feature = "mainnet")`. Defaults to System Program pubkey (placeholder); constraint also rejects the placeholder so a forgotten edit fails fast at init time. **User action required: paste Ledger pubkey into `lib.rs` before mainnet build (see DEPLOY_MAINNET.md step 1).**
+- [x] **B9-3 Redis fail-open on locks AND nonces** — when `REDIS_URL` was set but the client unavailable, locks became no-ops AND auth nonces could be replayed. Now fails closed in production: `redisAcquireLock` and `redisConsumeNonce` return `false` on Redis failure, callers get 503/401. Dev mode without `REDIS_URL` keeps in-memory fallback.
+- [x] **B9-4 `types/index.ts` dotenv timing** — `process.env.SOLANA_NETWORK` was read at module load, defaulting to devnet (9 decimals → 1000× too-large amounts) if dotenv hadn't fired yet. Now reads from `config.solana.network` (post-dotenv).
+- [x] **B9-5 SGT `cleanupExpiredNonces` module-load setInterval** — no shutdown hook, blocked SIGTERM force-exit. Refactored to `startSGTWorkers()` / `stopSGTWorkers()` wired into `index.ts` listen + shutdown.
+- [x] **B9-6 Mobile demo code shipping in release** — `addWinnings` mutated UI balance independent of on-chain; `DEMO_TARGETS` array of fake hints, `DEMO_WALLET` keypair, `DEMO_MODE.INITIAL_BALANCE = 50000` fallback (real wallet with 0 SKR showed 50k SKR), `useFallbackDemoBounty`, `isDemoMode` UI badge — all bundled into the production APK. **Removed completely.** AppContext rewritten to MWA-only flow. `wallet.service.ts` collapsed to balance fetch + state mirror. `useWallet` hook (dead) deleted.
+
+### HIGH — fixed
+- [x] **B9-7 `revealMissionOnChain` + `proposeResolutionOnChain` no withTimeout** — stuck Solana RPC held the bounty lock for the full 120s TTL, blocking the player. Both now wrapped in `withTimeout(..., 30_000, label)`.
+- [x] **B9-8 Finalizer drops bounty after 10 attempts with no Sentry alert** — bounty was permanently stuck on-chain with no signal to operator. Now `captureException` with `severity: 'critical'` + bounty PDA + player wallet for manual intervention.
+- [x] **B9-9 SGT routes unrate-limited** — `/nonce` and `/verify` triggered Helius RPC calls per request. Added `sgtLimiter` (30/min/IP) at router level.
+- [x] **B9-10 SKR routes unrate-limited + no input length cap** — `/lookup/:input` triggered mainnet RPC per request, no upper bound on input length. Added `skrLookupLimiter` (60/min/IP) and `MAX_LOOKUP_LENGTH = 64` rejection.
+- [x] **B9-11 Sentry PII scrub gaps** — `x-wallet-address`, `x-wallet-message`, `x-wallet-timestamp` headers were not scrubbed; wallet pubkeys leaked through URL paths (`/api/bounty/player/:wallet`, `/api/sgt/status/:wallet`, `/api/skr/lookup/:input`); IP retained. Now scrubbed: all wallet headers, dynamic URL segments rewritten to `<wallet>`, `event.user.ip_address` cleared.
+
+### Mission pool — calibration fixes (4 of 7 outliers patched, ~85% → ~90% calibrated)
+- [x] **B9-12** Tightened `t1-005` "tree taller than two stories" → "deciduous tree with completely bare branches".
+- [x] **B9-13** Tightened `t1-013` "cat outdoors" → "outdoor cat with collar + tag".
+- [x] **B9-14** Tightened `t1-019` "sidewalk with cracks" → "sidewalk slab with crack running edge to edge".
+- [x] **B9-15** Softened `t1-091` "ceiling fan blades spinning" (motion in still photo, AI ambiguous) → "ceiling fan with visible pull-chain".
+- [x] **B9-16** Replaced `t3-014` "dog mid-air catching frisbee" (functional duplicate of `t3-006`) → "person playing chess at outdoor public chess table".
+
+Remaining post-launch: ~3 more T1 trivials worth tightening (mowed lawn, closed garage, closed door) + per-mission win-rate tracking for retire/rewrite triggers (see § E8).
+
+### dApp Store + deploy docs
+- [x] `config.yaml:24` — added MAINNET LAUNCH BLOCKER comment block with the exact `solana-keygen new` + airdrop steps for filling `PLACEHOLDER_PUBLISHER_PUBKEY` before publisher NFT mint.
+- [x] `config.yaml:86` — testing instructions rewritten for mainnet (mainnet SKR, no demo mode).
+
+### CI — green for the first time
+- [x] **B9-17** Fixed Rust 1.82's `clippy::doc-lazy-continuation` errors at `lib.rs:197, 293` (reflowed multi-line size comments).
+- [x] **B9-18** Regenerated `mobile/package-lock.json` to include `@sentry/react-native` family deps (lock was stale from Mar 3 vs package.json updated Apr 22).
+
+### Result
+- Contract: `cargo check --features mainnet` AND `--features devnet` both clean.
+- Backend: `tsc --noEmit` clean.
+- Mobile: `tsc --noEmit` clean (pre-existing SafeAreaView deprecation warnings only).
+- Contract unit tests: 19/19 passing in <10ms.
+- ~840 LoC + / ~2820 LoC − across 23 files (mostly mobile lock regeneration).
+
+### Still gated on user (Phase B unchanged)
+- Replace `EXPECTED_INITIAL_AUTHORITY` placeholder in `lib.rs` with cold Ledger pubkey before `anchor build` for mainnet.
+- All other Phase B items (keystore, DNS, Ledger SOL, SKR for vault, publisher wallet, dApp Store assets, marketing site) remain user-gated.
 
 ---
 

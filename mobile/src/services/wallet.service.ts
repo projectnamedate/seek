@@ -1,129 +1,59 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { WalletState } from '../types';
-import apiService from './api.service';
 import { TOKEN } from '../config';
 
 // Dev-only logging - stripped from production builds
 const log = (...args: any[]) => __DEV__ && console.log(...args);
 const logError = (...args: any[]) => __DEV__ && console.error(...args);
 
-// Demo wallet configuration
-const DEMO_WALLET = {
-  address: 'Demo7...seeker',
-  fullAddress: 'Demo7xR3kN9vU2mQp8sW4yL6hJ1cBfT5gA2dSeeker',
-  initialBalance: 10000, // 10000 SKR to start
-};
-
-// Singleton wallet state
+// Singleton wallet state (mirror of AppContext for non-React consumers).
+// Updated by AppContext via setWalletState(). Real wallet state is owned
+// by AppContext + MWA hook; this exists for legacy fetchRealBalance /
+// getFullAddress callers that don't have React context.
 let walletState: WalletState = {
   connected: false,
   address: null,
   fullAddress: null,
   skrName: null,
   balance: 0,
-  isDemo: true,
+  isDemo: false,
 };
 
-// Subscribers for state changes
+// Subscribers for state changes (legacy — AppContext is the source of truth)
 type WalletListener = (state: WalletState) => void;
 const listeners: Set<WalletListener> = new Set();
 
-/**
- * Subscribe to wallet state changes
- */
 export function subscribeToWallet(listener: WalletListener): () => void {
   listeners.add(listener);
-  // Immediately notify with current state
   listener(walletState);
-  // Return unsubscribe function
   return () => listeners.delete(listener);
 }
 
-/**
- * Notify all listeners of state change
- */
 function notifyListeners() {
   listeners.forEach((listener) => listener(walletState));
 }
 
-/**
- * Connect demo wallet (simulates MWA connection)
- */
-export async function connectWallet(): Promise<WalletState> {
-  // Simulate connection delay
-  await new Promise((resolve) => setTimeout(resolve, 800));
-
-  // Fetch .skr name for the wallet
-  let skrName: string | null = null;
-  try {
-    const result = await apiService.resolveSkrName(DEMO_WALLET.fullAddress);
-    if (result.success && result.skrName) {
-      skrName = result.skrName;
-      log('[Wallet] Resolved .skr name:', skrName);
-    }
-  } catch (error) {
-    log('[Wallet] Could not resolve .skr name:', error);
-  }
-
-  walletState = {
-    connected: true,
-    address: DEMO_WALLET.address,
-    fullAddress: DEMO_WALLET.fullAddress,
-    skrName,
-    balance: DEMO_WALLET.initialBalance,
-    isDemo: true,
-  };
-
+export function setWalletState(next: WalletState): void {
+  walletState = next;
   notifyListeners();
-  log('[Wallet] Demo wallet connected:', walletState.address, skrName ? `(${skrName})` : '');
-  return walletState;
 }
 
-/**
- * Disconnect wallet
- */
-export async function disconnectWallet(): Promise<void> {
-  walletState = {
-    connected: false,
-    address: null,
-    fullAddress: null,
-    skrName: null,
-    balance: 0,
-    isDemo: true,
-  };
-
-  notifyListeners();
-  log('[Wallet] Wallet disconnected');
-}
-
-/**
- * Get current wallet state
- */
 export function getWalletState(): WalletState {
   return { ...walletState };
 }
 
 /**
  * Get full wallet address (for display in certain contexts).
- * Prefer `walletState.fullAddress` (populated by MWA) over the hardcoded
- * DEMO_WALLET constant — previously this always returned the demo address
- * even for real wallets.
+ * Returns the MWA-populated `fullAddress` when connected, null otherwise.
  */
 export function getFullAddress(): string | null {
-  if (!walletState.connected) return null;
-  return walletState.fullAddress ?? (walletState.isDemo ? DEMO_WALLET.fullAddress : null);
+  return walletState.connected ? walletState.fullAddress : null;
 }
 
-/**
- * Check if wallet has sufficient balance
- */
 export function hasSufficientBalance(amount: number): boolean {
   return walletState.connected && walletState.balance >= amount;
 }
 
-/**
- * Format balance for display
- */
 export function formatBalance(amount: number): string {
   return `${amount.toLocaleString()} $SKR`;
 }
@@ -147,7 +77,6 @@ export async function fetchRealBalance(
       return 0;
     }
 
-    // Parse the token account data to get the balance
     // Token account data: first 32 bytes = mint, next 32 = owner, next 8 = amount (little-endian u64)
     const data = accounts.value[0].account.data;
     const amountBytes = data.slice(64, 72);
@@ -164,8 +93,7 @@ export async function fetchRealBalance(
 
 export default {
   subscribeToWallet,
-  connectWallet,
-  disconnectWallet,
+  setWalletState,
   getWalletState,
   getFullAddress,
   hasSufficientBalance,

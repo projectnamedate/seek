@@ -54,6 +54,19 @@ pub const TIER_3_DURATION: i64 = 60;   // 1 minute
 /// separate post-resolution dispute window.)
 pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original entry to dispute
 
+/// Mainnet `initialize` is restricted to this pubkey to prevent front-running
+/// of the deploy → initialize gap by an MEV bot. Replace the placeholder with
+/// the cold-authority Ledger pubkey BEFORE running `anchor build` for mainnet.
+/// On devnet (no economic value) this constraint is disabled.
+///
+/// To set: `solana-keygen pubkey usb://ledger`, paste base58 below, rebuild.
+#[cfg(feature = "mainnet")]
+pub const EXPECTED_INITIAL_AUTHORITY: Pubkey =
+    pubkey!("11111111111111111111111111111111");
+// NOTE: 11111…111 (System Program) is the placeholder. The constraint also
+// rejects this default, so a forgotten edit will fail-fast at init time
+// rather than silently allowing any caller.
+
 /// Validate entry amount and return tier
 pub fn validate_entry_amount(entry_amount: u64) -> Result<u8> {
     match entry_amount {
@@ -186,15 +199,11 @@ pub struct GlobalState {
 }
 
 impl GlobalState {
-    /// Account size:
-    ///   8 (discriminator)
-    /// + 32 * 6 (authority, hot_authority, pending_authority, house_vault,
-    ///          singularity_vault, protocol_treasury)
-    /// + 8 * 7  (house_fund_balance, singularity_balance, total_burned,
-    ///          total_bounties_created, total_bounties_won, total_bounties_lost,
-    ///          total_singularity_wins)
-    /// + 1       (bump)
-    /// = 8 + 192 + 56 + 1 = 257
+    /// Account size: 8 (discriminator) + 32*6 (authority, hot_authority,
+    /// pending_authority, house_vault, singularity_vault, protocol_treasury)
+    /// + 8*7 (house_fund_balance, singularity_balance, total_burned,
+    /// total_bounties_created, total_bounties_won, total_bounties_lost,
+    /// total_singularity_wins) + 1 (bump) = 257.
     pub const SIZE: usize = 8 + 32 * 6 + 8 * 7 + 1;
 }
 
@@ -284,13 +293,11 @@ pub struct Bounty {
 }
 
 impl Bounty {
-    /// Account size calculation:
-    /// 8 (discriminator) + 32*2 (pubkeys) + 8*4 (u64/i64: entry, payout, created_at, expires_at)
-    /// + 1*4 (status, tier, singularity_won, bump)
-    /// + 32*2 (commitment + mission_id) + 1 (mission_revealed)
-    /// + 8*2 (resolved_at, challenge_ends_at) + 1 (proposed_win)
-    /// + 1 (is_disputed) + 8 (dispute_stake) + 8 (disputed_at)
-    /// = 8 + 64 + 32 + 4 + 64 + 1 + 16 + 1 + 1 + 16 = 207, padded to 216
+    /// Account size: 8 (discriminator) + 32*2 (pubkeys) + 8*4 (entry, payout,
+    /// created_at, expires_at) + 1*4 (status, tier, singularity_won, bump) +
+    /// 32*2 (commitment + mission_id) + 1 (mission_revealed) + 8*2 (resolved_at,
+    /// challenge_ends_at) + 1 (proposed_win) + 1 (is_disputed) + 8 (dispute_stake)
+    /// + 8 (disputed_at) = 207, padded to 216.
     pub const SIZE: usize = 216;
 }
 
@@ -1129,9 +1136,14 @@ pub mod seek_protocol {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
-        // Must be in a cancellable state (not yet resolved)
+        // Only Pending bounties (no photo submitted yet) can be cancelled.
+        // Once a player submits a photo and the backend reveals the mission,
+        // the bounty is in `Submitted` and must flow through propose_resolution
+        // → finalize_bounty (or dispute). Allowing cancel from `Submitted` was
+        // a loss-rate exploit — a backend outage > grace_period would let
+        // every Submitted bounty reclaim entry, draining the house pool.
         require!(
-            bounty.status == BountyStatus::Pending || bounty.status == BountyStatus::Submitted,
+            bounty.status == BountyStatus::Pending,
             SeekError::BountyAlreadyResolved
         );
 
@@ -1307,8 +1319,13 @@ pub mod seek_protocol {
 /// Step 1: Initialize global state only (small stack footprint)
 #[derive(Accounts)]
 pub struct Initialize<'info> {
-    /// Authority who will manage the protocol
-    #[account(mut)]
+    /// Authority who will manage the protocol. On mainnet, must match the
+    /// hardcoded `EXPECTED_INITIAL_AUTHORITY` (see top of file). Closes the
+    /// front-run vector between `anchor deploy` and the first `initialize` tx.
+    #[account(
+        mut,
+        constraint = is_expected_initial_authority(&authority.key()) @ SeekError::Unauthorized
+    )]
     pub authority: Signer<'info>,
 
     /// Global state PDA
@@ -1323,6 +1340,25 @@ pub struct Initialize<'info> {
 
     /// System program for account creation
     pub system_program: Program<'info, System>,
+}
+
+/// Runtime check for the initialize-time authority. On mainnet, requires the
+/// hardcoded value AND rejects the System-Program placeholder so a forgotten
+/// edit fails fast. On devnet, permissive (no production value at risk).
+#[inline(always)]
+fn is_expected_initial_authority(_caller: &Pubkey) -> bool {
+    #[cfg(feature = "mainnet")]
+    {
+        // Reject the placeholder so a forgotten edit fails at init time.
+        if EXPECTED_INITIAL_AUTHORITY == Pubkey::default() {
+            return false;
+        }
+        return *_caller == EXPECTED_INITIAL_AUTHORITY;
+    }
+    #[cfg(not(feature = "mainnet"))]
+    {
+        true
+    }
 }
 
 /// Step 2: Initialize house vault

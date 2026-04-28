@@ -202,6 +202,16 @@ async function processPendingFinalizations(): Promise<void> {
           { bountyPda: pending.bountyPda.slice(0, 8), max: MAX_ATTEMPTS },
           'giving up on bounty after max attempts'
         );
+        // Page operator — bounty is permanently stuck on-chain. Manual
+        // intervention required (call finalize_bounty via admin.ts or
+        // investigate the on-chain state).
+        captureException(error, {
+          bountyPda: pending.bountyPda,
+          playerWallet: pending.playerWallet,
+          attempts: pending.attempts,
+          severity: 'critical',
+          context: 'finalizer-max-attempts',
+        });
       }
     }
   }

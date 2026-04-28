@@ -1,10 +1,13 @@
+import { config } from '../config';
+
 // Bounty tiers
 export type Tier = 1 | 2 | 3;
 
 // SKR base-unit multiplier — MUST match the on-chain SKR_DECIMALS const.
 // Mainnet SKR (official Solana Mobile token) uses 6 decimals; devnet test
-// mint uses 9. Exported so consumers can format balances consistently.
-export const SKR_DECIMALS = (process.env.SOLANA_NETWORK ?? 'devnet').toLowerCase() === 'mainnet-beta' ? 6 : 9;
+// mint uses 9. Read from `config` (dotenv-loaded) rather than `process.env`
+// directly so this module cannot be imported before env is parsed.
+export const SKR_DECIMALS = config.solana.network === 'mainnet-beta' ? 6 : 9;
 export const SKR_MULTIPLIER = BigInt(10) ** BigInt(SKR_DECIMALS);
 
 // Entry amounts in base units (whole SKR × SKR_MULTIPLIER).

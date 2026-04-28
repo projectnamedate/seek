@@ -11,6 +11,7 @@ import bs58 from 'bs58';
 import { createHash, randomFillSync } from 'crypto';
 import { queueFinalization } from './finalizer.service';
 import { childLogger } from './logger.service';
+import { withTimeout } from '../utils/timeout';
 
 // Load IDL
 import idl from '../idl/seek_protocol.json';
@@ -174,17 +175,21 @@ export async function revealMissionOnChain(
   const program = getProgram();
   const [globalStatePda] = deriveGlobalStatePda();
 
-  const signature = await program.methods
-    .revealMission(
-      Array.from(missionIdBytes) as any,
-      Array.from(salt) as any
-    )
-    .accounts({
-      hotAuthority: getHotAuthorityKeypair().publicKey,
-      globalState: globalStatePda,
-      bounty: new PublicKey(bountyPda),
-    })
-    .rpc();
+  const signature = await withTimeout(
+    program.methods
+      .revealMission(
+        Array.from(missionIdBytes) as any,
+        Array.from(salt) as any
+      )
+      .accounts({
+        hotAuthority: getHotAuthorityKeypair().publicKey,
+        globalState: globalStatePda,
+        bounty: new PublicKey(bountyPda),
+      })
+      .rpc(),
+    30_000,
+    'reveal_mission'
+  );
 
   log.info({ signature }, 'mission revealed');
   return signature;
@@ -201,14 +206,18 @@ export async function proposeResolutionOnChain(
   const program = getProgram();
   const [globalStatePda] = deriveGlobalStatePda();
 
-  const signature = await program.methods
-    .proposeResolution(success)
-    .accounts({
-      hotAuthority: getHotAuthorityKeypair().publicKey,
-      globalState: globalStatePda,
-      bounty: new PublicKey(bountyPda),
-    })
-    .rpc();
+  const signature = await withTimeout(
+    program.methods
+      .proposeResolution(success)
+      .accounts({
+        hotAuthority: getHotAuthorityKeypair().publicKey,
+        globalState: globalStatePda,
+        bounty: new PublicKey(bountyPda),
+      })
+      .rpc(),
+    30_000,
+    'propose_resolution'
+  );
 
   log.info({ outcome: success ? 'WIN' : 'LOSS', signature }, 'resolution proposed');
   return signature;

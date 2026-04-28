@@ -34,3 +34,25 @@ export const bountySubmitLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, error: 'Too many submission requests, slow down' },
 });
+
+// SGT routes hit Helius (paid RPC) — cap at 30/min/IP. SGT verification is
+// once per wallet per 30d, so this is plenty of slack for legit retries.
+export const sgtLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  validate: false,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many SGT requests, slow down' },
+});
+
+// SKR domain lookup hits mainnet RPC — cap at 60/min/IP. Resolutions are
+// cached client-side so this is the cold-cache cap.
+export const skrLookupLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  validate: false,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many lookup requests, slow down' },
+});

@@ -254,13 +254,6 @@ export default function HomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* Demo Badge */}
-      {wallet.isDemo && wallet.connected && (
-        <View style={styles.demoBadge}>
-          <Text style={styles.demoBadgeText}>DEMO MODE</Text>
-        </View>
-      )}
-
       {/* Compliance Disclaimer */}
       <View style={styles.disclaimerContainer}>
         <Text style={styles.disclaimerText}>

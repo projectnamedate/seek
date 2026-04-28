@@ -188,6 +188,14 @@ See [memory/project_economic_model.md](~/.claude/projects/-Users-hammer-Desktop-
 - **Mobile:** NETWORK build-time assertion. bs58/formatTime/PDA dedupe. `TIERS` single source of truth.
 - **Loss-rate fix:** New `expireAndResolveOldBounties()` worker calls `propose_resolution(false)` on stale Pending bounties — closes the cancel_bounty 1h-grace exploit.
 
+**Done in Phase B9 (2026-04-27 pre-mainnet re-audit + remediation):** 15 new CRIT/HIGH items B8 missed. See [tasks/roadmap.md § B9](tasks/roadmap.md). Highlights:
+- **Contract:** `cancel_bounty` Submitted-state exploit closed (was a backend SPOF — 1h outage = 100% win rate). `initialize` locked to `EXPECTED_INITIAL_AUTHORITY` (mainnet feature) — closes deploy-init front-run vector. **User must paste Ledger pubkey into lib.rs before mainnet build.**
+- **Backend:** Redis fail-closed on locks AND nonces in production (was fail-open → silent auth replay during outages). `types/index.ts` reads from `config` (was module-load `process.env` → devnet default risk). `withTimeout` on `revealMissionOnChain` + `proposeResolutionOnChain`. SGT cleanup setInterval → start/stop pattern wired into shutdown. SGT + SKR routes rate-limited. Sentry PII scrub now covers wallet headers + URL paths + IP. Finalizer drops `captureException` with severity:critical when bounty stuck after 10 attempts.
+- **Mobile:** Demo code stripped from release bundle — `addWinnings`, `DEMO_TARGETS`, `DEMO_WALLET`, `DEMO_MODE.INITIAL_BALANCE = 50000` fallback (a 0-SKR wallet showed 50k SKR), `isDemoMode` UI badge, `useFallbackDemoBounty`, `useWallet` dead hook. AppContext + wallet.service rewritten MWA-only.
+- **Mission pool:** 5 outliers fixed (4 trivial-T1 tightenings + 1 dup replaced).
+- **CI:** Green for the first time. Fixed Rust 1.82 doc-lint errors + regenerated mobile lock file (was stale Mar 3 vs package.json Apr 22).
+- **dApp Store:** Publisher pubkey requirement documented in config.yaml. Testing instructions rewritten for mainnet (no devnet wording).
+
 **Gated on user:**
 - Release keystore generation (mobile/android/SIGNING.md)
 - Production domain purchase + DNS → Railway

@@ -73,3 +73,40 @@ When removing `requireWalletAuth` from a route, you MUST also update:
 ### Audit before you build
 - This session spent ~25% of tokens on audit + research before touching code. That was the right call — turned up the SKR-is-6-decimals bug that would have broken mainnet entirely, and the mainnet-SKR-is-SMS-ecosystem-token realization that changes the economic model (real $$ from launch).
 - **Rule:** For any "ready-for-mainnet" sweep, budget serious audit time before refactors. Surprises up front are cheap; surprises mid-deploy are not.
+
+## Mainnet readiness — 2026-04-27 second-pass lessons
+
+### Verify CI was actually green before claiming "CI green"
+- Phase A's roadmap claimed "CI green" but the workflow had failed on every single push since it was added (7 consecutive red runs over 4 days). I never actually checked `gh run list`.
+- **Rule:** A docs claim of "CI green" is only valid if you ran `gh run list --limit 5` against the workflow within the same commit. Otherwise write "CI runs on push" and don't say green.
+- Two specific failures: Rust 1.82's stable lints now include `doc-lazy-continuation` (multi-line `///` after a list item is now an error under `-D warnings`); `npm ci` fails on lock-file/package-json drift even with `npm ci || npm install` fallback in some shell configs (regenerate lock pre-emptively).
+
+### Sub-agent audits find what the previous audit missed
+- A second-pass independent audit (parallel sub-agents, no memory of prior fixes) found 15 CRIT/HIGH items that the first audit (B8) missed despite claiming completeness — including a backend SPOF (cancel-on-Submitted) that would have let players reclaim entry whenever Anthropic had a multi-hour outage.
+- **Rule:** Before mainnet, run a re-audit with a fresh agent and explicit instructions to "find what the previous audit missed, don't trust the previous audit's claims."
+- Worked particularly well to give each sub-agent ONE layer (contract / backend / mobile) and a list of risk classes to look for, rather than a generic "audit this."
+
+### Fail-closed for security state on Redis outage
+- The B8 Redis migration treated "Redis client null" as "in-memory fallback" — fine in dev, but on production it meant locks became no-ops and auth nonces could be replayed during a Redis outage.
+- **Rule:** If `REDIS_URL` is set, Redis is required. Helpers that gate security-critical state (locks, nonces) must `return false` on `null` client, not `return true`. Callers see a 503 / 401 instead of a silent bypass.
+- Dev mode (no `REDIS_URL` set) keeps the in-memory fallback — only production fails closed.
+
+### `process.env.X` at module load is a footgun behind dotenv
+- `backend/src/types/index.ts` had `process.env.SOLANA_NETWORK` at line 7 — module-load time. If the file was imported before `dotenv.config()` ran (varies by Node import-graph traversal order), it defaulted to `'devnet'` → 9 decimals → 1000× off entry amounts.
+- Railway pre-sets env vars before the process starts so this didn't bite there, but ts-node / local runs were at risk.
+- **Rule:** No `process.env.X` reads at module-load. Always go through the validated `config` object — the only place `process.env` is read is `config/index.ts` after `dotenv.config()`.
+
+### Demo code in production binaries is reverse-engineerable + UX-breaking
+- Mobile shipped `addWinnings` (which mutated UI balance independent of on-chain), `DEMO_TARGETS` (an array of fake hints — players who reverse-engineered the APK got a hint pool), `DEMO_WALLET` (a keypair string in the binary), and `DEMO_MODE.INITIAL_BALANCE = 50000` (a real wallet with 0 SKR showed 50,000 SKR).
+- The `addWinnings` one is the worst — pre-confirmation it credited the player +2000 SKR, then the on-chain balance fetch overwrote, creating a flicker that looked like funds disappearing.
+- **Rule:** Demo state and demo-only code paths should never compile into release. Either delete them, or tree-shake-eliminate via a top-level `__DEV__` constant guard that bundlers can statically remove.
+- **Rule:** Client-side balance is a CACHE of on-chain truth, never a source of truth. Don't optimistically update it — wait for the next on-chain fetch.
+
+### `cancel_bounty` accepts only `Pending`, never `Submitted`
+- The original design accepted both states with a 1h grace, intending to give players an escape hatch if the backend ever broke. But "the backend is broken" is exactly when the loss-rate guarantee disappears: every photo-submitted bounty becomes refundable, every photo becomes a free option.
+- **Rule:** `cancel_bounty` (player-driven escape hatch) is only valid for the `Pending` state (no photo committed). After photo submit → `Submitted`, the bounty is on-rails to dispute or finalize. If the backend dies, recovery flows through admin or dispute, not through cancel.
+
+### `initialize` is a one-shot — front-running risk on mainnet
+- Permissionless `initialize` between `anchor deploy` and the first init tx is a real MEV target — anyone watching can become `global_state.authority` if their tx lands first.
+- **Rule:** Mainnet `initialize` should be gated by a hardcoded pubkey constant (`EXPECTED_INITIAL_AUTHORITY`). Build feature flag toggles it on for mainnet, off for devnet. The constant defaults to `Pubkey::default()` (System Program) and the constraint also rejects that, so a forgotten edit fails fast at init time rather than silently allowing any caller.
+- Cost is one source-edit before mainnet `anchor build` — well worth eliminating the front-run window.

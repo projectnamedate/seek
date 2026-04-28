@@ -11,6 +11,7 @@ import skrRoutes from './routes/skr.routes';
 import sgtRoutes from './routes/sgt.routes';
 import { startFinalizationWorker, stopFinalizationWorker } from './services/finalizer.service';
 import { startBountyWorkers, stopBountyWorkers } from './services/bounty.service';
+import { startSGTWorkers, stopSGTWorkers } from './services/sgt.service';
 import { initSentry, setupSentryErrorHandler } from './services/sentry.service';
 import { logger } from './services/logger.service';
 
@@ -153,6 +154,7 @@ const server = app.listen(PORT, HOST, () => {
   // Start background workers (cleanly stopped on SIGTERM)
   startFinalizationWorker();
   startBountyWorkers();
+  startSGTWorkers();
 });
 
 // Graceful shutdown
@@ -160,6 +162,7 @@ function shutdown(signal: string) {
   logger.info({ signal }, 'Shutting down gracefully');
   stopFinalizationWorker();
   stopBountyWorkers();
+  stopSGTWorkers();
   server.close(() => {
     logger.info('Server closed cleanly');
     process.exit(0);

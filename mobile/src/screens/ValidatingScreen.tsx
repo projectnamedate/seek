@@ -14,7 +14,6 @@ import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, ValidationResult } from '../types';
 import apiService from '../services/api.service';
 import { useApp } from '../context/AppContext';
-import { DEMO_MODE } from '../config';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Validating'>;
@@ -99,8 +98,9 @@ export default function ValidatingScreen({ navigation, route }: Props) {
       }).start();
 
       try {
-        // Call the real API for validation
-        const authOptions = !DEMO_MODE.USE_DEMO_ENDPOINTS && wallet.fullAddress
+        // Call the real API for validation. Auth headers are required —
+        // no demo bypass. Without a wallet address, /submit will 401.
+        const authOptions = wallet.fullAddress
           ? { signMessage, walletAddress: wallet.fullAddress }
           : undefined;
         const result = await apiService.submitPhoto(bounty.id, photoUri, attestation, authOptions);

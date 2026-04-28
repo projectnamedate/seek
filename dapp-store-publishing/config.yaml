@@ -21,6 +21,15 @@
 publisher:
   # Your publisher identity (NFT owner). This keypair must stay funded with
   # ~0.5 SOL. BACK IT UP — losing it means losing control of the listing.
+  #
+  # MAINNET LAUNCH BLOCKER: Replace `PLACEHOLDER_PUBLISHER_PUBKEY` with the
+  # base58 pubkey of a freshly generated publisher keypair before running
+  # `npx dapp-store create publisher`:
+  #   solana-keygen new --outfile ./publisher.json
+  #   solana-keygen pubkey ./publisher.json   # paste the result below
+  #   solana airdrop 0.5 <pubkey>             # mainnet: actually transfer 0.5 SOL
+  # Then back up `publisher.json` to 1Password (or equivalent) — losing the
+  # private key = losing the ability to publish updates forever.
   address: PLACEHOLDER_PUBLISHER_PUBKEY
   name: Projectnamedate
   website: https://seek.mythx.art
@@ -82,18 +91,22 @@ release:
 solana_mobile_dapp_publisher_portal:
   google_store_package: ""  # empty — we're dApp-Store-only, not also on Play Store
   testing_instructions: |
-    Test wallet with 50,000 devnet SKR + 0.1 SOL is provided in the
-    submission notes. To run a complete flow:
+    Test wallet seed and ~3,000 mainnet SKR (≈ $50 at current price) +
+    0.05 SOL for tx fees are provided in the submission notes. This is
+    real on-chain SKR — the app does NOT support a dev/test mode.
+    To run a complete flow:
     1. Launch the app (age gate on first run — accept 18+)
-    2. Tap Connect Wallet → approve MWA
-    3. Pick Easy tier → Start Hunt → approve transaction
-    4. Accept the random mission
-    5. Tap camera → capture any photo matching the mission
-    6. AI validates in ~3 seconds
-    7. On win: +2000 SKR credited on-chain. On loss: entry distributed.
+    2. Tap Connect Wallet → approve MWA prompt in Phantom
+    3. (Optional) verify Seeker Genesis Token if the test device holds one
+    4. Pick Easy tier (1,000 SKR) → Start Hunt → approve accept_bounty tx
+    5. Accept the random mission (commit-revealed by backend)
+    6. Tap camera → capture any photo matching the mission target
+    7. AI (Claude Vision) validates in ~3 seconds
+    8. On win: +2,000 SKR profit pays out from house pool after the 5-minute
+       challenge period. On loss: entry distributed 70/20/10 across house,
+       jackpot, treasury.
 
-    Source at github.com/projectnamedate/seek. Questions:
-    jeff@projectname.date.
+    Source: github.com/projectnamedate/seek. Questions: jeff@projectname.date.
 
 # Age / content ratings (per dApp Store policy)
 iarc_rating_system:

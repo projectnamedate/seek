@@ -10,10 +10,15 @@ import {
 import { validate } from '../middleware/validate.middleware';
 import { childLogger } from '../services/logger.service';
 import { config } from '../config';
+import { sgtLimiter } from '../middleware/rateLimiter.middleware';
 
 const log = childLogger('sgt-routes');
 
 const router = Router();
+
+// All SGT routes go through the rate limiter — they trigger Helius RPC calls
+// and SIWS signature verification, both expensive. Cap per-IP at 30/min.
+router.use(sgtLimiter);
 
 // Base58 pattern for Solana addresses
 const base58Pattern = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;

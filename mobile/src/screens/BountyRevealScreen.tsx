@@ -18,31 +18,6 @@ import { buildAcceptBountyTransaction } from '../services/solana.mobile';
 import { useApp } from '../context/AppContext';
 import { formatTime } from '../utils/format';
 
-// Sample targets for demo fallback
-const DEMO_TARGETS: Record<number, { target: string; hint: string }[]> = {
-  1: [
-    { target: 'Fire Hydrant', hint: 'Usually red or yellow, found on streets' },
-    { target: 'Blue Car', hint: 'Any shade of blue will work' },
-    { target: 'Dog', hint: 'Man\'s best friend, any breed' },
-    { target: 'Coffee Cup', hint: 'Paper or reusable, with a lid' },
-    { target: 'Tree', hint: 'Living, with visible leaves or branches' },
-  ],
-  2: [
-    { target: 'Starbucks Cup', hint: 'The iconic green mermaid logo' },
-    { target: 'Red Shoes', hint: 'Any style, must be clearly red' },
-    { target: 'Bicycle', hint: 'Any type, must show wheels' },
-    { target: 'Pizza Box', hint: 'Classic delivery box shape' },
-    { target: 'Traffic Light', hint: 'Any color showing' },
-  ],
-  3: [
-    { target: 'Person Running', hint: 'Capture the motion' },
-    { target: 'Bird in Flight', hint: 'Wings spread in the air' },
-    { target: 'Rainbow', hint: 'Natural or artificial' },
-    { target: 'Skateboarder', hint: 'On the board, in action' },
-    { target: 'Street Performer', hint: 'Any type of performance' },
-  ],
-};
-
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'BountyReveal'>;
   route: RouteProp<RootStackParamList, 'BountyReveal'>;
@@ -64,8 +39,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
 
-  // Start bounty flow — DEMO_MODE.USE_DEMO_ENDPOINTS is permanently false in
-  // production builds; local demo fallback only fires if on-chain init throws.
+  // Start the on-chain flow as soon as the screen mounts.
   useEffect(() => {
     startOnChainBounty();
   }, [tier]);
@@ -102,7 +76,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       }
 
       const { commitment, timestamp, bountyPda, entryAmount } = prepResult.data;
-      console.log('[BountyReveal] Prepared:', { bountyPda: bountyPda.slice(0, 8), timestamp });
+      if (__DEV__) console.log('[BountyReveal] Prepared:', { bountyPda: bountyPda.slice(0, 8), timestamp });
 
       // Step 2: Build the accept_bounty transaction
       setStatusText('Building transaction...');
@@ -126,10 +100,10 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
           new Promise<never>((_, reject) => setTimeout(() => reject(new Error('slot timeout')), 5000)),
         ]);
       } catch {
-        console.warn('[BountyReveal] getSlot timed out, sending without minContextSlot');
+        if (__DEV__) console.warn('[BountyReveal] getSlot timed out, sending without minContextSlot');
       }
       const txSignature = await signAndSendTransaction(transaction, ...(slot !== undefined ? [slot] : []) as [number]);
-      console.log('[BountyReveal] Tx sent:', txSignature);
+      if (__DEV__) console.log('[BountyReveal] Tx sent:', txSignature);
 
       // Brief delay after Phantom deep-link return to let network stabilize
       await new Promise(r => setTimeout(r, 1500));
@@ -138,7 +112,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       // IS the player's authorization, and backend verifyTransaction asserts
       // (player, bountyPda, programId) all match the supplied signature.
       setStatusText('Starting mission...');
-      console.log('[BountyReveal] Calling /start...');
+      if (__DEV__) console.log('[BountyReveal] Calling /start...');
       if (typeof txSignature !== 'string') {
         throw new Error('Wallet did not return a transaction signature');
       }
@@ -177,10 +151,10 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         potentialReward: tierData.entry * 2,
       };
 
-      console.log('[BountyReveal] On-chain bounty started:', newBounty.id);
+      if (__DEV__) console.log('[BountyReveal] On-chain bounty started:', newBounty.id);
       setBounty(newBounty);
     } catch (error: any) {
-      console.error('[BountyReveal] On-chain flow error:', error);
+      if (__DEV__) console.error('[BountyReveal] On-chain flow error:', error);
       const message = error?.message || 'Transaction failed';
 
       // User cancelled in wallet
@@ -194,24 +168,6 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         { text: 'Cancel', onPress: () => navigation.goBack() },
       ]);
     }
-  };
-
-  const useFallbackDemoBounty = () => {
-    const targets = DEMO_TARGETS[tier];
-    const randomTarget = targets[Math.floor(Math.random() * targets.length)];
-    const now = Date.now();
-
-    setBounty({
-      id: `demo-${now}`,
-      tier,
-      target: randomTarget.target,
-      targetHint: randomTarget.hint,
-      startTime: now,
-      endTime: now + tierData.timeLimit * 1000,
-      status: 'revealing',
-      entryAmount: tierData.entry,
-      potentialReward: tierData.entry * 2,
-    });
   };
 
   // Reveal animation sequence

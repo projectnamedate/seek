@@ -1,10 +1,20 @@
 import { Router, Request, Response } from 'express';
 import skrService from '../services/skr.service';
 import { childLogger } from '../services/logger.service';
+import { skrLookupLimiter } from '../middleware/rateLimiter.middleware';
 
 const log = childLogger('skr-routes');
 
 const router = Router();
+
+// All SKR routes go through the rate limiter — every endpoint hits mainnet
+// RPC for resolution. Cap per-IP at 60/min.
+router.use(skrLookupLimiter);
+
+// Hard cap on input length — base58 wallets max 44 chars, .skr domains
+// realistically < 64. Anything longer is malformed; reject early to keep
+// bad input from reaching the RPC client.
+const MAX_LOOKUP_LENGTH = 64;
 
 /**
  * POST /api/skr/resolve-address
@@ -82,10 +92,10 @@ router.get('/lookup/:input', async (req: Request, res: Response) => {
   try {
     const { input } = req.params;
 
-    if (!input) {
+    if (!input || input.length > MAX_LOOKUP_LENGTH) {
       return res.status(400).json({
         success: false,
-        error: 'Missing input parameter',
+        error: 'Invalid input parameter',
       });
     }
 

@@ -64,35 +64,58 @@ export const RK = {
 
 /**
  * Acquire a distributed lock with TTL. Returns true if acquired, false if
- * another process holds it. TTL prevents deadlock on crashes.
+ * another process holds it OR if Redis is configured but unreachable.
+ * TTL prevents deadlock on crashes.
  *
- * When Redis is unavailable, returns true (single-instance in-memory fallback
- * is handled by the caller via Set-based locking).
+ * Fail-mode policy:
+ *  - REDIS_URL UNSET (dev): returns true (no-op lock; single-instance only).
+ *  - REDIS_URL SET but client unreachable (production outage): returns FALSE
+ *    so callers fail closed. A 503 to the client is correct here — without
+ *    locks, /submit and the expirer can race and double-resolve.
  */
 export async function redisAcquireLock(key: string, ttlSeconds: number): Promise<boolean> {
-  const r = await getRedis();
-  if (!r) return true; // caller falls back to in-memory lock
-  const result = await r.set(key, '1', { NX: true, EX: ttlSeconds });
-  return result === 'OK';
+  if (!config.redis.url) return true; // dev mode, no Redis configured
+  try {
+    const r = await getRedis();
+    if (!r) return false; // Redis configured but unavailable → fail closed
+    const result = await r.set(key, '1', { NX: true, EX: ttlSeconds });
+    return result === 'OK';
+  } catch (err) {
+    log.error({ err, key }, 'lock acquire failed — failing closed');
+    return false;
+  }
 }
 
 export async function redisReleaseLock(key: string): Promise<void> {
-  const r = await getRedis();
-  if (!r) return;
-  await r.del(key);
+  if (!config.redis.url) return;
+  try {
+    const r = await getRedis();
+    if (!r) return;
+    await r.del(key);
+  } catch (err) {
+    log.error({ err, key }, 'lock release failed — TTL will expire it');
+  }
 }
 
 /**
  * Consume an auth nonce. Returns true if this is the first time the nonce
  * is being used (and reserves it for `ttlSeconds`), false if it has already
- * been consumed within the TTL.
+ * been consumed within the TTL OR if Redis is configured but unreachable.
  *
- * When Redis is unavailable, returns true (in-memory single-instance dev
- * fallback — production MUST set REDIS_URL or auth replay is unprotected).
+ * Fail-mode policy:
+ *  - REDIS_URL UNSET (dev): returns true (no replay protection — dev only).
+ *  - REDIS_URL SET but client unreachable: returns FALSE so auth replay is
+ *    impossible during a Redis outage. Clients get 401 until Redis recovers.
  */
 export async function redisConsumeNonce(key: string, ttlSeconds: number): Promise<boolean> {
-  const r = await getRedis();
-  if (!r) return true;
-  const result = await r.set(key, '1', { NX: true, EX: ttlSeconds });
-  return result === 'OK';
+  if (!config.redis.url) return true;
+  try {
+    const r = await getRedis();
+    if (!r) return false; // Redis configured but unavailable → fail closed
+    const result = await r.set(key, '1', { NX: true, EX: ttlSeconds });
+    return result === 'OK';
+  } catch (err) {
+    log.error({ err, key }, 'nonce consume failed — failing closed');
+    return false;
+  }
 }

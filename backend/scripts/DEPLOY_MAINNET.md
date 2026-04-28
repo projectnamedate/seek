@@ -18,6 +18,28 @@ Prereqs (user-side):
 
 ## 1. Build the mainnet contract binary
 
+**FIRST**: paste the cold-Ledger pubkey into `lib.rs` to lock the
+`initialize` instruction. Without this, anyone can front-run the
+deploy → init gap and become `global_state.authority`.
+
+```bash
+# Get the Ledger pubkey
+LEDGER_PUBKEY=$(solana-keygen pubkey usb://ledger)
+echo "Cold Ledger pubkey: $LEDGER_PUBKEY"
+
+# Edit contracts/programs/seek-protocol/src/lib.rs and replace the
+# placeholder in EXPECTED_INITIAL_AUTHORITY with $LEDGER_PUBKEY:
+#   pub const EXPECTED_INITIAL_AUTHORITY: Pubkey =
+#       pubkey!("11111111111111111111111111111111");   ← BEFORE
+#   pub const EXPECTED_INITIAL_AUTHORITY: Pubkey =
+#       pubkey!("YOUR_LEDGER_PUBKEY_HERE");            ← AFTER
+
+# Sanity check — should print your Ledger pubkey, NOT 1111…111:
+grep -A1 EXPECTED_INITIAL_AUTHORITY contracts/programs/seek-protocol/src/lib.rs
+```
+
+Now build:
+
 ```bash
 cd contracts
 anchor build                # default features = mainnet
