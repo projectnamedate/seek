@@ -34,7 +34,9 @@ const contractsRoot = process.cwd().endsWith("contracts")
 
 const idl = JSON.parse(
   readFileSync(
-    resolve(contractsRoot, "target", "idl", "seek_protocol.json"),
+    // Try the committed backend IDL first (works in CI without anchor build);
+    // fall back to target/idl/ for local runs after `anchor build`.
+    resolve(contractsRoot, "..", "backend", "src", "idl", "seek_protocol.json"),
     "utf8"
   )
 );

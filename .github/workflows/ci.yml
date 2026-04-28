@@ -117,13 +117,12 @@ jobs:
             contracts/target
           key: ${{ runner.os }}-cargo-${{ hashFiles('contracts/**/Cargo.lock', 'contracts/**/Cargo.toml') }}
 
-      - name: Ensure IDL exists
+      - name: Verify committed IDL is present
         run: |
-          if [ ! -f target/idl/seek_protocol.json ]; then
-            # Minimal IDL generation without full anchor CLI: run cargo build
-            # with the idl-build feature. For CI we still rely on the check
-            # above having populated target/.
-            echo "IDL missing — run 'anchor build' locally before pushing."
+          # Tests read from ../backend/src/idl/seek_protocol.json (committed)
+          # rather than target/idl/ (gitignored, requires anchor build).
+          if [ ! -f ../backend/src/idl/seek_protocol.json ]; then
+            echo "Committed IDL missing at backend/src/idl/seek_protocol.json"
             exit 1
           fi
 
