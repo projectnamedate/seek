@@ -110,3 +110,14 @@ When removing `requireWalletAuth` from a route, you MUST also update:
 - Permissionless `initialize` between `anchor deploy` and the first init tx is a real MEV target — anyone watching can become `global_state.authority` if their tx lands first.
 - **Rule:** Mainnet `initialize` should be gated by a hardcoded pubkey constant (`EXPECTED_INITIAL_AUTHORITY`). Build feature flag toggles it on for mainnet, off for devnet. The constant defaults to `Pubkey::default()` (System Program) and the constraint also rejects that, so a forgotten edit fails fast at init time rather than silently allowing any caller.
 - Cost is one source-edit before mainnet `anchor build` — well worth eliminating the front-run window.
+
+### Verify before claim — never propagate "complete" / "green" without running it
+This is the meta-lesson from the B8 → B9 cycle. The B8 audit memory said "all 20 items closed" four days before B9 found that 15 CRIT/HIGH items it didn't even check were still wide open AND that several it claimed to close were only partially fixed. Plus the roadmap said "CI green" without anyone actually running `gh run list`.
+
+- **Never write "CI green" from memory.** Run `gh run list --limit 3` against the current commit. If the conclusion isn't `success`, don't claim green.
+- **Never claim "X removed" without `grep`.** B8 claimed `addWinnings` and `DEMO_TARGETS` were stripped — neither was. A 5-second grep would have caught it.
+- **Never trust prior audit memory blindly.** Memory entries are point-in-time snapshots, not live state. Before citing a memory's claim as fact, verify the cited file:line still exists and still has the claimed content. A 4-day-old "PASS" can be a 4-day-old lie.
+- **Run a re-audit before any "ready to ship" milestone.** A second pass with a fresh agent (no memory of prior audits) finds what the first pass missed. Worked particularly well to give each sub-agent ONE layer (contract / backend / mobile) and a list of specific risk classes to check.
+- **Make verification cheap.** A `check-seek` skill that runs `gh run list`, `cargo check`, `tsc --noEmit`, and `grep -rn` for known regressions in 30s removes the excuse for not verifying. It also surfaces drift between docs/memory and code at session start, before the drift compounds.
+
+The cost of one missed verification compounds over days: B8's incorrect "complete" claims survived in memory for 4 days. B9's re-audit took ~3 hours but found 15 items that would have been exploited within a week of mainnet launch. The ratio of "verify cost" to "ignore-and-eat-the-tail-risk cost" is enormous when the tail is a $1k vault going to zero.

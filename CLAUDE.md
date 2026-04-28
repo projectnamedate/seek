@@ -1,3 +1,32 @@
+## Session-start protocol (MANDATORY before any Seek work)
+
+**First action of every Seek session:** invoke `/check-seek`. It reads
+CLAUDE.md, where-we-are.md, MEMORY.md, roadmap.md, phase-b-execution.md,
+runs `gh run list`, `cargo check`, `tsc --noEmit`, and spot-checks 3-4
+B9 fixes for drift. Takes ~30s. Surfaces broken state immediately.
+
+**If `/check-seek` flags any drift,** address that drift BEFORE any other
+work. Do not start new tasks on top of broken state — this was the B8 →
+B9 failure mode (B8 docs claimed "complete," code wasn't, B9 found it 4
+days late after the user almost shipped to mainnet on top).
+
+**Verify before claim** — applies to all "complete," "closed," "fixed,"
+"shipped," "CI green," "all PASS" claims:
+- "CI green" requires running `gh run list --limit 3` and seeing actual
+  green within the same commit. Never write "CI green" from memory.
+- "X removed" requires running `grep -rn "X" src/` and seeing zero
+  matches. Never claim removal based on intent.
+- "Items closed" requires actually verifying each item against current
+  code. Don't propagate claims from prior memory entries.
+- See `tasks/lessons.md` § "Verify CI was actually green" for prior
+  failure mode that necessitated this rule.
+
+**Session-end protocol:** before pausing for the night or claiming
+"complete," update `tasks/where-we-are.md` so the next session can pick
+up cold without re-reading the whole codebase. Specifically: bump date,
+list what shipped, list latest 3 commit hashes, write the next concrete
+action as a single executable step.
+
 ## Workflow Orchestration
 
 ### 1. Plan Mode Default
