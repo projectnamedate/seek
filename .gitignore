@@ -52,8 +52,16 @@ tmp/
 .mcp.json
 
 # Claude Code / AI tooling
-.claude/
-.agents/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/check-seek/
+!.claude/skills/check-seek/SKILL.md
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/check-seek/
+!.agents/skills/check-seek/SKILL.md
 skills-lock.json
 
 # Local notes

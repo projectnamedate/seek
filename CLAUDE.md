@@ -5,6 +5,10 @@ CLAUDE.md, where-we-are.md, MEMORY.md, roadmap.md, phase-b-execution.md,
 runs `gh run list`, `cargo check`, `tsc --noEmit`, and spot-checks 3-4
 B9 fixes for drift. Takes ~30s. Surfaces broken state immediately.
 
+Codex loads this repo-local skill from `.agents/skills/check-seek/SKILL.md`.
+The `.claude/skills/check-seek/SKILL.md` file is only a compatibility wrapper
+for Claude-style sessions.
+
 **If `/check-seek` flags any drift,** address that drift BEFORE any other
 work. Do not start new tasks on top of broken state — this was the B8 →
 B9 failure mode (B8 docs claimed "complete," code wasn't, B9 found it 4

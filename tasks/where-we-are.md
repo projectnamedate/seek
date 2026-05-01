@@ -53,13 +53,14 @@
 ## Where the user paused
 Night wrap after committing the mainnet-readiness, demo-cleanup, residual-risk,
 and dApp Store asset-planning sweep. Latest commits:
-- `HEAD` docs: refresh README launch status
+- `HEAD` chore: make check-seek Codex-loadable
+- `647e651` docs: refresh README launch status
 - `aad8f60` chore: close mainnet readiness gaps
 - `9aa0e1c` chore: drift-prevention guardrails — session-start protocol, verify-before-claim
-- `18171d7` docs: add Phase B execution playbook
 
 Drift guardrails active:
-- `/check-seek` skill at `.claude/skills/check-seek/SKILL.md` — invoke at session start.
+- `/check-seek` skill at `.agents/skills/check-seek/SKILL.md` — invoke at session start in Codex.
+- Legacy wrapper remains at `.claude/skills/check-seek/SKILL.md` for Claude-style sessions.
 - This file (`tasks/where-we-are.md`) is the canonical session-resume snapshot.
 - CLAUDE.md "Session-start protocol" mandates `/check-seek` first.
 - Global SessionStart hook prints git+CI status when entering any git repo.
