@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 360" role="img" aria-label="Seek logo lockup on light">
+  <rect width="1180" height="360" rx="32" fill="#f6f6f5"/>
+  <g transform="translate(72 58) scale(0.48)">
+    <circle cx="256" cy="256" r="166" fill="none" stroke="#cfe6e4" stroke-width="10"/>
+    <circle cx="256" cy="256" r="118" fill="none" stroke="#99b3be" stroke-width="3" stroke-dasharray="3 18" stroke-linecap="round"/>
+    <path d="M126 126h60M126 126v60M386 126h-60M386 126v60M126 386h60M126 386v-60M386 386h-60M386 386v-60" fill="none" stroke="#61afbd" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M256 118l84 138-84 138-84-138z" fill="#f6f6f5" stroke="#10282c" stroke-width="18" stroke-linejoin="round"/>
+    <path d="M256 165l45 91-45 91-45-91z" fill="#cfe6e4" stroke="#10282c" stroke-width="8" stroke-linejoin="round"/>
+    <circle cx="256" cy="256" r="23" fill="#10282c"/>
+  </g>
+  <text x="350" y="208" fill="#10282c" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="152" font-weight="800" letter-spacing="20">SEEK</text>
+  <text x="358" y="266" fill="#3b555e" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="500" letter-spacing="8">REAL-WORLD BOUNTIES ON SEEKER</text>
+</svg>

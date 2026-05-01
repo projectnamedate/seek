@@ -146,7 +146,7 @@ authority. The signer running init must be the same Ledger.
 **Needs production art, not placeholder reuse.** Current mobile icon/banner
 quality should not be assumed good enough for review or launch conversion.
 
-- [ ] **Design/brand audit first:** review current Seek logo, in-app visual
+- [x] **Design/brand audit first:** review current Seek logo, in-app visual
   language, store listing, and marketing-site direction against Solana Mobile
   dApp Store requirements, Solana Mobile co-marketing guidance, and official
   Solana brand constraints before producing final assets.
@@ -154,24 +154,26 @@ quality should not be assumed good enough for review or launch conversion.
   `https://docs.solanamobile.com/dapp-store/submit-new-app`,
   `https://docs.solanamobile.com/marketing/comarketing-guidelines`,
   `https://solana.com/branding/`.
-- [ ] **Seek logo system:** create the production Seek logo/mark, app-icon
+  Done in `dapp-store-publishing/assets/source/brand-audit.md`.
+- [x] **Seek logo system:** create the production Seek logo/mark, app-icon
   variant, monochrome variant, dark/light lockups, and usage notes. This should
   be Seek-owned branding; do not misuse or recolor Solana/Solana Mobile marks.
-- [ ] **New app icon:** `dapp-store-publishing/assets/icon.png`, 512x512 PNG.
+- [x] **New app icon:** `dapp-store-publishing/assets/icon.png`, 512x512 PNG.
   Needs a cleaner production mark that reads at store/grid size; do not rely on
   the hackathon-era mobile icon without a design pass.
-- [ ] **New required banner:** `dapp-store-publishing/assets/banner.png`,
+- [x] **New required banner:** `dapp-store-publishing/assets/banner.png`,
   1200x600 PNG/JPG. Should communicate "real-world Seeker hunt + SKR stakes"
   immediately, using real app/product visuals rather than generic gradients or
   over-weighted token/economics messaging.
 - [ ] **Screenshots/videos:** at least 4 real app screenshots/videos under
   `dapp-store-publishing/assets/screenshots/en-US/`; images must be >=1080x1080
   and share orientation + aspect ratio.
-- [ ] **Optional feature graphic:** `dapp-store-publishing/assets/feature-graphic.png`,
+- [x] **Optional feature graphic:** `dapp-store-publishing/assets/feature-graphic.png`,
   1200x1200 for Editor's Choice consideration.
-- [ ] **Asset QA:** verify icon legibility at small sizes, banner readability
+- [~] **Asset QA:** verify icon legibility at small sizes, banner readability
   in dark/light contexts, screenshot text fit, and contrast/accessibility before
-  running `check-assets.mjs`.
+  running `check-assets.mjs`. Icon/banner/feature graphic dimensions pass; final
+  screenshot QA remains pending real captures.
 
 **Unblocks:** `dapp-store-publishing/config.yaml` final fill + release NFT mint.
 **Guard:** `cd dapp-store-publishing && node check-assets.mjs`.

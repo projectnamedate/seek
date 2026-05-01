@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" role="img" aria-label="Seek feature graphic">
+  <defs>
+    <linearGradient id="bg" x1="120" y1="0" x2="1080" y2="1200" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#010101"/>
+      <stop offset="0.62" stop-color="#071314"/>
+      <stop offset="1" stop-color="#10282c"/>
+    </linearGradient>
+    <linearGradient id="stroke" x1="260" y1="220" x2="940" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#cfe6e4"/>
+      <stop offset="0.5" stop-color="#95d2e6"/>
+      <stop offset="1" stop-color="#61afbd"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="340" y1="850" x2="860" y2="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d4a017"/>
+      <stop offset="1" stop-color="#cfe6e4"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="1200" fill="url(#bg)"/>
+  <path d="M0 300h1200M0 600h1200M0 900h1200M300 0v1200M600 0v1200M900 0v1200" stroke="#cfe6e4" stroke-width="2" opacity="0.06"/>
+  <circle cx="600" cy="560" r="318" fill="#010101" opacity="0.32"/>
+  <circle cx="600" cy="560" r="300" fill="none" stroke="#10282c" stroke-width="22"/>
+  <circle cx="600" cy="560" r="214" fill="none" stroke="#cfe6e4" stroke-width="7" stroke-dasharray="7 30" stroke-linecap="round" opacity="0.34"/>
+  <path d="M365 325h110M365 325v110M835 325H725M835 325v110M365 795h110M365 795V685M835 795H725M835 795V685" fill="none" stroke="url(#stroke)" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M600 310l152 250-152 250-152-250z" fill="#010101" stroke="url(#stroke)" stroke-width="30" stroke-linejoin="round"/>
+  <path d="M600 392l82 168-82 168-82-168z" fill="#10282c" stroke="#cfe6e4" stroke-width="14" stroke-linejoin="round"/>
+  <circle cx="600" cy="560" r="42" fill="#cfe6e4"/>
+  <path d="M424 748c68-22 110-58 143-111 33-52 86-78 167-101 42-12 73-34 95-71" fill="none" stroke="url(#gold)" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="424" cy="748" r="24" fill="#d4a017"/>
+  <circle cx="829" cy="465" r="18" fill="#cfe6e4"/>
+  <text x="600" y="1000" text-anchor="middle" fill="url(#stroke)" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="150" font-weight="850" letter-spacing="22">SEEK</text>
+  <text x="600" y="1062" text-anchor="middle" fill="#99b3be" font-family="Arial, Helvetica, sans-serif" font-size="30" font-weight="500" letter-spacing="7">HUNT. CAPTURE. SETTLE.</text>
+</svg>

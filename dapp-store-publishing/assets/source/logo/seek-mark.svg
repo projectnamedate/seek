@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Seek reticle compass mark">
+  <defs>
+    <linearGradient id="seekStroke" x1="96" y1="80" x2="416" y2="432" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#cfe6e4"/>
+      <stop offset="0.48" stop-color="#95d2e6"/>
+      <stop offset="1" stop-color="#61afbd"/>
+    </linearGradient>
+    <linearGradient id="seekGold" x1="172" y1="350" x2="342" y2="166" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#d4a017"/>
+      <stop offset="1" stop-color="#cfe6e4"/>
+    </linearGradient>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.38 0 0 0 0 0.69 0 0 0 0 0.74 0 0 0 0.45 0"/>
+      <feMerge>
+        <feMergeNode/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <rect width="512" height="512" rx="104" fill="#010101"/>
+  <path d="M64 164H40M64 256H32M64 348H40M448 164h24M448 256h32M448 348h24M164 64V40M256 64V32M348 64V40M164 448v24M256 448v32M348 448v24" stroke="#10282c" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="256" cy="256" r="166" fill="none" stroke="#10282c" stroke-width="10"/>
+  <circle cx="256" cy="256" r="118" fill="none" stroke="#373c3e" stroke-width="3" stroke-dasharray="3 18" stroke-linecap="round"/>
+  <path d="M126 126h60M126 126v60M386 126h-60M386 126v60M126 386h60M126 386v-60M386 386h-60M386 386v-60" fill="none" stroke="url(#seekStroke)" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" filter="url(#softGlow)"/>
+  <path d="M256 118l84 138-84 138-84-138z" fill="#010101" stroke="url(#seekStroke)" stroke-width="18" stroke-linejoin="round" filter="url(#softGlow)"/>
+  <path d="M256 165l45 91-45 91-45-91z" fill="#10282c" stroke="#cfe6e4" stroke-width="8" stroke-linejoin="round"/>
+  <circle cx="256" cy="256" r="23" fill="#cfe6e4"/>
+  <path d="M166 342c32-11 50-28 65-52 16-26 42-39 82-50 18-5 31-14 40-28" fill="none" stroke="url(#seekGold)" stroke-width="10" stroke-linecap="round"/>
+  <circle cx="166" cy="342" r="14" fill="#d4a017"/>
+  <circle cx="353" cy="212" r="10" fill="#cfe6e4"/>
+</svg>

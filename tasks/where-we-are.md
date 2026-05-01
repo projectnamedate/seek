@@ -44,8 +44,11 @@
 - ✅ 2026-05-01 session-start check cleaned README launch drift: production
   docs now describe mainnet-beta as default, Ledger-gated deploy status, current
   auth rotation, and tier-specific AI thresholds.
-- 🟡 `dapp-store-publishing/check-assets.mjs` correctly fails until real assets
-  exist: missing `icon.png`, `banner.png`, and screenshots.
+- ✅ 2026-05-01 B6 asset pass: official-source design audit, Seek-owned logo
+  system, store icon, banner, optional feature graphic, and mobile app icon
+  refresh are done.
+- 🟡 `dapp-store-publishing/check-assets.mjs` now correctly fails only until
+  real screenshots/videos exist.
 - ⚠️ `npm audit fix` applied non-breaking backend fixes. Residual audit findings
   are Solana stack advisories (`bigint-buffer`, transitive `uuid`) where npm's
   only proposed fix is a breaking `@solana/spl-token` downgrade.
@@ -53,7 +56,8 @@
 ## Where the user paused
 Night wrap after committing the mainnet-readiness, demo-cleanup, residual-risk,
 and dApp Store asset-planning sweep. Latest commits:
-- `HEAD` chore: make check-seek Codex-loadable
+- `HEAD` feat: add Seek launch brand assets
+- `06f0ebb` chore: make check-seek Codex-loadable
 - `647e651` docs: refresh README launch status
 - `aad8f60` chore: close mainnet readiness gaps
 - `9aa0e1c` chore: drift-prevention guardrails — session-start protocol, verify-before-claim
@@ -69,7 +73,7 @@ Drift guardrails active:
 
 ## Next concrete action
 
-**Tomorrow first: B6 design/brand audit + production Seek logo/icon/banner direction.**
+**Next: capture real release-build screenshots/videos for B6.**
 
 Use:
 - `tasks/roadmap.md` § B6
@@ -81,7 +85,8 @@ Re-check official sources before producing assets:
 - `https://docs.solanamobile.com/marketing/comarketing-guidelines`
 - `https://solana.com/branding/`
 
-After B6 direction is locked, capture real Seeker screenshots and run:
+After the app can run as a release build on device, capture real Seeker
+screenshots and run:
 
 ```bash
 cd dapp-store-publishing

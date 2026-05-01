@@ -179,6 +179,11 @@ screenshots once a dev build is running on Seeker.
 
 **Validate:** `cd dapp-store-publishing && node check-assets.mjs`.
 
+**2026-05-01 progress:** brand audit, logo system source files, app/store
+icon, required banner, optional feature graphic, and mobile Expo icon refresh
+are done. `check-assets.mjs` now fails only because real screenshots/videos are
+not captured yet.
+
 **Unblocks:** `npx dapp-store create release`.
 
 **Can be parallel with:** B0, B1, B5.
