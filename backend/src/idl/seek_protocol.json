@@ -278,7 +278,7 @@
       "name": "cancel_bounty",
       "docs": [
         "Cancel a bounty - player can reclaim entry after expiry + grace period",
-        "Only works if bounty is still in Pending or Submitted state (not resolved)"
+        "Only works if bounty is still Pending (no photo submitted yet)."
       ],
       "discriminator": [
         79,
@@ -784,7 +784,9 @@
         {
           "name": "authority",
           "docs": [
-            "Authority who will manage the protocol"
+            "Authority who will manage the protocol. On mainnet, must match the",
+            "hardcoded `EXPECTED_INITIAL_AUTHORITY` (see top of file). Closes the",
+            "front-run vector between `anchor deploy` and the first `initialize` tx."
           ],
           "writable": true,
           "signer": true
@@ -991,9 +993,17 @@
           }
         },
         {
+          "name": "protocol_treasury_owner",
+          "docs": [
+            "Protocol treasury owner. Unchecked because the token-account owner may",
+            "be a system wallet today or a program-owned multisig/PDA later; the key",
+            "is still pinned by token owner + canonical ATA constraints below."
+          ]
+        },
+        {
           "name": "protocol_treasury",
           "docs": [
-            "Protocol treasury - existing token account for protocol fees"
+            "Protocol treasury - existing canonical SKR ATA for protocol fees"
           ]
         },
         {
@@ -1473,6 +1483,14 @@
           }
         },
         {
+          "name": "new_treasury_owner",
+          "docs": [
+            "New treasury owner. Unchecked because future custody could be a",
+            "program-owned multisig/PDA; constraints below bind the key to the token",
+            "account owner and canonical ATA."
+          ]
+        },
+        {
           "name": "new_treasury"
         },
         {
@@ -1759,6 +1777,16 @@
       "code": 6017,
       "name": "BountyCooldown",
       "msg": "Bounty close cooldown has not elapsed (24h after creation)"
+    },
+    {
+      "code": 6018,
+      "name": "InvalidTreasuryOwner",
+      "msg": "Invalid protocol treasury owner"
+    },
+    {
+      "code": 6019,
+      "name": "InvalidTreasuryAccount",
+      "msg": "Protocol treasury must be the canonical SKR associated token account for its owner"
     }
   ],
   "types": [

@@ -90,7 +90,7 @@ router.get('/ready', async (req: Request, res: Response) => {
  */
 router.get('/stats', async (req: Request, res: Response) => {
   try {
-    const bountyStats = getBountyStats();
+    const bountyStats = await getBountyStats();
     const houseBalance = await getHouseVaultBalance();
     const singularityBalance = await getSingularityVaultBalance();
 
@@ -116,35 +116,5 @@ router.get('/stats', async (req: Request, res: Response) => {
     });
   }
 });
-
-// Demo endpoint: only register in development
-if (config.server.isDev) {
-  /**
-   * GET /api/health/demo
-   * Demo-friendly stats (no blockchain calls)
-   */
-  router.get('/demo', (req: Request, res: Response) => {
-    const bountyStats = getBountyStats();
-
-    res.status(200).json({
-      success: true,
-      data: {
-        status: 'Demo Mode Active',
-        bounties: {
-          ...bountyStats,
-          winRate: bountyStats.total > 0
-            ? Math.round((bountyStats.won / (bountyStats.won + bountyStats.lost || 1)) * 100)
-            : 0,
-        },
-        features: {
-          aiValidation: true,
-          blockchain: false,
-          singularityJackpot: 'simulated',
-        },
-        version: '1.0.0-demo',
-      },
-    });
-  });
-}
 
 export default router;

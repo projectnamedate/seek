@@ -1,8 +1,10 @@
 # Phase B — User-gated execution sequence
 
-**Status as of 2026-04-27:** All code-side mainnet blockers closed (Phases A
-+ B7 + B8 + B9). CI green for first time. Remaining work is
-hardware/funding/assets/manual-edits the user has to do or authorize.
+**Status as of 2026-04-30:** B9 code hardening is still green. B0a Ledger
+signing support is now implemented in code for `initialize-protocol.ts` and
+cold-admin `admin.ts` paths. The remaining launch gate is user hardware:
+connect the Ledger, paste the same pubkey into `EXPECTED_INITIAL_AUTHORITY`,
+run preflight, then build/deploy.
 
 This file is the **execution playbook** for getting from here to a live
 mainnet deploy + Solana dApp Store listing. Each item is sized in real
@@ -14,11 +16,26 @@ Order matters where flagged. Items not flagged can be parallelized.
 
 ---
 
-## The 9 items
+## The launch items
+
+### B0a — Make init/admin Ledger-signable ✅ code complete
+**Time:** 5-10 min real-device smoke once Ledger is connected
+**Dependency:** Ledger connected locally.
+**Done:** `backend/src/utils/authority-signer.ts` supports
+`AUTHORITY_SIGNER=ledger`, `AUTHORITY_LEDGER_PATH`, and
+`AUTHORITY_LEDGER_PUBKEY`; `initialize-protocol.ts` and cold-admin paths in
+`admin.ts` now sign through that abstraction. `mainnet-preflight.ts` verifies
+the Ledger pubkey matches `EXPECTED_INITIAL_AUTHORITY`.
+
+**Still required:** real-device verification with the Solana app open.
+
+**Unblocks:** B0, Phase C steps 6-10 after the Ledger pubkey is known.
+
+---
 
 ### B0 — Paste cold Ledger pubkey into `lib.rs` 🔴 NEW from B9-2
 **Time:** 1 min
-**Dependency:** Have a Ledger device with the Solana app installed.
+**Dependency:** Ledger device with the Solana app installed.
 **Action:**
 ```bash
 solana-keygen pubkey usb://ledger
@@ -31,10 +48,26 @@ grep -A1 EXPECTED_INITIAL_AUTHORITY contracts/programs/seek-protocol/src/lib.rs
 ```
 **Why this is first:** Without it, the mainnet `anchor build` will produce
 a binary whose `initialize` rejects the cold Ledger as authority (the
-constraint also rejects the System Program placeholder). Cheap to do up
-front; impossible to forget if it's step 1.
+constraint also rejects the System Program placeholder). Do not build for
+mainnet until the signer that will run `initialize` is the same pubkey pasted
+here.
 
 **Unblocks:** mainnet `anchor build`.
+
+### B0b — Verify program stays upgradeable 🟡 critical-path
+**Time:** 1 min before deploy, 1 min after deploy
+**Dependency:** B0.
+**Action:**
+```bash
+cd backend
+npm run preflight:mainnet -- --offline   # before deploy
+npm run preflight:mainnet                # after deploy, verifies upgrade authority if account exists
+```
+**Rule:** deploy with `anchor deploy --provider.cluster mainnet --provider.wallet usb://ledger`
+and do **not** pass `--final`. Keep Ledger as program upgrade authority until
+post-launch behavior is stable and any demo/devnet-era tweaks are complete.
+
+**Unblocks:** safe post-deploy tweaks/upgrades.
 
 ---
 
@@ -126,14 +159,25 @@ Then update `dapp-store-publishing/config.yaml:24` with the pubkey.
 ---
 
 ### B6 — dApp Store visual assets 🟡 critical-path-for-dApp-Store
-**Time:** 30-60 min for screenshots (need a dev build running on Seeker)
+**Time:** 2-4 hr for design audit + logo/icon/banner pass; 30-60 min for
+screenshots once a dev build is running on Seeker.
 **Needs:**
-- 5-6 screenshots at Seeker aspect ratio (1080×2400)
-- Feature graphic (1200×630)
-- App icon (512×512 — can reuse `mobile/assets/icon.png`)
+- Design/brand audit against current Solana Mobile dApp Store publishing docs,
+  Solana Mobile co-marketing guidance, and official Solana brand constraints.
+- Production Seek logo/mark system: app icon variant, monochrome variant,
+  dark/light lockups, and usage notes.
+- App icon: `dapp-store-publishing/assets/icon.png` (512x512 PNG)
+- Required banner: `dapp-store-publishing/assets/banner.png` (1200x600 PNG/JPG)
+- At least 4 real screenshots/videos in `dapp-store-publishing/assets/screenshots/en-US/`
+- Screenshot images must be at least 1080x1080 and share orientation/aspect ratio
+- Optional Editor's Choice feature graphic: `feature-graphic.png` (1200x1200)
 
-**Drop into:** `dapp-store-publishing/assets/` with subfolders per locale
-(`screenshots/en-US/`).
+**Source checks before producing assets:**
+- `https://docs.solanamobile.com/dapp-store/submit-new-app`
+- `https://docs.solanamobile.com/marketing/comarketing-guidelines`
+- `https://solana.com/branding/`
+
+**Validate:** `cd dapp-store-publishing && node check-assets.mjs`.
 
 **Unblocks:** `npx dapp-store create release`.
 
@@ -169,11 +213,10 @@ does the wiring once you click deploy. Final copy approval.
 ## Recommended execution order
 
 ```
-Day 1 (parallelizable hour):
-  ┌─ B0 (paste pubkey, 1 min)  ─┐
-  ├─ B1 (keystore, 5 min)        │
-  ├─ B5 (publisher wallet, 5 min)│  all in parallel,
-  └─ B9 (marketing site, ~45 min) ┘  Claude does B9 while you do the others
+Day 1:
+  1. B0 (paste Ledger pubkey) → B0b (preflight)
+  2. In parallel after B0/B0b: B1 (keystore), B5 (publisher wallet),
+     B9 (marketing site)
 
 Day 1 → Day 2 (waits on user funding):
   - B3 (Ledger SOL, depends on your SOL liquidity)
@@ -183,14 +226,14 @@ Day 1 → Day 2 (waits on user funding):
 Day 2 (when B3 + B4 + B6 + B9 all done):
   → Phase C: mainnet deploy (sequential, ≤1 day)
     1. anchor build
-    2. anchor deploy --provider.cluster mainnet --provider.wallet usb://ledger
+    2. npm run deploy:mainnet (no --final)
     3. anchor idl init
     4. solana-verify build && solana-verify upload
     5. Generate hot keypair, fund 0.3 SOL
     6. initialize → initialize_house_vault → initialize_singularity_vault
     7. admin.ts set-hot <hot_pubkey>
     8. admin.ts propose-transfer (if rotating cold auth)
-    9. solana program set-upgrade-authority (optional)
+    9. confirm Ledger remains program upgrade authority; do not finalize
     10. Transfer SKR + admin.ts fund 58824
     11. Backend → Railway, env vars, Upstash addon, custom domain
     12. mobile/src/config/index.ts already at mainnet (verified by build-time assertion)
@@ -213,7 +256,7 @@ Day 3 → Day 7 (dApp Store review):
 ## Hard dependencies
 
 ```
-B0 ────► Phase C (mainnet build)
+B0 ───► B0b ────► Phase C (mainnet build + init/admin)
 B1 ────► Release APK ────► Phase C step 13
 B3 ────► Phase C steps 2-7 (deploy + init)
 B4 ────► Real-money play (vault funded)

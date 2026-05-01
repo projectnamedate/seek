@@ -96,8 +96,8 @@ function swapTo(network: 'devnet' | 'mainnet') {
     console.log('\nREMINDER: You must also:');
     console.log('  1. Run `anchor build` to rebuild the contract with mainnet SKR_MINT');
     console.log('  2. Deploy to mainnet: `anchor deploy --provider.cluster mainnet`');
-    console.log('  3. Update AUTHORITY_PRIVATE_KEY in .env with mainnet key');
-    console.log('  4. Run initialize-protocol.ts against mainnet');
+    console.log('  3. Run `npm run preflight:mainnet -- --offline` before deploy');
+    console.log('  4. Deploy without --final, then run initialize-protocol.ts with AUTHORITY_SIGNER=ledger');
   } else {
     console.log('\nREMINDER: You must also:');
     console.log('  1. Run `anchor build` to rebuild the contract with devnet test token');

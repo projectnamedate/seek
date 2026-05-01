@@ -107,7 +107,7 @@ export default function HomeScreen({ navigation }: Props) {
   const handleStartHunt = async () => {
     const tier = TIERS[selectedTier];
 
-    // Check balance using AppContext wallet state (works for both MWA and demo)
+    // Check balance using AppContext wallet state.
     if (wallet.balance < tier.entry) {
       // TODO: Show insufficient balance modal
       return;
@@ -545,20 +545,6 @@ const styles = StyleSheet.create({
     fontSize: fontSize.sm,
     marginTop: spacing.xs,
     opacity: 0.8,
-  },
-  demoBadge: {
-    position: 'absolute',
-    top: spacing.xl + 8,
-    right: spacing.lg,
-    backgroundColor: colors.teal,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: borderRadius.sm,
-  },
-  demoBadgeText: {
-    color: colors.textPrimary,
-    fontSize: 10,
-    fontWeight: '700',
   },
   dimmed: {
     opacity: 0.3,

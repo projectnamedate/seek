@@ -6,7 +6,9 @@
     "test": "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts",
     "test:integration": "anchor test",
     "build": "anchor build",
-    "deploy:devnet": "anchor deploy --provider.cluster devnet"
+    "build:devnet": "anchor build -- --no-default-features --features devnet",
+    "deploy:devnet": "anchor deploy --provider.cluster devnet",
+    "deploy:mainnet": "anchor deploy --provider.cluster mainnet --provider.wallet usb://ledger"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",

@@ -11,28 +11,42 @@
 import 'dotenv/config';
 import {
   Connection,
-  Keypair,
   PublicKey,
   SystemProgram,
-  Transaction,
+  Transaction
 } from '@solana/web3.js';
-import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction } from '@solana/spl-token';
-import bs58 from 'bs58';
+import { AnchorProvider, Program } from '@coral-xyz/anchor';
+import {
+  TOKEN_PROGRAM_ID,
+  getAssociatedTokenAddress,
+  createAssociatedTokenAccountInstruction
+} from '@solana/spl-token';
 import idl from '../src/idl/seek_protocol.json';
+import {
+  AuthoritySigner,
+  loadAuthoritySigner,
+  sendAuthorityTransaction
+} from '../src/utils/authority-signer';
 
 // Load config from env
-const RPC_URL = process.env.SOLANA_RPC_URL!;
-const AUTHORITY_KEY = process.env.AUTHORITY_PRIVATE_KEY!;
-const PROGRAM_ID = new PublicKey(process.env.SEEK_PROGRAM_ID!);
-const SKR_MINT = new PublicKey(process.env.SKR_MINT!);
+function requiredEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`Missing required initialization env: ${name}`);
+  }
+  return value;
+}
+
+const RPC_URL = requiredEnv('SOLANA_RPC_URL');
+const PROGRAM_ID = new PublicKey(requiredEnv('SEEK_PROGRAM_ID'));
+const SKR_MINT = new PublicKey(requiredEnv('SKR_MINT'));
 
 // FEES_WALLET — receives the 10% protocol-treasury cut from every loss.
 // Locked on-chain at initialize_singularity_vault. Required.
 if (!process.env.FEES_WALLET) {
   throw new Error(
     'FEES_WALLET env var is required. This address is the protocol_treasury ' +
-    'recipient and is locked on-chain forever at initialize_singularity_vault.'
+      'recipient set at initialize_singularity_vault. It is rotatable later via set_treasury.'
   );
 }
 const FEES_WALLET = new PublicKey(process.env.FEES_WALLET);
@@ -42,16 +56,20 @@ async function main() {
 
   // Setup
   const connection = new Connection(RPC_URL, 'confirmed');
-  const authority = Keypair.fromSecretKey(bs58.decode(AUTHORITY_KEY));
-  const wallet = new Wallet(authority);
-  const provider = new AnchorProvider(connection, wallet, { commitment: 'confirmed' });
+  const authority = await loadAuthoritySigner();
+  const provider = new AnchorProvider(connection, authority, {
+    commitment: 'confirmed'
+  });
   const program = new Program(idl as any, provider);
 
   console.log(`RPC:        ${RPC_URL}`);
   console.log(`Authority:  ${authority.publicKey.toBase58()}`);
+  console.log(`Signer:     ${authority.label}`);
   console.log(`Program:    ${PROGRAM_ID.toBase58()}`);
   console.log(`SKR Mint:   ${SKR_MINT.toBase58()}`);
-  console.log(`Fees Wallet: ${FEES_WALLET.toBase58()}  (LOCKED ON-CHAIN AT INIT)`);
+  console.log(
+    `Fees Wallet: ${FEES_WALLET.toBase58()}  (set at init; rotatable via set_treasury)`
+  );
 
   const balance = await connection.getBalance(authority.publicKey);
   console.log(`Balance:   ${balance / 1e9} SOL\n`);
@@ -78,23 +96,31 @@ async function main() {
   const existingState = await connection.getAccountInfo(globalStatePda);
   if (existingState) {
     console.log('Global state already exists. Checking vault status...\n');
-    const state = await (program.account as any).globalState.fetch(globalStatePda);
+    const state = await (program.account as any).globalState.fetch(
+      globalStatePda
+    );
     console.log('Current state:', {
       authority: state.authority.toBase58(),
       houseVault: state.houseVault.toBase58(),
       singularityVault: state.singularityVault.toBase58(),
       protocolTreasury: state.protocolTreasury.toBase58(),
       houseFundBalance: state.houseFundBalance.toString(),
-      totalBountiesCreated: state.totalBountiesCreated.toString(),
+      totalBountiesCreated: state.totalBountiesCreated.toString()
     });
 
     // Check if vaults need initialization
     const houseVaultExists = await connection.getAccountInfo(houseVaultPda);
-    const singularityVaultExists = await connection.getAccountInfo(singularityVaultPda);
+    const singularityVaultExists =
+      await connection.getAccountInfo(singularityVaultPda);
 
     if (!houseVaultExists) {
       console.log('\nHouse vault not initialized. Running step 2...');
-      await step2_initHouseVault(program, authority, globalStatePda, houseVaultPda);
+      await step2_initHouseVault(
+        program,
+        authority,
+        globalStatePda,
+        houseVaultPda
+      );
     } else {
       console.log('House vault: OK');
     }
@@ -102,7 +128,13 @@ async function main() {
     if (!singularityVaultExists) {
       console.log('\nSingularity vault not initialized. Running step 3...');
       const treasuryAta = await getOrCreateTreasury(connection, authority);
-      await step3_initSingularityVault(program, authority, globalStatePda, singularityVaultPda, treasuryAta);
+      await step3_initSingularityVault(
+        program,
+        authority,
+        globalStatePda,
+        singularityVaultPda,
+        treasuryAta
+      );
     } else {
       console.log('Singularity vault: OK');
     }
@@ -119,7 +151,7 @@ async function main() {
       .accounts({
         authority: authority.publicKey,
         globalState: globalStatePda,
-        systemProgram: SystemProgram.programId,
+        systemProgram: SystemProgram.programId
       })
       .rpc();
     console.log(`  TX: ${sig}`);
@@ -137,17 +169,25 @@ async function main() {
 
   // === Step 3: Initialize Singularity Vault + Treasury ===
   const treasuryAta = await getOrCreateTreasury(connection, authority);
-  await step3_initSingularityVault(program, authority, globalStatePda, singularityVaultPda, treasuryAta);
+  await step3_initSingularityVault(
+    program,
+    authority,
+    globalStatePda,
+    singularityVaultPda,
+    treasuryAta
+  );
 
   // === Verify ===
   console.log('\n=== Verification ===');
-  const state = await (program.account as any).globalState.fetch(globalStatePda);
+  const state = await (program.account as any).globalState.fetch(
+    globalStatePda
+  );
   console.log('Global State:', {
     authority: state.authority.toBase58(),
     houseVault: state.houseVault.toBase58(),
     singularityVault: state.singularityVault.toBase58(),
     protocolTreasury: state.protocolTreasury.toBase58(),
-    bump: state.bump,
+    bump: state.bump
   });
 
   console.log('\nProtocol initialization complete!');
@@ -155,7 +195,7 @@ async function main() {
 
 async function step2_initHouseVault(
   program: Program,
-  authority: Keypair,
+  authority: AuthoritySigner,
   globalStatePda: PublicKey,
   houseVaultPda: PublicKey
 ) {
@@ -169,7 +209,7 @@ async function step2_initHouseVault(
         houseVault: houseVaultPda,
         skrMint: SKR_MINT,
         systemProgram: SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID
       })
       .rpc();
     console.log(`  TX: ${sig}`);
@@ -185,7 +225,7 @@ async function step2_initHouseVault(
 
 async function step3_initSingularityVault(
   program: Program,
-  authority: Keypair,
+  authority: AuthoritySigner,
   globalStatePda: PublicKey,
   singularityVaultPda: PublicKey,
   treasuryAta: PublicKey
@@ -198,10 +238,11 @@ async function step3_initSingularityVault(
         authority: authority.publicKey,
         globalState: globalStatePda,
         singularityVault: singularityVaultPda,
+        protocolTreasuryOwner: FEES_WALLET,
         protocolTreasury: treasuryAta,
         skrMint: SKR_MINT,
         systemProgram: SystemProgram.programId,
-        tokenProgram: TOKEN_PROGRAM_ID,
+        tokenProgram: TOKEN_PROGRAM_ID
       })
       .rpc();
     console.log(`  TX: ${sig}`);
@@ -217,7 +258,7 @@ async function step3_initSingularityVault(
 
 async function getOrCreateTreasury(
   connection: Connection,
-  authority: Keypair
+  authority: AuthoritySigner
 ): Promise<PublicKey> {
   // Treasury is the SKR ATA owned by FEES_WALLET. Authority pays the rent
   // to create it if needed; FEES_WALLET keeps custody of any received tokens.
@@ -225,17 +266,20 @@ async function getOrCreateTreasury(
 
   const existing = await connection.getAccountInfo(treasuryAta);
   if (!existing) {
-    console.log(`Creating treasury ATA owned by FEES_WALLET (${FEES_WALLET.toBase58()})...`);
+    console.log(
+      `Creating treasury ATA owned by FEES_WALLET (${FEES_WALLET.toBase58()})...`
+    );
     const tx = new Transaction().add(
       createAssociatedTokenAccountInstruction(
         authority.publicKey, // payer
-        treasuryAta,         // ata to create
-        FEES_WALLET,         // owner
+        treasuryAta, // ata to create
+        FEES_WALLET, // owner
         SKR_MINT
       )
     );
-    const sig = await connection.sendTransaction(tx, [authority]);
-    await connection.confirmTransaction(sig, 'confirmed');
+    const sig = await sendAuthorityTransaction(connection, authority, tx, {
+      preflightCommitment: 'confirmed'
+    });
     console.log(`  Treasury ATA created: ${treasuryAta.toBase58()}\n`);
   } else {
     console.log(`Treasury ATA: ${treasuryAta.toBase58()} (already exists)`);

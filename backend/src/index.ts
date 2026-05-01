@@ -12,6 +12,7 @@ import sgtRoutes from './routes/sgt.routes';
 import { startFinalizationWorker, stopFinalizationWorker } from './services/finalizer.service';
 import { startBountyWorkers, stopBountyWorkers } from './services/bounty.service';
 import { startSGTWorkers, stopSGTWorkers } from './services/sgt.service';
+import { createRateLimitStore } from './middleware/rateLimiter.middleware';
 import { initSentry, setupSentryErrorHandler } from './services/sentry.service';
 import { logger } from './services/logger.service';
 
@@ -76,9 +77,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Tighter per-wallet limits on /start + /submit live in rateLimiter.middleware.ts.
 // A single app session easily hits ~20 requests (balance + sgt + prepare + start +
 // poll + submit) so keep the global budget friendly for users behind carrier NAT.
+const globalRateLimitStore = createRateLimitStore('seek:rl:global');
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 300,
+  ...(globalRateLimitStore ? { store: globalRateLimitStore } : {}),
+  passOnStoreError: false,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests, please try again later' },

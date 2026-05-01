@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Install deps (use npm ci for reproducibility when package-lock.json exists)
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --omit=optional
 
 # Build the TypeScript sources
 COPY tsconfig.json ./
@@ -22,7 +22,7 @@ RUN addgroup -S seek && adduser -S seek -G seek
 
 # Install production deps only
 COPY package*.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+RUN npm ci --omit=dev --omit=optional && npm cache clean --force
 
 # Copy built artifacts
 COPY --from=builder /app/dist ./dist

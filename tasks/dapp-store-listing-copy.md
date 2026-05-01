@@ -128,13 +128,13 @@ random real-world target, photograph it within a time limit, and
 earn 2x their entry if Claude Vision confirms the photo.
 
 TO TEST:
-1. Connect wallet (Phantom on devnet, Solflare, etc). We provided a
-   test wallet in the submission form with 50,000 SKR.
+1. Connect a Seeker-compatible wallet via Mobile Wallet Adapter. We provided
+   a funded mainnet test wallet in the submission form.
 2. Tap "Connect Wallet" → MWA approves.
 3. Select any tier (recommend Easy — 1000 SKR, 3 min).
 4. Tap "Start Hunt" and approve the transaction.
-5. You'll receive a mission like "Find a red fire hydrant". For
-   testing, any photo of the target works — AI is lenient in demo.
+5. You'll receive a mission like "Find a red fire hydrant". Capture a real
+   matching target; the app does not support a demo mode.
 6. Tap the camera button, capture any photo.
 7. AI validates in ~3 seconds. Win → +2000 SKR. Loss → entry
    distributed to house / jackpot / treasury pools.

@@ -33,6 +33,7 @@ import { getRandomMission } from '../data/missions';
 import { PublicKey } from '@solana/web3.js';
 import { isWalletSGTVerified } from '../services/sgt.service';
 import { attestationService, AttestationPayload } from '../services/attestation.service';
+import { reserveWalletDailyBounty } from '../services/wallet-bounty-limit.service';
 import { validate } from '../middleware/validate.middleware';
 import { requireWalletAuth } from '../middleware/auth.middleware';
 import { bountyPrepareLimiter, bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
@@ -86,11 +87,23 @@ router.post('/prepare', bountyPrepareLimiter, requireWalletAuth('prepare'), vali
     const playerWallet = (req as any).verifiedWallet as string;
 
     // Check for existing active bounty
-    const existing = getPlayerActiveBounty(playerWallet);
+    const existing = await getPlayerActiveBounty(playerWallet);
     if (existing) {
       return res.status(409).json({
         success: false,
         error: 'Player already has an active bounty',
+      });
+    }
+
+    const dailyLimit = await reserveWalletDailyBounty(playerWallet);
+    if (!dailyLimit.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: 'Daily bounty limit reached',
+        data: {
+          limit: dailyLimit.limit,
+          resetAt: dailyLimit.resetAt.toISOString(),
+        },
       });
     }
 
@@ -160,7 +173,7 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
 
     try {
     // Check for existing active bounty
-    const existing = getPlayerActiveBounty(playerWallet);
+    const existing = await getPlayerActiveBounty(playerWallet);
     if (existing) {
       return res.status(409).json({
         success: false,
@@ -208,8 +221,19 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
+    // Bind /start to the exact prepared tier. The on-chain accept_bounty
+    // transaction was built from /prepare's entryAmount/timestamp/commitment;
+    // trusting a new client-supplied tier here would desync backend timers and
+    // payout display from the already-signed on-chain bounty.
+    if (prepared.tier !== tier) {
+      return res.status(400).json({
+        success: false,
+        error: 'Tier does not match prepared bounty',
+      } as ApiResponse<never>);
+    }
+
     // Create bounty using the prepared mission (not a new random one)
-    const { bounty, missionDescription } = createBounty(
+    const { bounty, missionDescription } = await createBounty(
       playerWallet,
       tier,
       bountyPda,
@@ -303,7 +327,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
     }
 
     // Get bounty
-    const bounty = getBounty(bountyId);
+    const bounty = await getBounty(bountyId);
     if (!bounty) {
       return res.status(404).json({
         success: false,
@@ -329,7 +353,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
 
     // Check expiration
     if (isBountyExpired(bounty)) {
-      updateBountyStatus(bountyId, 'expired');
+      await updateBountyStatus(bountyId, 'expired');
       return res.status(400).json({
         success: false,
         error: 'Bounty has expired',
@@ -337,7 +361,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
     }
 
     // Get mission
-    const mission = getBountyMission(bountyId);
+    const mission = await getBountyMission(bountyId);
     if (!mission) {
       return res.status(500).json({
         success: false,
@@ -346,7 +370,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
     }
 
     // Mark as validating
-    markBountyValidating(bountyId);
+    await markBountyValidating(bountyId);
 
     log.info({ bountyId }, 'validating photo for bounty');
 
@@ -413,7 +437,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
     );
 
     // Update bounty status
-    updateBountyStatus(bountyId, success ? 'won' : 'lost', signature);
+    await updateBountyStatus(bountyId, success ? 'won' : 'lost', signature);
 
     // Build response
     const response: SubmitPhotoResponse = {
@@ -455,7 +479,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
  */
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const bounty = getBounty(req.params.id);
+    const bounty = await getBounty(req.params.id);
     if (!bounty) {
       return res.status(404).json({
         success: false,
@@ -491,7 +515,7 @@ router.get('/:id', async (req: Request, res: Response) => {
  */
 router.get('/player/:wallet', async (req: Request, res: Response) => {
   try {
-    const bounty = getPlayerActiveBounty(req.params.wallet);
+    const bounty = await getPlayerActiveBounty(req.params.wallet);
     if (!bounty) {
       return res.status(404).json({
         success: false,

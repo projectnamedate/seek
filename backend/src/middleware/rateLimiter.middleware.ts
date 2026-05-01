@@ -1,13 +1,27 @@
 import rateLimit from 'express-rate-limit';
+import { config } from '../config';
+import { RedisRateLimitStore } from './redis-rate-limit-store';
+
+export function createRateLimitStore(prefix: string) {
+  if (!config.redis.url) return undefined;
+  return new RedisRateLimitStore({ prefix });
+}
+
+function storeOption(prefix: string) {
+  const store = createRateLimitStore(prefix);
+  return store ? { store } : {};
+}
 
 // Per-IP rate limit for /prepare: 20 per minute.
-// /prepare is unauthenticated and spawns a mission commitment + Redis entry
-// with a 5-min TTL, so an unthrottled attacker could bloat Redis / exhaust
-// the free-tier command budget. 20/min leaves plenty of room for legitimate
+// /prepare requires wallet-auth and spawns a mission commitment + Redis entry
+// with a 5-min TTL, so throttling still protects Redis / RPC budgets from
+// authenticated retry storms. 20/min leaves plenty of room for legitimate
 // retries but caps obvious abuse.
 export const bountyPrepareLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 20,
+  ...storeOption('seek:rl:bounty:prepare'),
+  passOnStoreError: false,
   validate: false,
   standardHeaders: true,
   legacyHeaders: false,
@@ -18,6 +32,8 @@ export const bountyPrepareLimiter = rateLimit({
 export const bountyStartLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
+  ...storeOption('seek:rl:bounty:start'),
+  passOnStoreError: false,
   // Key on IP — body fields are attacker-controlled and can't be trusted
   validate: false,
   standardHeaders: true,
@@ -29,6 +45,8 @@ export const bountyStartLimiter = rateLimit({
 export const bountySubmitLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 10,
+  ...storeOption('seek:rl:bounty:submit'),
+  passOnStoreError: false,
   validate: false,
   standardHeaders: true,
   legacyHeaders: false,
@@ -40,6 +58,8 @@ export const bountySubmitLimiter = rateLimit({
 export const sgtLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 30,
+  ...storeOption('seek:rl:sgt'),
+  passOnStoreError: false,
   validate: false,
   standardHeaders: true,
   legacyHeaders: false,
@@ -51,6 +71,8 @@ export const sgtLimiter = rateLimit({
 export const skrLookupLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 60,
+  ...storeOption('seek:rl:skr:lookup'),
+  passOnStoreError: false,
   validate: false,
   standardHeaders: true,
   legacyHeaders: false,

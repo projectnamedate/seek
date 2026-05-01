@@ -33,7 +33,7 @@ src/
 ├── components/     # Reusable UI components (Button, Timer, Card, Loader)
 ├── config/         # App configuration (API URLs, game settings)
 ├── context/        # React Context for global state
-├── hooks/          # Custom hooks (useWallet, useTimer)
+├── hooks/          # Custom hooks (useTimer)
 ├── navigation/     # React Navigation stack navigator
 ├── screens/        # Main app screens
 │   ├── AgeGateScreen.tsx     # 18+ verification (first screen)
@@ -50,14 +50,11 @@ src/
 └── utils/          # Helper functions (formatting, storage)
 ```
 
-## Demo Mode
+## Wallet + Network
 
-The app includes demo mode for hackathon presentations:
-
-- Mock wallet with 1000 SKR balance
-- Local bounty generation (fallback when offline)
-- Real GPT-4V validation via backend API
-- Visual feedback for all validation stages
+The release app is MWA-only and has no demo wallet or local bounty fallback.
+`src/config/index.ts` defaults to `mainnet-beta`; release builds refuse to
+boot on devnet unless `EXPO_PUBLIC_ALLOW_DEVNET_RELEASE=1` is explicitly set.
 
 ## Screens
 

@@ -47,6 +47,9 @@ export function getConnection(): Connection {
 export function getHotAuthorityKeypair(): Keypair {
   if (!cachedHotAuthority) {
     const hotPk = config.solana.hotAuthorityPrivateKey || config.solana.authorityPrivateKey;
+    if (!hotPk) {
+      throw new Error('HOT_AUTHORITY_PRIVATE_KEY is required for backend signing');
+    }
     const privateKey = bs58.decode(hotPk);
     cachedHotAuthority = Keypair.fromSecretKey(privateKey);
   }
@@ -379,8 +382,7 @@ export async function verifyTransaction(
     });
     if (!tx || tx.meta?.err) return false;
 
-    const programIdStr = (process.env.SEEK_PROGRAM_ID ?? '').trim();
-    if (!programIdStr) return false;
+    const programIdStr = PROGRAM_ID.toBase58();
 
     const accountKeys = tx.transaction.message.getAccountKeys
       ? tx.transaction.message.getAccountKeys().keySegments().flat()

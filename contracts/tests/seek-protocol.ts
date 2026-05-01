@@ -41,6 +41,11 @@ const idl = JSON.parse(
   )
 );
 
+const programSource = readFileSync(
+  resolve(contractsRoot, "programs", "seek-protocol", "src", "lib.rs"),
+  "utf8"
+);
+
 const PROGRAM_ID = new PublicKey("DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v");
 
 const MAINNET_SKR_MINT = new PublicKey(
@@ -262,6 +267,36 @@ describe("seek-protocol (client-side invariants)", () => {
 
       assert.equal(revealSigner?.name, "hot_authority");
       assert.equal(proposeSigner?.name, "hot_authority");
+    });
+
+    it("treasury setup requires explicit owner accounts in the IDL", () => {
+      const initializeSingularity = instructions.find(
+        (i) => i.name === "initialize_singularity_vault"
+      );
+      const setTreasury = instructions.find((i) => i.name === "set_treasury");
+      assert.ok(initializeSingularity);
+      assert.ok(setTreasury);
+
+      const initializeAccounts = ((initializeSingularity as any).accounts as Array<{ name: string }>).map(
+        (a) => a.name
+      );
+      const setTreasuryAccounts = ((setTreasury as any).accounts as Array<{ name: string }>).map(
+        (a) => a.name
+      );
+
+      assert.include(initializeAccounts, "protocol_treasury_owner");
+      assert.include(setTreasuryAccounts, "new_treasury_owner");
+    });
+
+    it("contract pins protocol treasury accounts to the canonical SKR ATA", () => {
+      assert.include(
+        programSource,
+        "get_associated_token_address(&protocol_treasury_owner.key(), &SKR_MINT)"
+      );
+      assert.include(
+        programSource,
+        "get_associated_token_address(&new_treasury_owner.key(), &SKR_MINT)"
+      );
     });
   });
 

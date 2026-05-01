@@ -69,7 +69,7 @@ export const TIERS = {
 
 // Token Info
 // Mainnet SKR = official Solana Mobile ecosystem token (6 decimals, 10B supply).
-// Devnet test SKR = internal 9-decimal mint used during hackathon demo.
+// Devnet test SKR = internal 9-decimal mint.
 export const TOKEN = NETWORK === 'mainnet-beta'
   ? {
       NAME: 'Seek',

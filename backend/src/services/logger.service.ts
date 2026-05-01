@@ -31,16 +31,22 @@ const baseOptions: LoggerOptions = {
   timestamp: pino.stdTimeFunctions.isoTime,
 };
 
-const transport = config.server.isDev
-  ? {
+let transport: LoggerOptions['transport'];
+if (config.server.isDev) {
+  try {
+    require.resolve('pino-pretty');
+    transport = {
       target: 'pino-pretty',
       options: {
         colorize: true,
         translateTime: 'HH:MM:ss.l',
         ignore: 'pid,hostname,env,network',
       },
-    }
-  : undefined;
+    };
+  } catch {
+    transport = undefined;
+  }
+}
 
 export const logger: Logger = transport
   ? pino({ ...baseOptions, transport })

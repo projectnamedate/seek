@@ -109,10 +109,10 @@ Pokemon-GO for crypto on Solana Seeker. Players stake $SKR (1000/2000/3000 per t
 ### Contract (Anchor 0.32 CLI / 0.30.1 lib)
 ```bash
 cd contracts
-anchor build                                                      # mainnet (default)
-anchor build --no-default-features --features devnet              # devnet
-anchor deploy --provider.cluster mainnet                          # DESTRUCTIVE
-anchor deploy --provider.cluster devnet
+npm run build                                                     # mainnet (default)
+npm run build:devnet                                              # devnet
+npm run deploy:mainnet                                            # DESTRUCTIVE; Ledger; no --final
+npm run deploy:devnet
 ```
 Feature flags gate SKR_MINT, SKR_DECIMALS, CHALLENGE_PERIOD (mainnet 300s / devnet 10s). Entry amounts derive from `DECIMALS_MULTIPLIER`.
 
@@ -126,11 +126,15 @@ npx tsc --noEmit               # typecheck only
 
 Required env on mainnet (see `backend/.env.example`):
 - `SOLANA_NETWORK=mainnet-beta` + `SOLANA_RPC_URL` (Helius/QuickNode)
-- `AUTHORITY_PRIVATE_KEY` (COLD — Ledger-backed; used only for admin ops)
 - `HOT_AUTHORITY_PRIVATE_KEY` (hot — backend-held; reveal + propose only). Config throws if missing on mainnet.
+- Local cold-admin/init scripts: `AUTHORITY_SIGNER=ledger` +
+  `AUTHORITY_LEDGER_PUBKEY=<cold Ledger pubkey>` (not Railway runtime env).
 - `SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`
 - `FEES_WALLET=Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr` (only consumed by `initialize-protocol.ts` at init)
 - `REDIS_URL` (Upstash recommended) + `SENTRY_DSN`
+
+Do **not** put the cold Ledger/private authority key in Railway runtime env.
+Cold admin/init signing is local only.
 
 ### Mobile
 ```bash
@@ -148,7 +152,7 @@ Switch `NETWORK` in `mobile/src/config/index.ts` to swap mainnet/devnet ($SKR mi
 - **Cold authority** (`GlobalState.authority`) — Ledger hardware wallet (Ledger #1). Signs: `fund_house`, `set_hot_authority`, `set_treasury`, `propose_authority_transfer`, `accept_authority_transfer`, `cancel_authority_transfer`, `resolve_dispute`. Two-step transfer prevents typo loss.
 - **Fees wallet / protocol_treasury OWNER** (`GlobalState.protocol_treasury` = its SKR ATA) — separate Ledger #2 (`Fmv8H…Y9Hr`). Signs **nothing on-chain in the Seek protocol**, just receives 10% rake from each loss. **The rake is income**: user periodically swaps SKR → USDC on a DEX (Ledger-signed) and off-ramps to fiat. Operating expenses are NOT paid from this wallet. Rotatable via `admin.ts set-treasury` (cold-signed). The contract has no `withdraw_treasury` instruction — it was removed 2026-04-23 because under the FEES_WALLET-owned-ATA design the cold authority cannot authorize SPL transfers from FEES_WALLET's account; the Ledger spends directly via DEX.
 - **Hot authority** (`GlobalState.hot_authority`) — Backend keypair in Railway env (NOT a Ledger). Signs ONLY: `reveal_mission`, `propose_resolution`. Compromise is contained (cannot drain treasury, cannot rotate any authority). Rotate via `set_hot_authority` (cold-signed).
-- **Program upgrade authority** — Ledger (same as cold authority by default, or split into a third Ledger). Set via `solana program set-upgrade-authority`. Can be made `--final` to lock the program immutable forever.
+- **Program upgrade authority** — Ledger (same as cold authority by default, or split into a third Ledger). Keep upgradeable during launch; do not use `--final` until post-launch tweaks are done. Set via `solana program set-upgrade-authority` only after an explicit decision.
 - **House vault** (`GlobalState.house_vault`) — PDA token account, NOT an EOA. Win payouts are PDA-signed CPIs from the program; **no human signs payouts**. Cold authority can `fund_house` to add SKR but cannot withdraw — only the protocol's win-payout logic moves funds out. This is the "hot, auto-paying" behavior without exposing a hot key.
 - User is solo operator — uses Ledger, not Squads multisig. Don't suggest multisig unless explicitly asked.
 - **External audit skipped** — internal audit only. Don't re-propose unless contract surface changes materially.
@@ -188,7 +192,7 @@ See [memory/project_economic_model.md](~/.claude/projects/-Users-hammer-Desktop-
 - **Optimistic resolve + dispute window**: `propose_resolution` → 300s challenge period → `finalize_bounty`. Player can `dispute_bounty` during challenge (stake 50% of entry) → `resolve_dispute` (cold-signed).
 - **Jackpot RNG** (v1): strengthened entropy = `hash(mission_commitment || bounty_pda || slot || timestamp) % 500`. Still grindable by a slot leader with low ROI at launch jackpot sizes. **Task #3 upgrade to Switchboard On-Demand VRF when jackpot pool > $50k.**
 - **finalize_bounty is permissionless** — anyone can crank once challenge period ends. Backend finalizer worker (`backend/src/services/finalizer.service.ts`) does this on a poll loop (`POLL_INTERVAL` = challenge_period/5, min 2s).
-- **Redis is the source of truth** for mission secrets, prepared bounties, finalizer queue. In-memory Maps are a cache + fallback for dev. On restart, finalizer hydrates from Redis. `REDIS_URL` unset = in-memory only (dev only).
+- **Redis is the source of truth** for mission secrets, prepared bounties, active bounties, player bounty index, finalizer queue, auth nonces, SGT verification, and rate-limit counters. In-memory Maps are a cache + fallback for dev. On restart, workers hydrate from Redis. `REDIS_URL` unset = in-memory only (dev only).
 
 ## Known gotchas
 - **MWA back-to-back transact hangs Phantom** — only ONE MWA call per user action. Insert `await new Promise(r => setTimeout(r, 1500))` after Phantom returns via deep-link before making HTTP calls. See `tasks/lessons.md`.
@@ -223,20 +227,22 @@ See [memory/project_economic_model.md](~/.claude/projects/-Users-hammer-Desktop-
 - **Mobile:** Demo code stripped from release bundle — `addWinnings`, `DEMO_TARGETS`, `DEMO_WALLET`, `DEMO_MODE.INITIAL_BALANCE = 50000` fallback (a 0-SKR wallet showed 50k SKR), `isDemoMode` UI badge, `useFallbackDemoBounty`, `useWallet` dead hook. AppContext + wallet.service rewritten MWA-only.
 - **Mission pool:** 5 outliers fixed (4 trivial-T1 tightenings + 1 dup replaced).
 - **CI:** Green for the first time. Fixed Rust 1.82 doc-lint errors + regenerated mobile lock file (was stale Mar 3 vs package.json Apr 22).
-- **dApp Store:** Publisher pubkey requirement documented in config.yaml. Testing instructions rewritten for mainnet (no devnet wording).
+- **dApp Store:** Publisher pubkey requirement documented in config.yaml. Testing instructions rewritten for mainnet (no devnet wording). Required banner + screenshot slots are wired, and `dapp-store-publishing/check-assets.mjs` validates asset dimensions before upload.
 
 **Gated on user:**
+- B0 Ledger pubkey paste: code now supports `AUTHORITY_SIGNER=ledger`, but the
+  user must connect the Ledger, paste the same pubkey into
+  `EXPECTED_INITIAL_AUTHORITY`, and run `npm run preflight:mainnet -- --offline`.
 - Release keystore generation (mobile/android/SIGNING.md)
 - Production domain purchase + DNS → Railway
 - Ledger pubkey share + ~5 SOL mainnet funding
 - SKR holdings → house vault funding (~58k SKR ≈ $1000 at $0.017 — intentionally small, see economic-model section)
 - Fees wallet (`Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr`) confirmed before init — rotatable post-init via `set_treasury` (cold-signed)
 - Publisher wallet + 0.5 SOL for dApp Store NFT flow
-- Screenshots + feature graphic for dApp Store listing
+- dApp Store icon, required 1200x600 banner, screenshots/videos, optional 1200x1200 feature graphic
 
 **Deferred post-launch** (see [tasks/roadmap.md](tasks/roadmap.md) § Phase E):
 - Switchboard On-Demand VRF (when jackpot pool > ~$50k USD)
 - Full Anchor integration tests (needs SKR_MINT runtime override or local-validator mint clone)
-- Ledger signing wired into `admin.ts` + `initialize-protocol.ts`
 - Seeker Camera SDK / TEE attestation (awaiting Solana Mobile)
 - Leaderboard, mission pool expansion, community missions, GPS super hunts

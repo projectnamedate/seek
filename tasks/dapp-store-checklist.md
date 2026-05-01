@@ -1,13 +1,15 @@
 # Solana dApp Store Submission Checklist
 
-Source: docs.solanamobile.com/dapp-publishing (April 2026).
+Source: docs.solanamobile.com/dapp-store (verified 2026-05-01).
 
 ## Pre-submission requirements
 
 ### Required before running CLI
 
 - [ ] Release-signed APK (NEW keystore, not Play Store signing key)
+- [ ] Publisher Portal account created, KYC/KYB complete, storage provider selected
 - [ ] Publisher wallet funded with ~0.5 SOL
+- [ ] `DAPP_STORE_API_KEY` generated in Publisher Portal and stored outside git/chat
 - [ ] Program + token on Solana mainnet (dApp Store reviewers will likely reject devnet-only listings for apps with on-chain economics)
 - [ ] Backend live at HTTPS production URL
 - [ ] Privacy policy URL (public web page, not just in-app)
@@ -16,9 +18,12 @@ Source: docs.solanamobile.com/dapp-publishing (April 2026).
 
 ### Required assets
 
-- [ ] App icon at 512×512 (high quality PNG, not alpha blend)
-- [ ] 4-6 app screenshots at Seeker aspect ratio (~1080×2400)
-- [ ] Feature graphic (landscape, typically 1200×630)
+- [ ] App icon: `dapp-store-publishing/assets/icon.png`, 512x512 PNG
+- [ ] Banner graphic: `dapp-store-publishing/assets/banner.png`, 1200x600 PNG/JPG
+- [ ] Screenshots/videos: at least 4 in `dapp-store-publishing/assets/screenshots/en-US/`
+- [ ] Screenshot images are at least 1080x1080, same orientation, same aspect ratio
+- [ ] Optional feature graphic: `dapp-store-publishing/assets/feature-graphic.png`, 1200x1200
+- [ ] Run `cd dapp-store-publishing && node check-assets.mjs`
 - [ ] Short description (<80 chars) — one-liner tagline
 - [ ] Long description (<4000 chars) — pulled from README/deck
 - [ ] Category: Games (Casino/Gambling is a separate flag to consider)
@@ -54,6 +59,19 @@ npx dapp-store publish submit \
   -k ~/seek-publisher.json \
   --requestor-is-authorized \
   --complies-with-solana-dapp-store-policies
+```
+
+## Current Publisher Portal CLI flow (May 2026)
+
+After the app exists in Publisher Portal and the App NFT is minted:
+
+```bash
+export DAPP_STORE_API_KEY=<from Publisher Portal settings>
+cd dapp-store-publishing
+dapp-store \
+  --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk \
+  --keypair ./publisher.json \
+  --whats-new "Initial mainnet launch."
 ```
 
 ## Likely review scrutiny areas

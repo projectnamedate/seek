@@ -22,6 +22,10 @@ Prereqs (user-side):
 `initialize` instruction. Without this, anyone can front-run the
 deploy → init gap and become `global_state.authority`.
 
+The TypeScript init/admin scripts now support `AUTHORITY_SIGNER=ledger`.
+Use the same Ledger pubkey here, in `AUTHORITY_LEDGER_PUBKEY`, and on the
+physical Ledger prompt.
+
 ```bash
 # Get the Ledger pubkey
 LEDGER_PUBKEY=$(solana-keygen pubkey usb://ledger)
@@ -36,6 +40,21 @@ echo "Cold Ledger pubkey: $LEDGER_PUBKEY"
 
 # Sanity check — should print your Ledger pubkey, NOT 1111…111:
 grep -A1 EXPECTED_INITIAL_AUTHORITY contracts/programs/seek-protocol/src/lib.rs
+```
+
+Run the offline preflight before building:
+
+```bash
+cd backend
+export SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+export SOLANA_NETWORK=mainnet-beta
+export SEEK_PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
+export SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
+export FEES_WALLET=Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr
+export AUTHORITY_SIGNER=ledger
+export AUTHORITY_LEDGER_PUBKEY=$LEDGER_PUBKEY
+npm run preflight:mainnet -- --offline
+cd ../contracts
 ```
 
 Now build:
@@ -74,9 +93,10 @@ is initially the Ledger.
 solana config set --url mainnet-beta
 solana config set --keypair usb://ledger
 
-# Deploy (~3-4 SOL for buffer + rent)
+# Deploy (~3-4 SOL for buffer + rent). Do NOT add --final; the program must
+# remain upgradeable while mainnet economics and UX settle.
 cd contracts
-anchor deploy --provider.cluster mainnet --provider.wallet usb://ledger
+npm run deploy:mainnet
 
 # Publish IDL on-chain (so indexers/explorers can decode)
 anchor idl init \
@@ -118,7 +138,7 @@ solana transfer <HOT_AUTHORITY_PUBKEY> 0.3 --url mainnet-beta --keypair usb://le
 
 The existing `scripts/initialize-protocol.ts` handles the 3-step init
 (`initialize` → `initialize_house_vault` → `initialize_singularity_vault`).
-Run it with the Ledger as authority:
+It must sign with the same pubkey compiled into `EXPECTED_INITIAL_AUTHORITY`.
 
 ```bash
 cd backend
@@ -129,12 +149,18 @@ export SOLANA_NETWORK=mainnet-beta
 export SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
 export SEEK_PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
 # Fees wallet — receives the 10% protocol-treasury cut from every loss.
-# LOCKED ON-CHAIN at initialize_singularity_vault. Triple-check before init.
+# Set at initialize_singularity_vault and rotatable later via set_treasury.
+# Triple-check before init anyway.
 export FEES_WALLET=Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr
-# IMPORTANT: initialize-protocol.ts expects an env keypair today — if you
-# want to sign with the Ledger, you'll need to refactor it to take a
-# signer. For a one-off init, it's acceptable to use an interim hot
-# keypair, then immediately rotate cold authority to Ledger (see step 8).
+export AUTHORITY_SIGNER=ledger
+export AUTHORITY_LEDGER_PUBKEY=$LEDGER_PUBKEY
+# Optional; defaults to true on mainnet-beta. Leave true for launch so the
+# Ledger displays the pubkey before signing.
+export AUTHORITY_LEDGER_CONFIRM_PUBKEY=true
+
+# Online preflight verifies the source constants and, if the program is already
+# deployed, confirms it is still upgradeable and controlled by this Ledger.
+npm run preflight:mainnet
 
 npx ts-node scripts/initialize-protocol.ts
 ```
@@ -143,12 +169,12 @@ This creates:
 - `GlobalState` PDA (owner = authority)
 - `house_vault` PDA token account (SKR) — owned by global_state PDA, payouts are PDA-signed
 - `singularity_vault` PDA token account (SKR) — same pattern as house_vault
-- `protocol_treasury` — the SKR ATA owned by `FEES_WALLET` (Ledger #2). Cold authority pays the ATA rent. **Rotatable post-init** via `admin.ts set-treasury <new_wallet_pubkey>` (cold-signed). The contract has no `withdraw_treasury` instruction (removed 2026-04-23) — under FEES_WALLET-owned-ATA, the Ledger swaps SKR for USDC on a DEX directly and off-ramps to fiat.
+- `protocol_treasury` — the canonical SKR ATA owned by `FEES_WALLET` (Ledger #2). Cold authority pays the ATA rent. The contract validates the owner account plus canonical ATA on init and rotation. **Rotatable post-init** via `admin.ts set-treasury <new_wallet_pubkey>` (cold-signed). The contract has no `withdraw_treasury` instruction (removed 2026-04-23) — under FEES_WALLET-owned-ATA, the Ledger swaps SKR for USDC on a DEX directly and off-ramps to fiat.
 
 ## 7. Set hot authority on-chain
 
 ```bash
-export AUTHORITY_PRIVATE_KEY=<cold keypair that ran init>
+# Uses the same AUTHORITY_SIGNER=ledger env from step 6.
 cd backend
 npx ts-node scripts/admin.ts set-hot <HOT_AUTHORITY_PUBKEY>
 ```
@@ -165,42 +191,43 @@ npx ts-node scripts/admin.ts set-treasury <NEW_FEES_WALLET_PUBKEY>
 
 All future protocol-treasury inflows redirect to the new ATA. Funds already in the old ATA stay under the old wallet's control — sweep them separately via the old Ledger if recoverable.
 
-## 8. Rotate cold authority to Ledger
+## 8. Rotate cold authority to Ledger (only if an interim keypair was used)
 
-Two-step. Run with the interim init keypair first to propose, then
-with the Ledger to accept.
+Preferred path after B0a: initialize directly with the Ledger, so this step is
+not needed. If the operator explicitly accepted an interim non-Ledger init
+keypair, run the two-step transfer: current authority proposes, Ledger accepts.
 
 ```bash
-# As current cold authority
+# As current interim cold authority
 export AUTHORITY_PRIVATE_KEY=<interim init keypair base58>
 npx ts-node scripts/admin.ts propose-transfer <LEDGER_PUBKEY>
 
-# Switch AUTHORITY_PRIVATE_KEY to a Ledger-signed keypair
-# (You'll need to wire Ledger signing into admin.ts — see follow-up)
-# Or: generate a cold keypair here, fund it, use it as the cold signer
-# on mainnet. The Ledger plan is a follow-up once admin.ts supports it.
+# Switch to Ledger signing for the accept step.
+export AUTHORITY_SIGNER=ledger
+export AUTHORITY_LEDGER_PUBKEY=$LEDGER_PUBKEY
 npx ts-node scripts/admin.ts accept-transfer
 ```
 
-*(Note: current admin.ts loads a base58 private key from env. Ledger
-integration needs a refactor to use `solana-ledger-wallet` or similar.
-For launch, an encrypted cold keypair on an airgapped machine is a
-reasonable interim. Track in task #5.)*
-
-## 9. Transfer program upgrade authority to Ledger
+## 9. Keep program upgrade authority on Ledger
 
 ```bash
-# Still with Ledger as current upgrade authority (step 3)
-# Optional: set to a different Ledger account or leave as-is.
-# To revoke (make program immutable — CAREFUL, no future upgrades):
-# solana program set-upgrade-authority -k usb://ledger \
-#   DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v --final
+# Still with Ledger as current upgrade authority (step 3).
+# Recommended during launch: leave as-is so the program can be upgraded while
+# you tune anything discovered after devnet/demo.
+solana program show DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v --url mainnet-beta
 
-# Or transfer to a new upgrade authority:
+# Optional later: set to a different Ledger account.
 # solana program set-upgrade-authority -k usb://ledger \
 #   DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v \
 #   --new-upgrade-authority <NEW_LEDGER_PUBKEY>
+
+# To revoke (make program immutable — CAREFUL, no future upgrades):
+# solana program set-upgrade-authority -k usb://ledger \
+#   DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v --final
 ```
+
+Do not use `--final` until after launch behavior is stable and you have made a
+separate irreversible-lock decision.
 
 ## 10. Fund house vault
 
@@ -233,7 +260,6 @@ railway variables set SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=<yo
 railway variables set SOLANA_NETWORK=mainnet-beta
 railway variables set SEEK_PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
 railway variables set SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
-railway variables set AUTHORITY_PRIVATE_KEY=<cold keypair base58>
 railway variables set HOT_AUTHORITY_PRIVATE_KEY=<hot keypair base58>
 railway variables set ANTHROPIC_API_KEY=<your claude key>
 railway variables set REDIS_URL=<upstash redis URL>
@@ -242,6 +268,10 @@ railway variables set NODE_ENV=production
 
 # Add custom domain (api.seek.mythx.art) — Railway handles SSL automatically
 ```
+
+Do **not** set the cold Ledger/private authority key in Railway runtime env.
+The backend signs only hot-path `reveal_mission` / `propose_resolution`
+transactions with `HOT_AUTHORITY_PRIVATE_KEY`; cold admin ops stay local.
 
 ## 12. Update mobile app + build release APK
 
@@ -270,12 +300,12 @@ Smoke-test the full flow end-to-end with real SKR before submitting.
 ## 13. Submit to Solana dApp Store
 
 Follow `dapp-store-publishing/README.md`:
-1. Fund publisher wallet with 0.5 SOL
-2. `npx dapp-store create publisher`
-3. `npx dapp-store create app`
-4. `npx dapp-store create release`
-5. `npx dapp-store publish submit --requestor-is-authorized --complies-with-solana-dapp-store-policies`
-6. Wait 2–5 business days for review.
+1. Fund publisher wallet with 0.5 SOL, back up `publisher.json`, and finish Publisher Portal KYC/KYB.
+2. Add icon, required banner, and at least 4 screenshots/videos; run `cd dapp-store-publishing && node check-assets.mjs`.
+3. Export `DAPP_STORE_API_KEY` from Publisher Portal.
+4. Publish the signed release APK with `dapp-store --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk --keypair ./publisher.json --whats-new "..."`
+5. If using the direct NFT/config flow, run `create publisher`, `create app`, `create release`, then `publish submit --requestor-is-authorized --complies-with-solana-dapp-store-policies`.
+6. Wait 3-5 business days for review.
 
 ## 14. Post-launch monitoring
 

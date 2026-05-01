@@ -48,7 +48,6 @@ const EMPTY_WALLET: WalletState = {
   fullAddress: null,
   skrName: null,
   balance: 0,
-  isDemo: false,
 };
 
 export function AppProvider({ children }: AppProviderProps) {
@@ -107,7 +106,6 @@ export function AppProvider({ children }: AppProviderProps) {
         fullAddress: fullAddress,
         skrName: prev.address === shortAddress ? prev.skrName : null,
         balance: prev.address === shortAddress ? prev.balance : 0,
-        isDemo: false,
       }));
 
       // Fetch real balance + .skr name in background (only once per address)

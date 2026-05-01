@@ -16,7 +16,6 @@ let walletState: WalletState = {
   fullAddress: null,
   skrName: null,
   balance: 0,
-  isDemo: false,
 };
 
 // Subscribers for state changes (legacy — AppContext is the source of truth)

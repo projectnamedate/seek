@@ -51,7 +51,19 @@ release:
     - purpose: icon
       uri: assets/icon.png
     - purpose: banner
-      uri: assets/feature-graphic.png
+      uri: assets/banner.png
+    - purpose: screenshot
+      uri: assets/screenshots/en-US/01-home.png
+    - purpose: screenshot
+      uri: assets/screenshots/en-US/02-connect-wallet.png
+    - purpose: screenshot
+      uri: assets/screenshots/en-US/03-start-hunt.png
+    - purpose: screenshot
+      uri: assets/screenshots/en-US/04-mission.png
+    - purpose: screenshot
+      uri: assets/screenshots/en-US/05-validation.png
+    - purpose: screenshot
+      uri: assets/screenshots/en-US/06-results.png
   files:
     - purpose: install
       uri: ../mobile/android/app/build/outputs/apk/release/app-release.apk
@@ -91,9 +103,9 @@ release:
 solana_mobile_dapp_publisher_portal:
   google_store_package: ""  # empty — we're dApp-Store-only, not also on Play Store
   testing_instructions: |
-    Test wallet seed and ~3,000 mainnet SKR (≈ $50 at current price) +
-    0.05 SOL for tx fees are provided in the submission notes. This is
-    real on-chain SKR — the app does NOT support a dev/test mode.
+    Test wallet seed with enough mainnet SKR for at least one Easy-tier hunt
+    plus 0.05 SOL for tx fees is provided in the submission notes. This is
+    real on-chain SKR; the app does NOT support a dev/test mode.
     To run a complete flow:
     1. Launch the app (age gate on first run — accept 18+)
     2. Tap Connect Wallet → approve MWA prompt in Phantom

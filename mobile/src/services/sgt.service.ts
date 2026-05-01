@@ -142,18 +142,6 @@ export async function checkSGTStatus(walletAddress: string): Promise<SGTVerifica
 }
 
 /**
- * Get demo SGT verification (always verified)
- */
-export function getDemoVerification(walletAddress: string): SGTVerificationState {
-  return {
-    verified: true,
-    sgtMintAddress: 'DemoSGTMint' + walletAddress.slice(0, 8),
-    verifiedAt: new Date().toISOString(),
-    walletAddress,
-  };
-}
-
-/**
  * Clear cached verification (on disconnect)
  */
 export async function clearVerification(): Promise<void> {
@@ -164,6 +152,5 @@ export default {
   getCachedVerification,
   verifySGT,
   checkSGTStatus,
-  getDemoVerification,
   clearVerification,
 };

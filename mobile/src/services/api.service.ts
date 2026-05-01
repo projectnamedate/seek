@@ -137,8 +137,7 @@ export async function startBounty(
 
 /**
  * Submit a photo for AI validation.
- * In demo mode: uses /bounty/demo/submit (no auth).
- * In devnet mode: uses /bounty/submit (with wallet auth headers).
+ * Uses /bounty/submit with wallet auth headers.
  */
 export async function submitPhoto(
   bountyId: string,
@@ -220,8 +219,7 @@ export async function submitPhoto(
       };
     }
 
-    // Handle devnet response format (data.validation) vs demo format (validation)
-    const validation = responseData.data?.validation || responseData.validation;
+    const validation = responseData.data?.validation;
 
     if (responseData.success && validation) {
       return {

@@ -1,7 +1,7 @@
 # Seek Roadmap
 
 **Current phase:** mainnet prep → mainnet launch → Solana dApp Store.
-**Snapshot date:** 2026-04-22.
+**Snapshot date:** 2026-05-01.
 **Timeline target:** 2-week solid launch.
 **Founder/operator:** Jeff (solo). Ledger hot/cold split. External audit skipped.
 
@@ -88,6 +88,18 @@ I can execute each in ≤10 minutes except the deploy itself.
 sequenced sub-items B0-B9 with parallelization plan, hard dependencies,
 and Phase C/D follow-on. Read that first when starting launch work.
 
+### B0a. Ledger signing support for init/admin — ✅ CODE COMPLETE
+**Runbook impact:** `backend/scripts/DEPLOY_MAINNET.md` steps 6-10.
+**Done:** `backend/src/utils/authority-signer.ts`,
+`initialize-protocol.ts`, and cold-admin paths in `admin.ts` now support
+`AUTHORITY_SIGNER=ledger` with optional `AUTHORITY_LEDGER_PUBKEY` mismatch
+protection. `backend/scripts/mainnet-preflight.ts` checks the launch constants
+and upgrade authority.
+**Why:** Mainnet `initialize` is now constrained to the hardcoded expected
+authority. The signer running init must be the same Ledger.
+**Still needs:** real-device Ledger smoke with the Solana app open.
+**Unblocks:** B0, Phase C init/admin operations after user provides the pubkey.
+
 ### B1. Release keystore generation
 **Runbook:** [mobile/android/SIGNING.md](../mobile/android/SIGNING.md).
 **Needs:** `keytool` on user's laptop + 1Password backup + paper backup.
@@ -118,7 +130,7 @@ and Phase C/D follow-on. Read that first when starting launch work.
 
 ### B4b. Fees wallet wired + ROTATABLE (✅ 2026-04-23)
 **Address:** `Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr` (a separate Ledger from cold authority) — receives the 10% protocol-treasury cut. Set at `initialize_singularity_vault` and **rotatable post-init** via the new `set_treasury` contract instruction + `admin.ts set-treasury <new_pubkey>` CLI command (cold-authority signed). The dead `withdraw_treasury` instruction was removed 2026-04-23 (it required PDA-owned treasury; non-functional under FEES_WALLET-owned-ATA). FEES_WALLET swaps SKR rake directly on a DEX (Ledger-signed) and off-ramps to fiat — the rake is income, not operating budget. Wired through:
-- `contracts/programs/seek-protocol/src/lib.rs` — `set_treasury` instruction + `SetTreasury` accounts struct + `TreasuryRotated` event
+- `contracts/programs/seek-protocol/src/lib.rs` — `initialize_singularity_vault` and `set_treasury` now require the treasury owner account and pin the treasury token account to that owner's canonical SKR ATA
 - `backend/src/idl/seek_protocol.json` — IDL regenerated + copied
 - `backend/scripts/admin.ts` — `set-treasury` command
 - `backend/.env.example` + `backend/scripts/initialize-protocol.ts` — `FEES_WALLET` env required, init script throws if unset
@@ -131,9 +143,38 @@ and Phase C/D follow-on. Read that first when starting launch work.
 **Unblocks:** Publisher NFT mint (one-time), App NFT, Release NFT.
 
 ### B6. dApp Store visual assets
-**Needs:** 5-6 screenshots at Seeker aspect ratio (1080×2400), feature
-graphic (1200×630), app icon (512×512 — may reuse `mobile/assets/icon.png`).
+**Needs production art, not placeholder reuse.** Current mobile icon/banner
+quality should not be assumed good enough for review or launch conversion.
+
+- [ ] **Design/brand audit first:** review current Seek logo, in-app visual
+  language, store listing, and marketing-site direction against Solana Mobile
+  dApp Store requirements, Solana Mobile co-marketing guidance, and official
+  Solana brand constraints before producing final assets.
+  Sources to re-check during the audit:
+  `https://docs.solanamobile.com/dapp-store/submit-new-app`,
+  `https://docs.solanamobile.com/marketing/comarketing-guidelines`,
+  `https://solana.com/branding/`.
+- [ ] **Seek logo system:** create the production Seek logo/mark, app-icon
+  variant, monochrome variant, dark/light lockups, and usage notes. This should
+  be Seek-owned branding; do not misuse or recolor Solana/Solana Mobile marks.
+- [ ] **New app icon:** `dapp-store-publishing/assets/icon.png`, 512x512 PNG.
+  Needs a cleaner production mark that reads at store/grid size; do not rely on
+  the hackathon-era mobile icon without a design pass.
+- [ ] **New required banner:** `dapp-store-publishing/assets/banner.png`,
+  1200x600 PNG/JPG. Should communicate "real-world Seeker hunt + SKR stakes"
+  immediately, using real app/product visuals rather than generic gradients or
+  over-weighted token/economics messaging.
+- [ ] **Screenshots/videos:** at least 4 real app screenshots/videos under
+  `dapp-store-publishing/assets/screenshots/en-US/`; images must be >=1080x1080
+  and share orientation + aspect ratio.
+- [ ] **Optional feature graphic:** `dapp-store-publishing/assets/feature-graphic.png`,
+  1200x1200 for Editor's Choice consideration.
+- [ ] **Asset QA:** verify icon legibility at small sizes, banner readability
+  in dark/light contexts, screenshot text fit, and contrast/accessibility before
+  running `check-assets.mjs`.
+
 **Unblocks:** `dapp-store-publishing/config.yaml` final fill + release NFT mint.
+**Guard:** `cd dapp-store-publishing && node check-assets.mjs`.
 
 ### B9. seek.mythx.art marketing + legal site — 🟡 QUEUED (agency-tier build)
 
@@ -197,14 +238,14 @@ graphic (1200×630), app icon (512×512 — may reuse `mobile/assets/icon.png`).
 Per [backend/scripts/DEPLOY_MAINNET.md](../backend/scripts/DEPLOY_MAINNET.md):
 
 1. `anchor build` (mainnet default)
-2. `anchor deploy --provider.cluster mainnet --provider.wallet usb://ledger` (~3-4 SOL)
+2. `npm run deploy:mainnet` from `contracts/` (~3-4 SOL, no `--final`; keep upgradeable)
 3. `anchor idl init` — publish IDL on-chain
 4. `solana-verify build && solana-verify upload` — verified build attestation
 5. Generate hot keypair, fund with 0.3 SOL
 6. Run `initialize` → `initialize_house_vault` → `initialize_singularity_vault`
 7. `admin.ts set-hot <hot_pubkey>`
-8. `admin.ts propose-transfer <ledger_pubkey>` then `accept-transfer` as Ledger
-9. Optionally transfer program upgrade authority to Ledger via `solana program set-upgrade-authority`
+8. Skip cold-authority transfer when initialized directly with Ledger; use two-step transfer only for an explicitly accepted interim keypair path
+9. Confirm Ledger remains program upgrade authority; do not make the program final until post-launch tweaks are done
 10. Transfer SKR to authority ATA, then `admin.ts fund 10000000`
 11. Deploy backend to Railway, set env vars, add Upstash Redis addon, point custom domain
 12. Flip `mobile/src/config/index.ts` `NETWORK` → `'mainnet-beta'`
@@ -217,13 +258,13 @@ Per [backend/scripts/DEPLOY_MAINNET.md](../backend/scripts/DEPLOY_MAINNET.md):
 
 Per [dapp-store-publishing/README.md](../dapp-store-publishing/README.md):
 
-1. `npm i -g @solana-mobile/dapp-store-cli`
-2. `npx dapp-store create publisher` (~0.03 SOL)
-3. `npx dapp-store create app` (~0.02 SOL)
-4. `npx dapp-store create release` (~0.1-0.2 SOL)
-5. `npx dapp-store publish submit --requestor-is-authorized --complies-with-solana-dapp-store-policies`
-6. Wait 2-5 business days; iterate on any review feedback
-7. Ship
+1. Create/verify Publisher Portal account, KYC/KYB, storage provider, App NFT.
+2. `npm i -g @solana-mobile/dapp-store-cli`
+3. `export DAPP_STORE_API_KEY=<Publisher Portal key>`
+4. `cd dapp-store-publishing && node check-assets.mjs`
+5. Publish release APK with `dapp-store --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk --keypair ./publisher.json --whats-new "..."`
+6. If using the NFT-backed config flow directly: `create publisher`, `create app`, `create release`, then `publish submit --requestor-is-authorized --complies-with-solana-dapp-store-policies`
+7. Wait 3-5 business days; iterate on review feedback
 
 ---
 
@@ -302,6 +343,9 @@ Remaining post-launch: ~3 more T1 trivials worth tightening (mowed lawn, closed 
 ### dApp Store + deploy docs
 - [x] `config.yaml:24` — added MAINNET LAUNCH BLOCKER comment block with the exact `solana-keygen new` + airdrop steps for filling `PLACEHOLDER_PUBLISHER_PUBKEY` before publisher NFT mint.
 - [x] `config.yaml:86` — testing instructions rewritten for mainnet (mainnet SKR, no demo mode).
+- [x] **2026-05-01 dApp Store asset update** — config now points at required
+  `banner.png` plus six screenshot slots; `assets/README.md` and
+  `check-assets.mjs` encode official icon/banner/screenshot requirements.
 
 ### CI — green for the first time
 - [x] **B9-17** Fixed Rust 1.82's `clippy::doc-lazy-continuation` errors at `lib.rs:197, 293` (reflowed multi-line size comments).
@@ -335,18 +379,22 @@ Not on the critical path. Each unblocks future scale or raises the security bar.
 **Blocker:** SKR_MINT const is compile-gated. Either (a) add a `test` feature that makes the mint pluggable, or (b) run tests against `solana-test-validator --clone <devnet SKR mint>`.
 **Effort:** ~2-3 hrs.
 
-### E3. Complete Redis migration
-**Remaining Maps:** `activeBounties`, `bountyByPlayer`, `walletLocks`, `bountyLocks`.
-**Unblocks:** horizontal scale beyond single Railway instance.
-**Effort:** ~1 hr.
+### E3. Complete Redis migration (✅ 2026-05-01)
+`activeBounties` and `bountyByPlayer` now persist to Redis with read-through
+Map caches. Rate limiters can use Redis stores when `REDIS_URL` is set, and
+`/prepare` enforces a per-wallet daily bounty cap in Redis. The remaining
+in-memory lock Sets are process-local guards in front of Redis SETNX locks,
+not the cross-instance source of truth.
 
 ### E4. Full pino migration
 **Scope:** remaining ~65 `console.log`/`console.error` calls across services + routes.
 **Effort:** ~30 min.
 
-### E5. Ledger signing wired into `admin.ts` + `initialize-protocol.ts`
-**Scope:** replace env-based base58 keypair with a signer abstraction that supports `@solana/wallet-adapter-ledger` or similar.
-**Effort:** ~1 hr.
+### E5. Cold signer ergonomics after launch
+**Scope:** after launch, improve cold-admin ergonomics for repeat
+operations (`fund_house`, `set_hot_authority`, `set_treasury`,
+`resolve_dispute`) and document the exact hardware-wallet ceremony.
+**Effort:** TBD after first real-device Ledger launch run.
 
 ### E6. Seeker Camera SDK / TEE attestation
 **When:** Solana Mobile ships the SDK (status unclear as of 2026-04-22).

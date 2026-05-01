@@ -2,6 +2,13 @@ import { v4 as uuidv4 } from 'uuid';
 import { ActiveBounty, Tier, BountyStatus, ENTRY_AMOUNTS, TIER_DURATIONS } from '../types';
 import { getRandomMission, getMissionById } from '../data/missions';
 import { getRedis, RK, redisAcquireLock, redisReleaseLock } from './redis.service';
+import {
+  loadActiveBounty,
+  loadAllActiveBounties,
+  loadPlayerActiveBountyId,
+  persistActiveBounty,
+  removePersistedActiveBounty,
+} from './bounty-persistence.service';
 import { childLogger } from './logger.service';
 
 const log = childLogger('bounty');
@@ -72,21 +79,18 @@ const preparedBounties = new Map<string, PreparedBounty>();
 /**
  * Create a new bounty for a player
  */
-export function createBounty(
+export async function createBounty(
   playerWallet: string,
   tier: Tier,
   bountyPda: string,
   transactionSignature?: string,
   sgtVerified?: boolean,
   preparedMissionId?: string
-): { bounty: ActiveBounty; missionDescription: string } {
+): Promise<{ bounty: ActiveBounty; missionDescription: string }> {
   // Check if player already has an active bounty
-  const existingBountyId = bountyByPlayer.get(playerWallet);
-  if (existingBountyId) {
-    const existing = activeBounties.get(existingBountyId);
-    if (existing && existing.status === 'pending') {
-      throw new Error('Player already has an active bounty');
-    }
+  const existing = await getPlayerActiveBounty(playerWallet);
+  if (existing) {
+    throw new Error('Player already has an active bounty');
   }
 
   // Use prepared mission if provided, otherwise get random
@@ -113,7 +117,9 @@ export function createBounty(
     sgtVerified: sgtVerified || false,
   };
 
-  // Store bounty
+  // Store bounty. Redis is durable/shared truth on production; Maps are a
+  // read-through cache and local-dev fallback.
+  await persistActiveBounty(bounty);
   activeBounties.set(bounty.id, bounty);
   bountyByPlayer.set(playerWallet, bounty.id);
 
@@ -125,19 +131,30 @@ export function createBounty(
 /**
  * Get bounty by ID
  */
-export function getBounty(bountyId: string): ActiveBounty | undefined {
-  return activeBounties.get(bountyId);
+export async function getBounty(bountyId: string): Promise<ActiveBounty | undefined> {
+  const cached = activeBounties.get(bountyId);
+  if (cached) return cached;
+
+  const restored = await loadActiveBounty(bountyId);
+  if (restored) {
+    activeBounties.set(restored.id, restored);
+    bountyByPlayer.set(restored.playerWallet, restored.id);
+  }
+  return restored;
 }
 
 /**
  * Get active bounty for a player
  */
-export function getPlayerActiveBounty(playerWallet: string): ActiveBounty | undefined {
-  const bountyId = bountyByPlayer.get(playerWallet);
+export async function getPlayerActiveBounty(playerWallet: string): Promise<ActiveBounty | undefined> {
+  const bountyId =
+    bountyByPlayer.get(playerWallet) ?? (await loadPlayerActiveBountyId(playerWallet));
   if (!bountyId) return undefined;
 
-  const bounty = activeBounties.get(bountyId);
-  if (!bounty || bounty.status !== 'pending') return undefined;
+  const bounty = await getBounty(bountyId);
+  if (!bounty || (bounty.status !== 'pending' && bounty.status !== 'validating')) {
+    return undefined;
+  }
 
   return bounty;
 }
@@ -145,18 +162,22 @@ export function getPlayerActiveBounty(playerWallet: string): ActiveBounty | unde
 /**
  * Update bounty status
  */
-export function updateBountyStatus(
+export async function updateBountyStatus(
   bountyId: string,
   status: BountyStatus,
   transactionSignature?: string
-): ActiveBounty | undefined {
-  const bounty = activeBounties.get(bountyId);
+): Promise<ActiveBounty | undefined> {
+  const bounty = await getBounty(bountyId);
   if (!bounty) return undefined;
 
   bounty.status = status;
   if (transactionSignature) {
     bounty.transactionSignature = transactionSignature;
   }
+
+  activeBounties.set(bounty.id, bounty);
+  bountyByPlayer.set(bounty.playerWallet, bounty.id);
+  await persistActiveBounty(bounty);
 
   log.info({ bountyId, status }, 'bounty updated');
 
@@ -173,8 +194,8 @@ export function isBountyExpired(bounty: ActiveBounty): boolean {
 /**
  * Get mission for a bounty
  */
-export function getBountyMission(bountyId: string) {
-  const bounty = activeBounties.get(bountyId);
+export async function getBountyMission(bountyId: string) {
+  const bounty = await getBounty(bountyId);
   if (!bounty) return undefined;
 
   return getMissionById(bounty.missionId);
@@ -283,12 +304,26 @@ export async function getPreparedBounty(bountyPda: string): Promise<PreparedBoun
 /**
  * Mark bounty as validating (photo submitted)
  */
-export function markBountyValidating(bountyId: string): boolean {
-  const bounty = activeBounties.get(bountyId);
+export async function markBountyValidating(bountyId: string): Promise<boolean> {
+  const bounty = await getBounty(bountyId);
   if (!bounty || bounty.status !== 'pending') return false;
 
   bounty.status = 'validating';
+  activeBounties.set(bounty.id, bounty);
+  await persistActiveBounty(bounty);
   return true;
+}
+
+export async function hydrateActiveBountiesFromRedis(): Promise<number> {
+  const restored = await loadAllActiveBounties();
+  for (const bounty of restored) {
+    activeBounties.set(bounty.id, bounty);
+    bountyByPlayer.set(bounty.playerWallet, bounty.id);
+  }
+  if (restored.length > 0) {
+    log.info({ restored: restored.length }, 'restored active bounties from redis');
+  }
+  return restored.length;
 }
 
 /**
@@ -301,6 +336,7 @@ export function markBountyValidating(bountyId: string): boolean {
  * happens to /submit just as expiration kicks in.
  */
 export async function expireAndResolveOldBounties(): Promise<number> {
+  await hydrateActiveBountiesFromRedis();
   const now = new Date();
   let resolvedCount = 0;
 
@@ -323,11 +359,11 @@ export async function expireAndResolveOldBounties(): Promise<number> {
       const secrets = await getMissionSecrets(id);
       if (!secrets) {
         log.error({ bountyId: id }, 'expirer: missing mission secrets — cannot reveal/propose. Marking expired locally only.');
-        bounty.status = 'expired';
+        await updateBountyStatus(id, 'expired');
         continue;
       }
 
-      bounty.status = 'validating'; // prevent submit handler from racing in
+      await updateBountyStatus(id, 'validating'); // prevent submit handler from racing in
       const { signature } = await resolveBountyOnChain(
         bountyPda,
         playerWallet,
@@ -335,14 +371,16 @@ export async function expireAndResolveOldBounties(): Promise<number> {
         secrets.missionIdBytes,
         secrets.salt,
       );
-      updateBountyStatus(id, 'lost', signature);
+      await updateBountyStatus(id, 'lost', signature);
       resolvedCount++;
       log.info({ bountyId: id, signature }, 'expirer: bounty timed out → propose_resolution(false)');
     } catch (err) {
       log.error({ err: err instanceof Error ? err.message : err, bountyId: id }, 'expirer: failed to resolve expired bounty');
       // leave as-is for next cycle to retry
       const bounty = activeBounties.get(id);
-      if (bounty && bounty.status === 'validating') bounty.status = 'pending';
+      if (bounty && bounty.status === 'validating') {
+        await updateBountyStatus(id, 'pending');
+      }
     } finally {
       await releaseBountyLock(id);
     }
@@ -354,7 +392,8 @@ export async function expireAndResolveOldBounties(): Promise<number> {
 /**
  * Get stats for monitoring
  */
-export function getBountyStats() {
+export async function getBountyStats() {
+  await hydrateActiveBountiesFromRedis();
   let pending = 0;
   let validating = 0;
   let won = 0;
@@ -401,7 +440,7 @@ export function getBountyStats() {
 /**
  * Cleanup old completed bounties (call periodically)
  */
-export function cleanupOldBounties(maxAgeHours: number = 24): number {
+export async function cleanupOldBounties(maxAgeHours: number = 24): Promise<number> {
   const cutoff = new Date(Date.now() - maxAgeHours * 60 * 60 * 1000);
   let removedCount = 0;
 
@@ -410,6 +449,7 @@ export function cleanupOldBounties(maxAgeHours: number = 24): number {
       activeBounties.delete(id);
       bountyByPlayer.delete(bounty.playerWallet);
       missionSecrets.delete(id);
+      await removePersistedActiveBounty(bounty);
       removedCount++;
     }
   }
@@ -428,6 +468,9 @@ let cleanupHandle: NodeJS.Timeout | null = null;
 
 export function startBountyWorkers(): void {
   if (expirerHandle || cleanupHandle) return;
+  void hydrateActiveBountiesFromRedis().catch(err =>
+    log.error({ err: err instanceof Error ? err.message : err }, 'active bounty hydration failed')
+  );
   // Expirer — 30s cadence keeps the cancel_bounty exploit window short
   expirerHandle = setInterval(() => {
     expireAndResolveOldBounties().catch(err =>
@@ -436,7 +479,9 @@ export function startBountyWorkers(): void {
   }, 30_000);
   // Old-bounty memory cleanup (terminal-state only) every hour
   cleanupHandle = setInterval(() => {
-    cleanupOldBounties(24);
+    cleanupOldBounties(24).catch(err =>
+      log.error({ err: err instanceof Error ? err.message : err }, 'bounty cleanup failed')
+    );
   }, 60 * 60 * 1000);
   log.info('bounty workers started');
 }

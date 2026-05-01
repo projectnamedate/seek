@@ -13,7 +13,9 @@ const envSchema = z.object({
   // Solana
   SOLANA_RPC_URL: z.string().url(),
   SOLANA_NETWORK: z.enum(['devnet', 'mainnet-beta', 'localnet']).default('devnet'),
-  AUTHORITY_PRIVATE_KEY: z.string().min(1),
+  // Cold authority key is only needed by local admin/init scripts. The
+  // production backend should not hold a Ledger/private cold authority key.
+  AUTHORITY_PRIVATE_KEY: z.string().optional(),
   // Hot authority used for reveal_mission + propose_resolution. If unset, falls
   // back to AUTHORITY_PRIVATE_KEY (dev only — mainnet must set this).
   HOT_AUTHORITY_PRIVATE_KEY: z.string().optional(),
@@ -28,6 +30,7 @@ const envSchema = z.object({
   // Validation settings
   MAX_PHOTO_AGE_SECONDS: z.string().default('300'),
   MIN_CONFIDENCE_SCORE: z.string().default('0.7'),
+  MAX_BOUNTIES_PER_WALLET_PER_DAY: z.string().default('20'),
 
   // SGT Verification (optional)
   HELIUS_API_KEY: z.string().optional(),
@@ -62,11 +65,11 @@ function loadConfig() {
     );
   }
 
-  // Safety: on mainnet, hot and cold keys must be DIFFERENT. Operator could
-  // accidentally paste the same value into both env slots, silently breaking
-  // the hot/cold split (hot key compromise = full treasury drain).
+  // Safety: on mainnet, hot and cold keys must be DIFFERENT if a cold key is
+  // present locally. Railway should normally omit AUTHORITY_PRIVATE_KEY.
   if (
     parsed.data.SOLANA_NETWORK === 'mainnet-beta' &&
+    parsed.data.AUTHORITY_PRIVATE_KEY &&
     parsed.data.HOT_AUTHORITY_PRIVATE_KEY &&
     parsed.data.HOT_AUTHORITY_PRIVATE_KEY === parsed.data.AUTHORITY_PRIVATE_KEY
   ) {
@@ -87,7 +90,7 @@ function loadConfig() {
     solana: {
       rpcUrl: parsed.data.SOLANA_RPC_URL,
       network: parsed.data.SOLANA_NETWORK,
-      authorityPrivateKey: parsed.data.AUTHORITY_PRIVATE_KEY,
+      authorityPrivateKey: parsed.data.AUTHORITY_PRIVATE_KEY || '',
       hotAuthorityPrivateKey: parsed.data.HOT_AUTHORITY_PRIVATE_KEY,
     },
     program: {
@@ -100,6 +103,7 @@ function loadConfig() {
     validation: {
       maxPhotoAgeSeconds: parseInt(parsed.data.MAX_PHOTO_AGE_SECONDS, 10),
       minConfidenceScore: parseFloat(parsed.data.MIN_CONFIDENCE_SCORE),
+      maxBountiesPerWalletPerDay: parseInt(parsed.data.MAX_BOUNTIES_PER_WALLET_PER_DAY, 10),
     },
     sgt: {
       heliusApiKey: parsed.data.HELIUS_API_KEY || '',

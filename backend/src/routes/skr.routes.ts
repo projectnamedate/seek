@@ -30,6 +30,12 @@ router.post('/resolve-address', async (req: Request, res: Response) => {
         error: 'Missing or invalid address parameter',
       });
     }
+    if (address.length > MAX_LOOKUP_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid address parameter',
+      });
+    }
 
     const skrName = await skrService.resolveAddressToSkr(address);
 
@@ -62,6 +68,12 @@ router.post('/resolve-domain', async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Missing or invalid domain parameter',
+      });
+    }
+    if (domain.length > MAX_LOOKUP_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid domain parameter',
       });
     }
 

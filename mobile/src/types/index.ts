@@ -59,7 +59,6 @@ export interface WalletState {
   fullAddress: string | null;   // Full base58 address for API calls
   skrName: string | null;       // .skr domain name (e.g., "player.skr")
   balance: number;              // SKR balance
-  isDemo: boolean;
   sgtVerified?: boolean;        // Seeker Genesis Token verified
 }
 

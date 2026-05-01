@@ -145,6 +145,12 @@ pub enum SeekError {
 
     #[msg("Bounty close cooldown has not elapsed (24h after creation)")]
     BountyCooldown,
+
+    #[msg("Invalid protocol treasury owner")]
+    InvalidTreasuryOwner,
+
+    #[msg("Protocol treasury must be the canonical SKR associated token account for its owner")]
+    InvalidTreasuryAccount,
 }
 
 /// Global protocol state - tracks all protocol-wide metrics
@@ -1129,7 +1135,7 @@ pub mod seek_protocol {
     }
 
     /// Cancel a bounty - player can reclaim entry after expiry + grace period
-    /// Only works if bounty is still in Pending or Submitted state (not resolved)
+    /// Only works if bounty is still Pending (no photo submitted yet).
     pub fn cancel_bounty(ctx: Context<CancelBounty>) -> Result<()> {
         let bounty = &mut ctx.accounts.bounty;
         let global_state = &mut ctx.accounts.global_state;
@@ -1416,9 +1422,17 @@ pub struct InitializeSingularityVault<'info> {
     )]
     pub singularity_vault: Box<Account<'info, TokenAccount>>,
 
-    /// Protocol treasury - existing token account for protocol fees
+    /// Protocol treasury owner. Unchecked because the token-account owner may
+    /// be a system wallet today or a program-owned multisig/PDA later; the key
+    /// is still pinned by token owner + canonical ATA constraints below.
+    /// CHECK: validated by protocol_treasury.owner and ATA derivation.
+    pub protocol_treasury_owner: UncheckedAccount<'info>,
+
+    /// Protocol treasury - existing canonical SKR ATA for protocol fees
     #[account(
         token::mint = skr_mint,
+        constraint = protocol_treasury.owner == protocol_treasury_owner.key() @ SeekError::InvalidTreasuryOwner,
+        constraint = protocol_treasury.key() == get_associated_token_address(&protocol_treasury_owner.key(), &SKR_MINT) @ SeekError::InvalidTreasuryAccount
     )]
     pub protocol_treasury: Box<Account<'info, TokenAccount>>,
 
@@ -1841,9 +1855,9 @@ pub struct SetHotAuthority<'info> {
 }
 
 /// Rotate the protocol treasury recipient. Cold authority only.
-/// `new_treasury` must be an existing SKR TokenAccount (the rent-paying
-/// caller pre-creates the ATA off-chain — this instruction just records
-/// the new recipient on `GlobalState`).
+/// `new_treasury` must be the existing canonical SKR ATA for
+/// `new_treasury_owner` (the rent-paying caller pre-creates it off-chain —
+/// this instruction just records the new recipient on `GlobalState`).
 #[derive(Accounts)]
 pub struct SetTreasury<'info> {
     #[account(
@@ -1858,8 +1872,16 @@ pub struct SetTreasury<'info> {
     )]
     pub global_state: Box<Account<'info, GlobalState>>,
 
+    /// New treasury owner. Unchecked because future custody could be a
+    /// program-owned multisig/PDA; constraints below bind the key to the token
+    /// account owner and canonical ATA.
+    /// CHECK: validated by new_treasury.owner and ATA derivation.
+    pub new_treasury_owner: UncheckedAccount<'info>,
+
     #[account(
         token::mint = skr_mint,
+        constraint = new_treasury.owner == new_treasury_owner.key() @ SeekError::InvalidTreasuryOwner,
+        constraint = new_treasury.key() == get_associated_token_address(&new_treasury_owner.key(), &SKR_MINT) @ SeekError::InvalidTreasuryAccount
     )]
     pub new_treasury: Box<Account<'info, TokenAccount>>,
 

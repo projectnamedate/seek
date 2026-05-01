@@ -98,8 +98,7 @@ export default function ValidatingScreen({ navigation, route }: Props) {
       }).start();
 
       try {
-        // Call the real API for validation. Auth headers are required —
-        // no demo bypass. Without a wallet address, /submit will 401.
+        // Auth headers are required; without a wallet address, /submit will 401.
         const authOptions = wallet.fullAddress
           ? { signMessage, walletAddress: wallet.fullAddress }
           : undefined;
