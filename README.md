@@ -83,7 +83,7 @@ seek/
 - Commit-reveal mission assignment (SHA-256 + random salt)
 - Player cancel after expiry + grace period (reclaim stuck funds)
 - Dispute resolution with on-chain arbitration
-- Authority key rotation via `transfer_authority`
+- Two-step authority rotation via `propose_authority_transfer` + `accept_authority_transfer`
 - Bounty account closing to reclaim rent
 - PDA-based account management
 - Event emission for real-time tracking
@@ -104,7 +104,7 @@ seek/
 2. Screenshot detection (no GPS + no device = reject)
 3. Timestamp validation (max 5 min old)
 4. Claude Vision object detection with confidence scoring
-5. Minimum 70% confidence threshold
+5. Tier-specific confidence thresholds: 88% / 92% / 95%
 
 ## Anti-Cheat
 
@@ -114,15 +114,20 @@ seek/
 
 ## On-Chain Integration
 
-The app runs fully on-chain on Solana devnet:
+The app runs fully on-chain. Production is mainnet-beta by default; devnet is
+available only through the explicit devnet build/config path:
 
 1. Mobile calls `/prepare` → backend generates commitment + returns account addresses
 2. Mobile builds `accept_bounty` instruction → MWA (Phantom) signs via Solana Mobile Stack
 3. `/start` verifies the on-chain transaction → hunt begins with timer
 4. Player finds target, takes photo → `/submit` with AI validation
-5. Backend calls `resolve_bounty` + `finalize_bounty` on-chain → tokens transferred
+5. Backend reveals the mission, proposes the result, then the finalizer cranks
+   `finalize_bounty` after the challenge window → tokens transferred
 
-**Devnet Program:** `DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v`
+**Mainnet deploy status:** the program is intentionally not deployed until the
+cold Ledger pubkey is pasted into `EXPECTED_INITIAL_AUTHORITY`; see
+[`backend/scripts/DEPLOY_MAINNET.md`](backend/scripts/DEPLOY_MAINNET.md).
+The historical devnet program is `DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v`.
 
 ```bash
 # 1. Start backend
@@ -145,7 +150,7 @@ npx expo run:android    # Phone connected via USB
 # 5. For wireless testing: unplug USB, app works over cellular
 ```
 
-**Admin CLI** for player setup:
+**Admin CLI** for devnet/local player setup:
 ```bash
 cd backend
 npx ts-node scripts/admin.ts mint <wallet-address> 50000   # Give SKR tokens
@@ -179,11 +184,13 @@ PORT=3001
 NODE_ENV=development
 
 # Solana
-SOLANA_RPC_URL=https://api.devnet.solana.com
-AUTHORITY_PRIVATE_KEY=your_base58_private_key
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+SOLANA_NETWORK=mainnet-beta
+HOT_AUTHORITY_PRIVATE_KEY=your_hot_backend_keypair
+REDIS_URL=rediss://...
 
 # Program
-SEEK_PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
+SEEK_PROGRAM_ID=<mainnet_program_id_after_deploy>
 SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
 
 # Claude API (get from https://console.anthropic.com)

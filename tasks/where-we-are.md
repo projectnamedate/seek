@@ -41,6 +41,9 @@
   backend typecheck PASS, mobile typecheck PASS, contract tests 21/21 PASS,
   contract mainnet cargo check PASS, `git diff --check` PASS, demo-residue grep
   over `backend/src` + `mobile/src` clean.
+- ✅ 2026-05-01 session-start check cleaned README launch drift: production
+  docs now describe mainnet-beta as default, Ledger-gated deploy status, current
+  auth rotation, and tier-specific AI thresholds.
 - 🟡 `dapp-store-publishing/check-assets.mjs` correctly fails until real assets
   exist: missing `icon.png`, `banner.png`, and screenshots.
 - ⚠️ `npm audit fix` applied non-breaking backend fixes. Residual audit findings
@@ -50,7 +53,8 @@
 ## Where the user paused
 Night wrap after committing the mainnet-readiness, demo-cleanup, residual-risk,
 and dApp Store asset-planning sweep. Latest commits:
-- `HEAD` chore: close mainnet readiness gaps
+- `HEAD` docs: refresh README launch status
+- `aad8f60` chore: close mainnet readiness gaps
 - `9aa0e1c` chore: drift-prevention guardrails — session-start protocol, verify-before-claim
 - `18171d7` docs: add Phase B execution playbook
 
