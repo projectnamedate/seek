@@ -2,11 +2,17 @@
 // Colors based on Solana Mobile design scheme
 
 export const colors = {
-  // Primary palette - Solana Mobile
-  gold: '#cfe6e4',      // Rewards, wins (cyan glow)
-  cyan: '#61afbd',      // Primary accent (bright cyan)
-  cyanLight: '#95d2e6', // Secondary accent (sky blue)
-  teal: '#10282c',      // Deep teal accent
+  // Primary palette - Solana Mobile Seeker
+  frost: '#cfe6e4',     // Primary CTA fill and high-contrast accent
+  ice: '#95d2e6',       // Secondary display accent
+  aqua: '#61afbd',      // Active signal accent
+  teal: '#10282c',      // Deep teal borders and depth
+  carbon: '#101618',    // Raised panels
+  line: '#373c3e',      // Secondary borders and inactive structure
+
+  // Existing app aliases
+  cyan: '#61afbd',
+  cyanLight: '#95d2e6',
 
   // Backgrounds - Solana Mobile
   dark: '#010101',      // Primary background (near black)
@@ -23,12 +29,9 @@ export const colors = {
   textSecondary: '#99b3be', // Medium gray
   textMuted: '#373c3e',     // Light gray
 
-  // Legacy support
-  purple: '#61afbd',    // Map to cyan for compatibility
-
   // Gradients (as arrays for LinearGradient)
-  gradientGold: ['#cfe6e4', '#95d2e6'],
-  gradientPurple: ['#61afbd', '#95d2e6'],
+  gradientFrost: ['#cfe6e4', '#95d2e6'],
+  gradientAqua: ['#61afbd', '#95d2e6'],
   gradientCyan: ['#61afbd', '#cfe6e4'],
   gradientSuccess: ['#61afbd', '#95d2e6'],
   gradientError: ['#EF4444', '#DC2626'],

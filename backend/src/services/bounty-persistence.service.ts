@@ -15,6 +15,9 @@ export interface SerializedActiveBounty {
   expiresAt: string;
   bountyPda: string;
   transactionSignature?: string;
+  disputeTransactionSignature?: string;
+  challengeEndsAt?: string;
+  disputedAt?: string;
   sgtVerified?: boolean;
   attestationType?: 'none' | 'standard';
 }
@@ -25,16 +28,28 @@ export function serializeActiveBounty(bounty: ActiveBounty): SerializedActiveBou
     entryAmount: bounty.entryAmount.toString(),
     createdAt: bounty.createdAt.toISOString(),
     expiresAt: bounty.expiresAt.toISOString(),
+    challengeEndsAt: bounty.challengeEndsAt?.toISOString(),
+    disputedAt: bounty.disputedAt?.toISOString(),
   };
 }
 
 export function deserializeActiveBounty(serialized: SerializedActiveBounty): ActiveBounty {
-  return {
-    ...serialized,
+  const { challengeEndsAt, disputedAt, ...rest } = serialized;
+  const bounty: ActiveBounty = {
+    ...rest,
     entryAmount: BigInt(serialized.entryAmount),
     createdAt: new Date(serialized.createdAt),
     expiresAt: new Date(serialized.expiresAt),
   };
+
+  if (challengeEndsAt) {
+    bounty.challengeEndsAt = new Date(challengeEndsAt);
+  }
+  if (disputedAt) {
+    bounty.disputedAt = new Date(disputedAt);
+  }
+
+  return bounty;
 }
 
 export function getActiveBountyTtlSeconds(

@@ -23,10 +23,18 @@ type Props = {
   route: RouteProp<RootStackParamList, 'BountyReveal'>;
 };
 
+function parseMissionDescription(description: string): { target: string; hint: string } {
+  const [targetPart, hintPart] = description.split(': ');
+  return {
+    target: (targetPart || description).replace(/^Find\s+(a\s+|an\s+)?/i, ''),
+    hint: hintPart || 'Capture all listed cues in one photo',
+  };
+}
+
 export default function BountyRevealScreen({ navigation, route }: Props) {
   const { tier } = route.params;
   const tierData = TIERS[tier];
-  const { wallet, signAndSendTransaction, signMessage, connection } = useApp();
+  const { wallet, signAndSendTransaction, connection } = useApp();
 
   const [bounty, setBounty] = useState<Bounty | null>(null);
   const [isRevealing, setIsRevealing] = useState(true);
@@ -38,17 +46,31 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
+  const statusSpinAnim = useRef(new Animated.Value(0)).current;
 
   // Start the on-chain flow as soon as the screen mounts.
   useEffect(() => {
     startOnChainBounty();
   }, [tier]);
 
+  useEffect(() => {
+    const statusLoop = Animated.loop(
+      Animated.timing(statusSpinAnim, {
+        toValue: 1,
+        duration: 1600,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    statusLoop.start();
+    return () => statusLoop.stop();
+  }, []);
+
   /**
    * On-chain flow:
    * 1. Call /prepare to get commitment + timestamp + bountyPda
    * 2. Build accept_bounty transaction
-   * 3. Sign & send via Phantom (MWA)
+   * 3. Sign & send via Seeker Wallet (MWA)
    * 4. Call /start with bountyPda + tx signature
    * 5. Get mission details back
    */
@@ -61,21 +83,14 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
     }
 
     try {
-      // Step 0: Sign 'prepare' auth header (one MWA prompt — operation-bound,
-      // single-use nonce on backend prevents replay against /submit etc).
-      setStatusText('Authorizing...');
-      const prepareHeaders = await apiService.getWalletAuthHeaders(signMessage, playerWallet, 'prepare');
-      // Phantom MWA gap — keep the 1500ms delay (lessons.md)
-      await new Promise(r => setTimeout(r, 1500));
-
       // Step 1: Prepare bounty (get commitment from backend)
       setStatusText('Preparing bounty...');
-      const prepResult = await apiService.prepareBounty(playerWallet, tier, prepareHeaders);
+      const prepResult = await apiService.prepareBounty(playerWallet, tier);
       if (!prepResult.success || !prepResult.data) {
         throw new Error(prepResult.error || 'Failed to prepare bounty');
       }
 
-      const { commitment, timestamp, bountyPda, entryAmount } = prepResult.data;
+      const { commitment, prepareId, timestamp, bountyPda, entryAmount } = prepResult.data;
       if (__DEV__) console.log('[BountyReveal] Prepared:', { bountyPda: bountyPda.slice(0, 8), timestamp });
 
       // Step 2: Build the accept_bounty transaction
@@ -91,8 +106,8 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         bountyPdaPubkey
       );
 
-      // Step 3: Sign & send via Phantom (second + last MWA prompt for this flow)
-      setStatusText('Approve in wallet...');
+      // Step 3: Sign & send via wallet (only required approval for this flow)
+      setStatusText('Approve in Seeker Wallet...');
       let slot: number | undefined;
       try {
         slot = await Promise.race([
@@ -105,7 +120,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       const txSignature = await signAndSendTransaction(transaction, ...(slot !== undefined ? [slot] : []) as [number]);
       if (__DEV__) console.log('[BountyReveal] Tx sent:', txSignature);
 
-      // Brief delay after Phantom deep-link return to let network stabilize
+      // Brief delay after wallet return to let network stabilize
       await new Promise(r => setTimeout(r, 1500));
 
       // Step 4: Call /start — no auth header needed; the on-chain tx signature
@@ -122,6 +137,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         {
           bountyPda,
           transactionSignature: txSignature,
+          prepareId,
         },
       );
 
@@ -133,9 +149,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       const responseData = startResult.data;
       const now = Date.now();
       const description = responseData?.mission?.description || 'Find the target';
-      const parts = description.split(': ');
-      const target = (parts[0] || description).replace('Find ', '').replace('Find a ', '').replace('Find an ', '');
-      const hint = parts[1] || 'Look around you';
+      const { target, hint } = parseMissionDescription(description);
 
       const newBounty: Bounty = {
         id: responseData?.bountyId || `onchain-${now}`,
@@ -149,6 +163,8 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         status: 'revealing',
         entryAmount: tierData.entry,
         potentialReward: tierData.entry * 2,
+        bountyPda,
+        submitToken: responseData?.submitToken,
       };
 
       if (__DEV__) console.log('[BountyReveal] On-chain bounty started:', newBounty.id);
@@ -247,17 +263,22 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
     outputRange: ['0deg', '360deg'],
   });
 
+  const statusSpin = statusSpinAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
   // Show status while preparing on-chain tx
   if (!bounty && statusText) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.statusContainer}>
-          <Animated.View style={styles.spinner}>
-            <Text style={styles.spinnerEmoji}>⏳</Text>
+          <Animated.View style={[styles.statusRing, { transform: [{ rotate: statusSpin }] }]}>
+            <View style={styles.statusRingInner} />
           </Animated.View>
           <Text style={styles.statusText}>{statusText}</Text>
           <Text style={styles.statusSubtext}>
-            {statusText.includes('wallet') ? 'Check your Phantom wallet' : 'Please wait...'}
+            {statusText.toLowerCase().includes('wallet') ? 'Check Seeker Wallet' : 'Please wait...'}
           </Text>
         </View>
       </SafeAreaView>
@@ -319,14 +340,15 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
             <Text style={styles.findLabel}>FIND</Text>
             <Text
               style={styles.targetText}
-              numberOfLines={2}
+              numberOfLines={4}
               adjustsFontSizeToFit
+              minimumFontScale={0.58}
             >
               {bounty.target}
             </Text>
             <View style={styles.hintContainer}>
               <Text style={styles.hintLabel}>HINT</Text>
-              <Text style={styles.hintText} numberOfLines={2}>{bounty.targetHint}</Text>
+              <Text style={styles.hintText} numberOfLines={2} adjustsFontSizeToFit>{bounty.targetHint}</Text>
             </View>
             <View style={styles.timeContainer}>
               <Text style={styles.timeLabel}>TIME LIMIT</Text>
@@ -335,7 +357,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
               </Text>
             </View>
             <View style={styles.rewardContainer}>
-              <Text style={styles.rewardLabel}>REWARD</Text>
+              <Text style={styles.rewardLabel}>RETURN</Text>
               <Text style={styles.rewardValue}>
                 {bounty.potentialReward} $SKR
               </Text>
@@ -374,11 +396,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: spacing.xl,
   },
-  spinner: {
+  statusRing: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 3,
+    borderColor: colors.aqua,
+    borderTopColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: spacing.lg,
   },
-  spinnerEmoji: {
-    fontSize: 48,
+  statusRingInner: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderColor: colors.frost,
+    borderBottomColor: 'transparent',
   },
   statusText: {
     color: colors.cyan,
@@ -418,7 +453,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.xs,
   },
   cardContainer: {
-    width: 300,
+    width: 320,
+    maxWidth: '90%',
     minHeight: 380,
   },
   card: {
@@ -466,11 +502,12 @@ const styles = StyleSheet.create({
   },
   targetText: {
     color: colors.cyan,
-    fontSize: fontSize.lg,
+    fontSize: fontSize.md,
+    lineHeight: 20,
     fontWeight: '900',
     textAlign: 'center',
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 0,
     paddingHorizontal: spacing.sm,
   },
   hintContainer: {

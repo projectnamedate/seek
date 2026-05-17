@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Bounty, TierNumber, ValidationResult, AttestationPayload } from '../types';
 import { API_BASE_URL } from '../config';
 import { encodeBase58 } from '../utils/bs58';
+import { normalizeSkrName } from '../utils/format';
 
 // Dev-only logging - stripped from production builds
 const log = (...args: any[]) => __DEV__ && console.log(...args);
@@ -24,6 +25,21 @@ const api = axios.create({
  * Auth operations the backend's `requireWalletAuth` middleware accepts.
  */
 export type AuthOperation = 'prepare' | 'submit';
+
+export type ProtocolStats = {
+  bounties: {
+    active: number;
+    completed: number;
+    won: number;
+    lost: number;
+    expired: number;
+  };
+  vaults: {
+    house: string;
+    singularity: string;
+  };
+  winRate: string;
+};
 
 /**
  * Generate wallet auth headers for an authenticated endpoint.
@@ -55,18 +71,18 @@ export async function getWalletAuthHeaders(
 /**
  * Prepare a bounty (pre-transaction).
  * Returns commitment, timestamp, bountyPda for building on-chain tx.
- * Wallet auth required (defeats targeted PDA-poisoning DoS).
- *
- * Pass `authHeaders` from `getWalletAuthHeaders(signMessage, wallet, 'prepare')`.
+ * No wallet prompt required. /start authorizes the prepared bounty with the
+ * signed accept_bounty transaction, and prepareId binds the returned commitment.
  */
 export async function prepareBounty(
   playerWallet: string,
   tier: TierNumber,
-  authHeaders: Record<string, string>,
+  authHeaders?: Record<string, string>,
 ): Promise<{
   success: boolean;
   data?: {
     commitment: number[];
+    prepareId: string;
     timestamp: number;
     bountyPda: string;
     entryAmount: number;
@@ -77,7 +93,7 @@ export async function prepareBounty(
     const response = await api.post('/bounty/prepare', {
       tier,
       playerWallet,
-    }, { headers: authHeaders });
+    }, { headers: authHeaders || { 'ngrok-skip-browser-warning': '1' } });
 
     if (response.data.success && response.data.data) {
       return {
@@ -111,6 +127,7 @@ export async function startBounty(
   options: {
     bountyPda: string;
     transactionSignature: string;
+    prepareId?: string;
   },
 ): Promise<{ success: boolean; bounty?: Bounty; data?: any; error?: string }> {
   try {
@@ -119,6 +136,7 @@ export async function startBounty(
       playerWallet: wallet,
       bountyPda: options.bountyPda,
       transactionSignature: options.transactionSignature,
+      prepareId: options.prepareId,
     });
 
     if (response.data.success && response.data.data) {
@@ -137,17 +155,28 @@ export async function startBounty(
 
 /**
  * Submit a photo for AI validation.
- * Uses /bounty/submit with wallet auth headers.
+ * Uses the /start submitToken in current builds. Wallet auth remains as a
+ * backwards-compatible fallback for older installed builds.
  */
 export async function submitPhoto(
   bountyId: string,
   photoUri: string,
   attestation?: AttestationPayload,
   authOptions?: {
-    signMessage: (message: Uint8Array) => Promise<Uint8Array>;
-    walletAddress: string;
+    submitToken?: string;
+    signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
+    walletAddress?: string;
   }
-): Promise<{ success: boolean; validation?: ValidationResult; error?: string }> {
+): Promise<{
+  success: boolean;
+  validation?: ValidationResult;
+  bountyPda?: string;
+  challengeEndsAt?: number;
+  transactionSignature?: string;
+  payout?: string;
+  singularityWon?: boolean;
+  error?: string;
+}> {
   try {
     const endpoint = '/bounty/submit';
 
@@ -170,6 +199,9 @@ export async function submitPhoto(
     if (authOptions?.walletAddress) {
       formData.append('playerWallet', authOptions.walletAddress);
     }
+    if (authOptions?.submitToken) {
+      formData.append('submitToken', authOptions.submitToken);
+    }
     formData.append('photo', {
       uri: photoUri,
       type: 'image/jpeg',
@@ -180,10 +212,9 @@ export async function submitPhoto(
       formData.append('attestation', JSON.stringify(attestation));
     }
 
-    // Wallet auth headers — backend's requireWalletAuth('submit') runs after
-    // multer parses FormData and verifies the per-operation signed message.
+    // Wallet auth headers are only used by old builds without submitToken.
     const submitHeaders: Record<string, string> = { 'ngrok-skip-browser-warning': '1' };
-    if (authOptions?.signMessage && authOptions?.walletAddress) {
+    if (!authOptions?.submitToken && authOptions?.signMessage && authOptions?.walletAddress) {
       const wAuth = await getWalletAuthHeaders(authOptions.signMessage, authOptions.walletAddress, 'submit');
       Object.assign(submitHeaders, wAuth);
     }
@@ -230,7 +261,14 @@ export async function submitPhoto(
           transactionSignature: responseData.data?.transactionSignature,
           payout: responseData.data?.payout,
           singularityWon: responseData.data?.singularityWon,
+          bountyPda: responseData.data?.bountyPda,
+          challengeEndsAt: responseData.data?.challengeEndsAt,
         },
+        bountyPda: responseData.data?.bountyPda,
+        challengeEndsAt: responseData.data?.challengeEndsAt,
+        transactionSignature: responseData.data?.transactionSignature,
+        payout: responseData.data?.payout,
+        singularityWon: responseData.data?.singularityWon,
       };
     }
 
@@ -310,6 +348,33 @@ export async function healthCheck(): Promise<boolean> {
 }
 
 /**
+ * Get public protocol statistics.
+ */
+export async function getProtocolStats(): Promise<{
+  success: boolean;
+  stats?: ProtocolStats;
+  error?: string;
+}> {
+  try {
+    const response = await api.get('/health/stats');
+    if (response.data.success && response.data.data) {
+      return { success: true, stats: response.data.data };
+    }
+
+    return {
+      success: false,
+      error: response.data.error || 'Failed to fetch protocol stats',
+    };
+  } catch (error: any) {
+    logError('[API] Protocol stats error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || 'Failed to fetch protocol stats',
+    };
+  }
+}
+
+/**
  * Resolve wallet address to .skr domain name
  */
 export async function resolveSkrName(
@@ -319,9 +384,10 @@ export async function resolveSkrName(
     const response = await api.get(`/skr/lookup/${address}`);
 
     if (response.data.success) {
+      const skrName = response.data.data.skrName;
       return {
         success: true,
-        skrName: response.data.data.skrName || null,
+        skrName: typeof skrName === 'string' ? normalizeSkrName(skrName) : null,
       };
     }
 
@@ -345,6 +411,7 @@ export default {
   getBountyStatus,
   getPlayerBounty,
   healthCheck,
+  getProtocolStats,
   resolveSkrName,
   getWalletAuthHeaders,
 };

@@ -132,22 +132,22 @@ describe("seek-protocol (client-side invariants)", () => {
     it("mainnet tier entries match 6-decimal base units", () => {
       const mult = 1_000_000n; // 10^6
       assert.equal(1000n * mult, 1_000_000_000n); // tier 1 = 1000 SKR
-      assert.equal(2000n * mult, 2_000_000_000n);
       assert.equal(3000n * mult, 3_000_000_000n);
+      assert.equal(5000n * mult, 5_000_000_000n);
     });
 
     it("devnet tier entries match 9-decimal base units", () => {
       const mult = 1_000_000_000n; // 10^9
       assert.equal(1000n * mult, 1_000_000_000_000n);
-      assert.equal(2000n * mult, 2_000_000_000_000n);
       assert.equal(3000n * mult, 3_000_000_000_000n);
+      assert.equal(5000n * mult, 5_000_000_000_000n);
     });
 
-    it("3x payout is entry + 2x profit", () => {
+    it("2x total return is entry + 1x profit", () => {
       const entry = 1000n * 1_000_000n; // 1000 SKR mainnet
-      const payout = entry * 3n;
+      const payout = entry * 2n;
       const profit = payout - entry;
-      assert.equal(profit, entry * 2n, "profit should equal 2x entry");
+      assert.equal(profit, entry, "profit should equal 1x entry");
     });
 
     it("loss distribution sums to 100% (basis points)", () => {
@@ -241,9 +241,12 @@ describe("seek-protocol (client-side invariants)", () => {
       assert.include(names, "accept_authority_transfer");
       assert.include(names, "cancel_authority_transfer");
       assert.include(names, "set_hot_authority");
+      assert.include(names, "set_protocol_paused");
+      assert.include(names, "withdraw_unreserved_house");
+      assert.include(names, "withdraw_singularity");
     });
 
-    it("GlobalState account has hot_authority + pending_authority fields", () => {
+    it("GlobalState account has auth + exposure-reserve + pause fields", () => {
       const accounts = (idl as any).types as Array<{ name: string; type: any }>;
       const globalState = accounts.find((a) => a.name === "GlobalState");
       assert.ok(globalState, "GlobalState type must be present in IDL");
@@ -251,6 +254,9 @@ describe("seek-protocol (client-side invariants)", () => {
       assert.include(fieldNames, "authority");
       assert.include(fieldNames, "hot_authority");
       assert.include(fieldNames, "pending_authority");
+      assert.include(fieldNames, "active_payout_liability");
+      assert.include(fieldNames, "active_bounty_count");
+      assert.include(fieldNames, "paused");
     });
 
     it("reveal_mission + propose_resolution use hot_authority signer", () => {
@@ -301,6 +307,19 @@ describe("seek-protocol (client-side invariants)", () => {
   });
 
   describe("Cluster constant sanity", () => {
+    it("public-release resolution delay is zero on both cluster builds", () => {
+      const zeroDelayDefinitions = programSource.match(/pub const CHALLENGE_PERIOD: i64 = 0;/g) || [];
+      assert.equal(zeroDelayDefinitions.length, 2, "mainnet and devnet challenge periods must both be zero");
+    });
+
+    it("finalize_bounty does not enforce challenge_ends_at while disputes are disabled", () => {
+      assert.notInclude(
+        programSource,
+        "current_time >= bounty.challenge_ends_at",
+        "finalize_bounty must not leave old queued bounties trapped behind a stale timestamp"
+      );
+    });
+
     it("mainnet and devnet mints are distinct", () => {
       assert.notEqual(MAINNET_SKR_MINT.toBase58(), DEVNET_SKR_MINT.toBase58());
     });

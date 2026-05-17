@@ -47,6 +47,14 @@ export function truncateAddress(address: string, chars: number = 4): string {
 }
 
 /**
+ * Normalize .skr names for display.
+ */
+export function normalizeSkrName(name: string): string {
+  const trimmed = name.trim().toLowerCase();
+  return trimmed.endsWith('.skr') ? trimmed : `${trimmed}.skr`;
+}
+
+/**
  * Format date for display
  */
 export function formatDate(timestamp: number): string {

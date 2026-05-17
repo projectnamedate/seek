@@ -65,6 +65,37 @@ export async function reserveWalletDailyBounty(
   return buildReservation(current.count, limit, current.resetAt);
 }
 
+export async function getWalletDailyBountyStatus(
+  wallet: string,
+  now: Date = new Date()
+): Promise<WalletDailyBountyReservation> {
+  const limit = config.validation.maxBountiesPerWalletPerDay;
+  const day = utcDayKey(now);
+  const resetAt = new Date(now.getTime() + secondsUntilNextUtcDay(now) * 1000);
+
+  if (config.redis.url) {
+    const r = await getRedis();
+    if (!r) {
+      return {
+        allowed: false,
+        limit,
+        used: limit,
+        remaining: 0,
+        resetAt,
+      };
+    }
+
+    const raw = await r.get(RK.walletDailyBountyLimit(wallet, day));
+    const used = raw ? Number(raw) : 0;
+    return buildStatus(used, limit, resetAt);
+  }
+
+  const key = `${day}:${wallet}`;
+  const current = localCounters.get(key);
+  const used = current && current.resetAt > now ? current.count : 0;
+  return buildStatus(used, limit, current?.resetAt && current.resetAt > now ? current.resetAt : resetAt);
+}
+
 function buildReservation(
   used: number,
   limit: number,
@@ -72,6 +103,20 @@ function buildReservation(
 ): WalletDailyBountyReservation {
   return {
     allowed: used <= limit,
+    limit,
+    used,
+    remaining: Math.max(0, limit - used),
+    resetAt,
+  };
+}
+
+function buildStatus(
+  used: number,
+  limit: number,
+  resetAt: Date
+): WalletDailyBountyReservation {
+  return {
+    allowed: used < limit,
     limit,
     used,
     remaining: Math.max(0, limit - used),

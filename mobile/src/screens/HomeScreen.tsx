@@ -13,10 +13,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TierNumber, TIERS } from '../types';
 import walletService from '../services/wallet.service';
+import apiService from '../services/api.service';
 import { useApp } from '../context/AppContext';
 import { formatTimeHuman as formatTime } from '../utils/format';
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.2';
 
 // Tier colors - Solana Mobile inspired
 const TIER_COLORS = {
@@ -30,12 +31,16 @@ type Props = {
 };
 
 export default function HomeScreen({ navigation }: Props) {
-  const { sgtVerified, wallet, connectWallet, disconnectWallet } = useApp();
+  const {
+    wallet,
+    connectWallet,
+    disconnectWallet,
+  } = useApp();
   const [selectedTier, setSelectedTier] = useState<TierNumber>(1);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [jackpot, setJackpot] = useState(128470); // Starting jackpot amount
+  const [singularityPool, setSingularityPool] = useState<string | null>(null);
   const [settingsVisible, setSettingsVisible] = useState(false);
-  const jackpotAnim = useRef(new Animated.Value(1)).current;
+  const singularityAnim = useRef(new Animated.Value(1)).current;
 
   // Individual pulse animations for each tier button
   const tierAnims = useRef({
@@ -52,15 +57,15 @@ export default function HomeScreen({ navigation }: Props) {
     tierAnims[tierNum].setValue(1);
     Animated.sequence([
       Animated.timing(tierAnims[tierNum], {
-        toValue: 1.08,
-        duration: 150,
-        easing: Easing.out(Easing.ease),
+        toValue: 1.025,
+        duration: 180,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(tierAnims[tierNum], {
         toValue: 1,
-        duration: 150,
-        easing: Easing.in(Easing.ease),
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
@@ -68,32 +73,38 @@ export default function HomeScreen({ navigation }: Props) {
 
   // Wallet state is now managed by AppContext — no subscription needed
 
-  // Jackpot animation and random updates
+  // Singularity pool pulse and live stats refresh.
   useEffect(() => {
-    // Pulse animation for jackpot
-    const jackpotPulse = Animated.loop(
+    const poolPulse = Animated.loop(
       Animated.sequence([
-        Animated.timing(jackpotAnim, {
-          toValue: 1.02,
-          duration: 500,
+        Animated.timing(singularityAnim, {
+          toValue: 1.008,
+          duration: 2200,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
-        Animated.timing(jackpotAnim, {
+        Animated.timing(singularityAnim, {
           toValue: 1,
-          duration: 500,
+          duration: 2200,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ])
     );
-    jackpotPulse.start();
+    poolPulse.start();
 
-    // Random jackpot increases
-    const interval = setInterval(() => {
-      setJackpot(prev => prev + Math.floor(Math.random() * 500) + 100);
-    }, 3000);
+    const refreshPool = async () => {
+      const result = await apiService.getProtocolStats();
+      if (result.success && result.stats) {
+        setSingularityPool(result.stats.vaults.singularity);
+      }
+    };
+
+    refreshPool();
+    const interval = setInterval(refreshPool, 30000);
 
     return () => {
-      jackpotPulse.stop();
+      poolPulse.stop();
       clearInterval(interval);
     };
   }, []);
@@ -146,7 +157,7 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
             <View style={styles.tierButtonRight}>
               <Text style={styles.tierButtonEntry}>{tier.entry} $SKR</Text>
-              <Text style={styles.tierButtonWin}>Reward {tier.entry * 2}</Text>
+              <Text style={styles.tierButtonReward}>Return {tier.entry * 2}</Text>
             </View>
           </View>
           {isSelected && (
@@ -171,7 +182,7 @@ export default function HomeScreen({ navigation }: Props) {
       </TouchableOpacity>
 
       {/* Header */}
-      <View style={[styles.header, !wallet.connected && styles.dimmed]}>
+      <View style={styles.header}>
         <Text style={styles.logo}>SEEK</Text>
         <Text style={styles.tagline}>Hunt. Capture. Win.</Text>
       </View>
@@ -185,17 +196,14 @@ export default function HomeScreen({ navigation }: Props) {
               <Text style={styles.walletAddress}>
                 {wallet.skrName || wallet.address}
               </Text>
-              {sgtVerified && (
-                <View style={styles.sgtBadge}>
-                  <Text style={styles.sgtBadgeText}>VERIFIED SEEKER</Text>
-                </View>
-              )}
             </View>
-            <View style={styles.balanceContainer}>
-              <Text style={styles.balanceLabel}>Balance</Text>
-              <Text style={styles.balanceValue}>
-                {walletService.formatBalance(wallet.balance)}
-              </Text>
+            <View style={styles.walletActions}>
+              <View style={styles.balanceContainer}>
+                <Text style={styles.balanceLabel}>Balance</Text>
+                <Text style={styles.balanceValue}>
+                  {walletService.formatBalance(wallet.balance)}
+                </Text>
+              </View>
             </View>
           </View>
         ) : (
@@ -219,16 +227,16 @@ export default function HomeScreen({ navigation }: Props) {
         </View>
       </View>
 
-      {/* Jackpot Monitor */}
-      <View style={styles.jackpotSection}>
-        <View style={styles.jackpotContainer}>
-          <Text style={styles.jackpotLabel}>JACKPOT</Text>
-          <Animated.View style={{ transform: [{ scale: jackpotAnim }] }}>
-            <Text style={styles.jackpotAmount}>
-              {jackpot.toLocaleString()} $SKR
+      {/* Singularity Pool */}
+      <View style={styles.singularitySection}>
+        <View style={styles.singularityContainer}>
+          <Text style={styles.singularityLabel}>SINGULARITY POOL</Text>
+          <Animated.View style={{ transform: [{ scale: singularityAnim }] }}>
+            <Text style={styles.singularityAmount}>
+              {singularityPool || '-- $SKR'}
             </Text>
           </Animated.View>
-          <Text style={styles.jackpotSubtext}>1 in 500 chance to win it all</Text>
+          <Text style={styles.singularitySubtext}>Eligible completions can receive it</Text>
         </View>
       </View>
 
@@ -243,12 +251,12 @@ export default function HomeScreen({ navigation }: Props) {
           disabled={!wallet.connected}
           activeOpacity={0.8}
         >
-          <Text style={styles.startButtonText}>
+          <Text style={[styles.startButtonText, !wallet.connected && styles.startButtonTextDisabled]}>
             {wallet.connected ? 'START HUNT' : 'Connect Wallet to Play'}
           </Text>
           {wallet.connected && (
             <Text style={styles.startButtonSubtext}>
-              Entry {TIERS[selectedTier].entry} $SKR → Reward {TIERS[selectedTier].entry * 2}
+              Entry {TIERS[selectedTier].entry} $SKR to Return {TIERS[selectedTier].entry * 2}
             </Text>
           )}
         </TouchableOpacity>
@@ -278,13 +286,13 @@ export default function HomeScreen({ navigation }: Props) {
 
             {wallet.connected && (
               <TouchableOpacity
-                style={[styles.modalItem, { borderBottomColor: '#ff4444' }]}
+                style={[styles.modalItem, styles.disconnectItem]}
                 onPress={async () => {
                   setSettingsVisible(false);
                   await disconnectWallet();
                 }}
               >
-                <Text style={[styles.modalItemText, { color: '#ff4444' }]}>Disconnect Wallet</Text>
+                <Text style={[styles.modalItemText, styles.disconnectText]}>Disconnect Wallet</Text>
               </TouchableOpacity>
             )}
 
@@ -370,10 +378,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: spacing.md,
   },
   walletInfo: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
   },
   walletDot: {
     width: 8,
@@ -388,6 +398,10 @@ const styles = StyleSheet.create({
   },
   balanceContainer: {
     alignItems: 'flex-end',
+  },
+  walletActions: {
+    alignItems: 'flex-end',
+    gap: spacing.sm,
   },
   balanceLabel: {
     color: colors.textMuted,
@@ -438,7 +452,7 @@ const styles = StyleSheet.create({
     ...shadows.md,
   },
   tierButtonSelected: {
-    borderColor: colors.textPrimary,
+    borderColor: colors.frost,
     ...shadows.lg,
   },
   tierButtonDisabled: {
@@ -471,7 +485,7 @@ const styles = StyleSheet.create({
     fontSize: fontSize.xl,
     fontWeight: '800',
   },
-  tierButtonWin: {
+  tierButtonReward: {
     color: 'rgba(0,0,0,0.7)',
     fontSize: fontSize.sm,
     marginTop: 2,
@@ -491,32 +505,32 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
-  jackpotSection: {
+  singularitySection: {
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
-  jackpotContainer: {
+  singularityContainer: {
     backgroundColor: colors.darkAlt,
     borderRadius: borderRadius.lg,
     padding: spacing.md,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: colors.cyan,
-    ...shadows.glow(colors.cyan),
+    borderColor: colors.teal,
+    ...shadows.glow(colors.aqua),
   },
-  jackpotLabel: {
+  singularityLabel: {
     color: colors.cyan,
     fontSize: fontSize.xs,
     fontWeight: '700',
     letterSpacing: 2,
     marginBottom: spacing.xs,
   },
-  jackpotAmount: {
+  singularityAmount: {
     color: colors.cyanLight,
     fontSize: fontSize.xxl,
     fontWeight: '900',
   },
-  jackpotSubtext: {
+  singularitySubtext: {
     color: colors.textMuted,
     fontSize: fontSize.xs,
     marginTop: spacing.xs,
@@ -532,13 +546,18 @@ const styles = StyleSheet.create({
     ...shadows.lg,
   },
   startButtonDisabled: {
-    backgroundColor: colors.darkLight,
+    backgroundColor: colors.darkAlt,
+    borderWidth: 1,
+    borderColor: colors.darkLight,
   },
   startButtonText: {
     color: colors.dark,
     fontSize: fontSize.lg,
     fontWeight: '800',
     letterSpacing: 2,
+  },
+  startButtonTextDisabled: {
+    color: colors.textSecondary,
   },
   startButtonSubtext: {
     color: colors.dark,
@@ -547,7 +566,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   dimmed: {
-    opacity: 0.3,
+    opacity: 0.42,
   },
   settingsButton: {
     position: 'absolute',
@@ -612,6 +631,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: fontSize.md,
   },
+  disconnectItem: {
+    borderBottomColor: colors.error,
+  },
+  disconnectText: {
+    color: colors.error,
+  },
   modalDivider: {
     height: 1,
     backgroundColor: colors.darkLight,
@@ -650,18 +675,5 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: fontSize.md,
     fontWeight: '600',
-  },
-  sgtBadge: {
-    backgroundColor: '#D4A017',
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    marginLeft: spacing.sm,
-  },
-  sgtBadgeText: {
-    color: '#1a1a2e',
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 0.5,
   },
 });

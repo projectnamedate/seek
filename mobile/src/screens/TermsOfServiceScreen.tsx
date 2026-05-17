@@ -37,7 +37,7 @@ export default function TermsOfServiceScreen({ navigation }: Props) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.lastUpdated}>Last Updated: February 2025</Text>
+        <Text style={styles.lastUpdated}>Last Updated: May 2026</Text>
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Service Description</Text>
@@ -74,7 +74,7 @@ export default function TermsOfServiceScreen({ navigation }: Props) {
               {'\u2022'} Photography skills to capture clear images
             </Text>
             <Text style={styles.bulletItem}>
-              {'\u2022'} Time management within the challenge period
+              {'\u2022'} Time management within the hunt timer
             </Text>
           </View>
           <Text style={styles.sectionText}>
@@ -105,18 +105,18 @@ export default function TermsOfServiceScreen({ navigation }: Props) {
           <Text style={styles.sectionTitle}>6. Entry Fees and Rewards</Text>
           <Text style={styles.sectionText}>
             Participation requires an entry fee in $SKR tokens. Successful completion of
-            a challenge results in a reward. Failed challenges result in loss of the entry
-            fee. Entry fees are distributed as follows:
+            a challenge results in a reward. Missed challenges distribute the entry
+            through protocol rules:
           </Text>
           <View style={styles.bulletList}>
             <Text style={styles.bulletItem}>
-              {'\u2022'} 70% to the protocol treasury
+              {'\u2022'} 70% to the reward pool
             </Text>
             <Text style={styles.bulletItem}>
-              {'\u2022'} 20% to the jackpot pool
+              {'\u2022'} 20% to the Singularity pool
             </Text>
             <Text style={styles.bulletItem}>
-              {'\u2022'} 10% to community development
+              {'\u2022'} 10% to the protocol treasury
             </Text>
           </View>
         </View>

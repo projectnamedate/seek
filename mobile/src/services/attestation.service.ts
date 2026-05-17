@@ -8,15 +8,22 @@
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Crypto from 'expo-crypto';
-import { AttestationPayload } from '../types';
+import { AttestationPayload, CaptureLocation } from '../types';
 
 const log = (...args: any[]) => __DEV__ && console.log(...args);
 
 export interface DeviceInfo {
   isSeeker: boolean;
   model: string;
+  brand?: string;
+  manufacturer?: string;
   hasTEESupport: boolean;
 }
+
+type CaptureMetadataInput = {
+  exif?: Record<string, unknown> | null;
+  location?: CaptureLocation | null;
+};
 
 /**
  * Detect device type (Seeker vs other)
@@ -36,8 +43,32 @@ export function detectDevice(): DeviceInfo {
   return {
     isSeeker,
     model: model || 'Unknown Android',
+    brand: brand || undefined,
+    manufacturer: manufacturer || undefined,
     hasTEESupport: false, // TODO: Enable when Seeker Camera SDK ships
   };
+}
+
+function getPlatformConstants() {
+  const constants = (Platform.constants || {}) as Record<string, unknown>;
+  return {
+    Model: typeof constants.Model === 'string' ? constants.Model : undefined,
+    Brand: typeof constants.Brand === 'string' ? constants.Brand : undefined,
+    Manufacturer: typeof constants.Manufacturer === 'string' ? constants.Manufacturer : undefined,
+    Release: typeof constants.Release === 'string' ? constants.Release : undefined,
+    Fingerprint: typeof constants.Fingerprint === 'string' ? constants.Fingerprint : undefined,
+    Version: typeof constants.Version === 'number' ? constants.Version : undefined,
+  };
+}
+
+function getExifString(exif: Record<string, unknown> | null | undefined, key: string): string | undefined {
+  const value = exif?.[key];
+  return typeof value === 'string' || typeof value === 'number' ? String(value) : undefined;
+}
+
+function getExifNumber(exif: Record<string, unknown> | null | undefined, key: string): number | undefined {
+  const value = exif?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 }
 
 /**
@@ -66,16 +97,44 @@ async function computePhotoHash(photoUri: string): Promise<string> {
 /**
  * Create an attestation payload for a captured photo
  */
-export async function createAttestation(photoUri: string): Promise<AttestationPayload> {
+export async function createAttestation(
+  photoUri: string,
+  metadata: CaptureMetadataInput = {},
+): Promise<AttestationPayload> {
   const device = detectDevice();
   const photoHash = await computePhotoHash(photoUri);
+  const capturedAt = Date.now();
+  const platformConstants = getPlatformConstants();
 
   const payload: AttestationPayload = {
     type: 'standard',
     photoHash,
-    timestamp: Date.now(),
+    timestamp: capturedAt,
+    capturedAt,
     deviceModel: device.model,
+    deviceMake: device.manufacturer || device.brand,
+    deviceBrand: device.brand,
+    deviceManufacturer: device.manufacturer,
+    platformConstants,
   };
+
+  if (metadata.location) {
+    payload.latitude = metadata.location.latitude;
+    payload.longitude = metadata.location.longitude;
+    payload.locationAccuracyMeters = metadata.location.accuracy ?? undefined;
+  }
+
+  if (metadata.exif) {
+    payload.exif = {
+      DateTimeOriginal: getExifString(metadata.exif, 'DateTimeOriginal'),
+      CreateDate: getExifString(metadata.exif, 'CreateDate'),
+      ModifyDate: getExifString(metadata.exif, 'ModifyDate'),
+      Make: getExifString(metadata.exif, 'Make'),
+      Model: getExifString(metadata.exif, 'Model'),
+      GPSLatitude: getExifNumber(metadata.exif, 'GPSLatitude'),
+      GPSLongitude: getExifNumber(metadata.exif, 'GPSLongitude'),
+    };
+  }
 
   // TODO: When Seeker Camera SDK ships and hasTEESupport is true:
   // 1. Request TEE nonce from backend

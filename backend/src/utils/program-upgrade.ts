@@ -31,24 +31,51 @@ export function parseProgramDataUpgradeAuthority(
       `Expected upgradeable loader ProgramData account tag 3, got ${tag}`
     );
   }
-  if (buffer.length < 16) {
+  if (buffer.length < 13) {
     throw new Error(
       `ProgramData account data too short: ${buffer.length} bytes`
     );
   }
 
-  const option = buffer.readUInt32LE(12);
-  if (option === 0) {
+  const compactOption = buffer.readUInt8(12);
+  if (compactOption === 0) {
     return null;
   }
-  if (option !== 1) {
-    throw new Error(
-      `Unexpected ProgramData upgrade authority option ${option}`
-    );
+
+  if (compactOption === 1) {
+    // Current loader-v3 ProgramData metadata is 45 bytes:
+    // tag u32 + slot u64 + Option<Pubkey> tag u8 + pubkey [u8; 32].
+    // Some old fixtures/tools represented Option as a u32; keep support below.
+    const looksLikeLegacyU32Option =
+      buffer.length >= 48 &&
+      buffer.readUInt32LE(12) === 1 &&
+      buffer[13] === 0 &&
+      buffer[14] === 0 &&
+      buffer[15] === 0;
+
+    if (!looksLikeLegacyU32Option) {
+      if (buffer.length < 45) {
+        throw new Error(
+          `ProgramData account missing upgrade authority pubkey: ${buffer.length} bytes`
+        );
+      }
+      return new PublicKey(buffer.subarray(13, 45));
+    }
   }
+
   if (buffer.length < 48) {
     throw new Error(
       `ProgramData account missing upgrade authority pubkey: ${buffer.length} bytes`
+    );
+  }
+
+  const legacyOption = buffer.readUInt32LE(12);
+  if (legacyOption === 0) {
+    return null;
+  }
+  if (legacyOption !== 1) {
+    throw new Error(
+      `Unexpected ProgramData upgrade authority option ${legacyOption}`
     );
   }
 

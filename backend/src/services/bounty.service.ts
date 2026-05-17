@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import { ActiveBounty, Tier, BountyStatus, ENTRY_AMOUNTS, TIER_DURATIONS } from '../types';
 import { getRandomMission, getMissionById } from '../data/missions';
 import { getRedis, RK, redisAcquireLock, redisReleaseLock } from './redis.service';
@@ -63,6 +64,8 @@ export async function releaseBountyLock(bountyId: string): Promise<void> {
 // Store prepared bounty data (from /prepare endpoint, before on-chain tx)
 // Keyed by bountyPda → prepared data
 export interface PreparedBounty {
+  prepareId?: string;
+  bountyPda?: string;
   tier: Tier;
   playerWallet: string;
   timestamp: number;
@@ -74,6 +77,14 @@ export interface PreparedBounty {
   createdAt: number;
 }
 const preparedBounties = new Map<string, PreparedBounty>();
+const preparedBountiesById = new Map<string, PreparedBounty>();
+
+interface SubmitTokenRecord {
+  tokenHash: string;
+  playerWallet: string;
+}
+
+const submitTokens = new Map<string, SubmitTokenRecord>();
 
 
 /**
@@ -152,8 +163,24 @@ export async function getPlayerActiveBounty(playerWallet: string): Promise<Activ
   if (!bountyId) return undefined;
 
   const bounty = await getBounty(bountyId);
-  if (!bounty || (bounty.status !== 'pending' && bounty.status !== 'validating')) {
+  if (!bounty || !['pending', 'validating', 'disputed'].includes(bounty.status)) {
     return undefined;
+  }
+
+  if (bounty.status === 'disputed') {
+    try {
+      const { getBountyOnChain } = await import('./solana.service');
+      const onChainBounty = await getBountyOnChain(bounty.bountyPda);
+      const onChainStatus = Object.keys(onChainBounty?.status || {})[0]?.toLowerCase();
+      if (['won', 'lost', 'cancelled'].includes(onChainStatus)) {
+        activeBounties.delete(bounty.id);
+        bountyByPlayer.delete(bounty.playerWallet);
+        await removePersistedActiveBounty(bounty);
+        return undefined;
+      }
+    } catch {
+      // If RPC is temporarily unavailable, keep the dispute active locally.
+    }
   }
 
   return bounty;
@@ -165,7 +192,8 @@ export async function getPlayerActiveBounty(playerWallet: string): Promise<Activ
 export async function updateBountyStatus(
   bountyId: string,
   status: BountyStatus,
-  transactionSignature?: string
+  transactionSignature?: string,
+  challengeEndsAt?: Date
 ): Promise<ActiveBounty | undefined> {
   const bounty = await getBounty(bountyId);
   if (!bounty) return undefined;
@@ -174,12 +202,35 @@ export async function updateBountyStatus(
   if (transactionSignature) {
     bounty.transactionSignature = transactionSignature;
   }
+  if (challengeEndsAt) {
+    bounty.challengeEndsAt = challengeEndsAt;
+  }
 
   activeBounties.set(bounty.id, bounty);
   bountyByPlayer.set(bounty.playerWallet, bounty.id);
   await persistActiveBounty(bounty);
 
   log.info({ bountyId, status }, 'bounty updated');
+
+  return bounty;
+}
+
+export async function markBountyDisputed(
+  bountyId: string,
+  disputeTransactionSignature: string,
+): Promise<ActiveBounty | undefined> {
+  const bounty = await getBounty(bountyId);
+  if (!bounty) return undefined;
+
+  bounty.status = 'disputed';
+  bounty.disputeTransactionSignature = disputeTransactionSignature;
+  bounty.disputedAt = new Date();
+
+  activeBounties.set(bounty.id, bounty);
+  bountyByPlayer.set(bounty.playerWallet, bounty.id);
+  await persistActiveBounty(bounty);
+
+  log.info({ bountyId, status: 'disputed' }, 'bounty disputed');
 
   return bounty;
 }
@@ -257,19 +308,24 @@ export async function getMissionSecrets(
  * Mirrored to Redis with 5-min TTL so restart doesn't break /start.
  */
 export async function storePreparedBounty(bountyPda: string, data: PreparedBounty): Promise<void> {
-  preparedBounties.set(bountyPda, data);
+  const prepared = { ...data, bountyPda };
+
+  preparedBounties.set(bountyPda, prepared);
   setTimeout(() => preparedBounties.delete(bountyPda), 5 * 60 * 1000);
+  if (prepared.prepareId) {
+    preparedBountiesById.set(prepared.prepareId, prepared);
+    setTimeout(() => {
+      if (prepared.prepareId) preparedBountiesById.delete(prepared.prepareId);
+    }, 5 * 60 * 1000);
+  }
 
   const r = await getRedis();
   if (r) {
-    // Serialize buffers as base64 for JSON round-trip.
-    const serialized = JSON.stringify({
-      ...data,
-      missionIdBytes: data.missionIdBytes.toString('base64'),
-      salt: data.salt.toString('base64'),
-      commitment: data.commitment.toString('base64'),
-    });
+    const serialized = serializePreparedBounty(prepared);
     await r.set(RK.preparedBounty(bountyPda), serialized, { EX: 5 * 60 });
+    if (prepared.prepareId) {
+      await r.set(RK.preparedBountyById(prepared.prepareId), serialized, { EX: 5 * 60 });
+    }
   }
 }
 
@@ -287,18 +343,111 @@ export async function getPreparedBounty(bountyPda: string): Promise<PreparedBoun
   if (!raw) return undefined;
 
   try {
-    const parsed = JSON.parse(raw);
-    const prepared: PreparedBounty = {
-      ...parsed,
-      missionIdBytes: Buffer.from(parsed.missionIdBytes, 'base64'),
-      salt: Buffer.from(parsed.salt, 'base64'),
-      commitment: Buffer.from(parsed.commitment, 'base64'),
-    };
+    const prepared = deserializePreparedBounty(raw);
     preparedBounties.set(bountyPda, prepared); // repopulate in-memory cache
+    if (prepared.prepareId) preparedBountiesById.set(prepared.prepareId, prepared);
     return prepared;
   } catch {
     return undefined;
   }
+}
+
+export async function getPreparedBountyById(prepareId: string): Promise<PreparedBounty | undefined> {
+  const cached = preparedBountiesById.get(prepareId);
+  if (cached) return cached;
+
+  const r = await getRedis();
+  if (!r) return undefined;
+  const raw = await r.get(RK.preparedBountyById(prepareId));
+  if (!raw) return undefined;
+
+  try {
+    const prepared = deserializePreparedBounty(raw);
+    preparedBountiesById.set(prepareId, prepared);
+    if (prepared.bountyPda) preparedBounties.set(prepared.bountyPda, prepared);
+    return prepared;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function issueBountySubmitToken(
+  bountyId: string,
+  playerWallet: string,
+  ttlSeconds: number
+): Promise<string> {
+  const token = randomBytes(32).toString('hex');
+  const record: SubmitTokenRecord = {
+    tokenHash: hashSubmitToken(token),
+    playerWallet,
+  };
+  const ttl = Math.max(60, ttlSeconds);
+
+  submitTokens.set(bountyId, record);
+  setTimeout(() => submitTokens.delete(bountyId), ttl * 1000);
+
+  const r = await getRedis();
+  if (r) {
+    await r.set(RK.bountySubmitToken(bountyId), JSON.stringify(record), { EX: ttl });
+  }
+
+  return token;
+}
+
+export async function verifyBountySubmitToken(
+  bountyId: string,
+  token: string,
+  playerWallet: string
+): Promise<boolean> {
+  const record = await getSubmitTokenRecord(bountyId);
+  if (!record || record.playerWallet !== playerWallet) return false;
+
+  const expected = Buffer.from(record.tokenHash, 'hex');
+  const actual = Buffer.from(hashSubmitToken(token), 'hex');
+  if (expected.length !== actual.length) return false;
+  return timingSafeEqual(expected, actual);
+}
+
+function serializePreparedBounty(data: PreparedBounty): string {
+  // Serialize buffers as base64 for JSON round-trip.
+  return JSON.stringify({
+    ...data,
+    missionIdBytes: data.missionIdBytes.toString('base64'),
+    salt: data.salt.toString('base64'),
+    commitment: data.commitment.toString('base64'),
+  });
+}
+
+function deserializePreparedBounty(raw: string): PreparedBounty {
+  const parsed = JSON.parse(raw);
+  return {
+    ...parsed,
+    missionIdBytes: Buffer.from(parsed.missionIdBytes, 'base64'),
+    salt: Buffer.from(parsed.salt, 'base64'),
+    commitment: Buffer.from(parsed.commitment, 'base64'),
+  };
+}
+
+async function getSubmitTokenRecord(bountyId: string): Promise<SubmitTokenRecord | undefined> {
+  const cached = submitTokens.get(bountyId);
+  if (cached) return cached;
+
+  const r = await getRedis();
+  if (!r) return undefined;
+  const raw = await r.get(RK.bountySubmitToken(bountyId));
+  if (!raw) return undefined;
+
+  try {
+    const record = JSON.parse(raw) as SubmitTokenRecord;
+    submitTokens.set(bountyId, record);
+    return record;
+  } catch {
+    return undefined;
+  }
+}
+
+function hashSubmitToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
 }
 
 /**

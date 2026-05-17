@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 2880" role="img">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1440" y2="2880" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#010101"/>
+      <stop offset="0.58" stop-color="#071314"/>
+      <stop offset="1" stop-color="#10282c"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="1440" y2="2880" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#101618"/>
+      <stop offset="0.5" stop-color="#0b3446"/>
+      <stop offset="0.74" stop-color="#0f0704"/>
+      <stop offset="1" stop-color="#247b71"/>
+    </linearGradient>
+    <linearGradient id="wordmark" x1="92" y1="120" x2="486" y2="310" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f6f6f5"/>
+      <stop offset="0.62" stop-color="#cfe6e4"/>
+      <stop offset="1" stop-color="#95d2e6"/>
+    </linearGradient>
+    <filter id="softGlow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1440" height="2880" fill="url(#bg)"/>
+  <line x1="0" y1="720" x2="1440" y2="720" stroke="#cfe6e4" stroke-width="2" opacity="0.04"/>
+  <line x1="0" y1="1440" x2="1440" y2="1440" stroke="#cfe6e4" stroke-width="2" opacity="0.04"/>
+  <line x1="360" y1="0" x2="360" y2="2880" stroke="#cfe6e4" stroke-width="2" opacity="0.035"/>
+  <line x1="720" y1="0" x2="720" y2="2880" stroke="#cfe6e4" stroke-width="2" opacity="0.035"/>
+  <line x1="1080" y1="0" x2="1080" y2="2880" stroke="#cfe6e4" stroke-width="2" opacity="0.035"/>
+
+    <text x="92" y="112" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="30" font-weight="400" letter-spacing="0">9:41</text>
+    <text x="1348" y="112" text-anchor="end" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="28" font-weight="400" letter-spacing="0">5G</text>
+    <image href="../../logo/seek-mark.svg" x="92" y="170" width="132" height="132"/>
+    <text x="252" y="240" text-anchor="start" fill="url(#wordmark)" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="72" font-weight="400" letter-spacing="-2.2">Seek</text>
+    <text x="252" y="282" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="24" font-weight="400" letter-spacing="1.1">Hunt. Capture. Win.</text>
+    <rect x="1090" y="178" width="258" height="74" rx="37" fill="rgba(1,1,1,0.55)" stroke="#373c3e" stroke-width="2" opacity="1"/>
+    <text x="1219" y="226" text-anchor="middle" fill="#cfe6e4" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="26" font-weight="400" letter-spacing="0">seeker.skr</text>
+    <text x="92" y="420" text-anchor="start" fill="#f6f6f5" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="74" font-weight="400" letter-spacing="-2.4">Scavenger hunts built for Seeker.</text>
+
+
+    <rect x="92" y="508" width="1256" height="446" rx="44" fill="url(#panel)" stroke="#10282c" stroke-width="2" opacity="1"/>
+    <text x="144" y="612" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="26" font-weight="400" letter-spacing="1.1">Connected wallet</text>
+    <text x="144" y="706" text-anchor="start" fill="#cfe6e4" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="88" font-weight="400" letter-spacing="-2">12,840 SKR</text>
+    <text x="144" y="772" text-anchor="start" fill="#f6f6f5" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="32" font-weight="400" letter-spacing="0">Ready for today's field missions</text>
+    <rect x="144" y="824" width="276" height="92" rx="46" fill="#cfe6e4" stroke="#cfe6e4" stroke-width="0" opacity="1"/>
+<text x="282" y="882" text-anchor="middle" fill="#010101" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="30" font-weight="400" letter-spacing="0">Start hunt</text>
+    <text x="1050" y="704" text-anchor="middle" fill="#95d2e6" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="124" font-weight="400" letter-spacing="-2">4</text>
+    <text x="1050" y="758" text-anchor="middle" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="24" font-weight="400" letter-spacing="1.2">DAY STREAK</text>
+    <text x="92" y="1064" text-anchor="start" fill="#f6f6f5" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="44" font-weight="400" letter-spacing="0">Choose a tier</text>
+
+    <rect x="92" y="1120" width="380" height="280" rx="34" fill="#101618" stroke="#10282c" stroke-width="2" opacity="1"/>
+    <text x="126" y="1182" text-anchor="start" fill="#cfe6e4" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="34" font-weight="400" letter-spacing="0">Scout</text>
+    <text x="126" y="1256" text-anchor="start" fill="#95d2e6" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="54" font-weight="400" letter-spacing="-1">50 SKR</text>
+    <text x="126" y="1314" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="25" font-weight="400" letter-spacing="0">Return on win</text>
+    <rect x="126" y="1342" width="160" height="12" rx="6" fill="#373c3e" stroke="none" stroke-width="0" opacity="1"/>
+
+
+    <rect x="530" y="1120" width="380" height="280" rx="34" fill="rgba(207,230,228,0.1)" stroke="#95d2e6" stroke-width="4" opacity="1"/>
+    <text x="564" y="1182" text-anchor="start" fill="#f6f6f5" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="34" font-weight="400" letter-spacing="0">Hunter</text>
+    <text x="564" y="1256" text-anchor="start" fill="#95d2e6" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="54" font-weight="400" letter-spacing="-1">100 SKR</text>
+    <text x="564" y="1314" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="25" font-weight="400" letter-spacing="0">Return on win</text>
+    <rect x="564" y="1342" width="230" height="12" rx="6" fill="#61afbd" stroke="none" stroke-width="0" opacity="1"/>
+
+
+    <rect x="968" y="1120" width="380" height="280" rx="34" fill="#101618" stroke="#10282c" stroke-width="2" opacity="1"/>
+    <text x="1002" y="1182" text-anchor="start" fill="#cfe6e4" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="34" font-weight="400" letter-spacing="0">Legend</text>
+    <text x="1002" y="1256" text-anchor="start" fill="#95d2e6" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="54" font-weight="400" letter-spacing="-1">250 SKR</text>
+    <text x="1002" y="1314" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="25" font-weight="400" letter-spacing="0">Return on win</text>
+    <rect x="1002" y="1342" width="160" height="12" rx="6" fill="#373c3e" stroke="none" stroke-width="0" opacity="1"/>
+
+    <rect x="92" y="1488" width="1256" height="336" rx="34" fill="#101618" stroke="#10282c" stroke-width="2" opacity="1"/>
+    <text x="144" y="1584" text-anchor="start" fill="#cfe6e4" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="32" font-weight="400" letter-spacing="0">Recent mission</text>
+    <text x="144" y="1662" text-anchor="start" fill="#f6f6f5" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="40" font-weight="400" letter-spacing="0">Find a public chess table with pieces in play.</text>
+    <text x="144" y="1728" text-anchor="start" fill="#99b3be" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="28" font-weight="400" letter-spacing="0">Settled on Solana - return claimed</text>
+
+  <text x="92" y="2750" fill="#373c3e" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="24" letter-spacing="1.1">PROJECTNAMEDATE LLC</text>
+</svg>

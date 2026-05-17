@@ -8,7 +8,7 @@
     "build": "anchor build",
     "build:devnet": "anchor build -- --no-default-features --features devnet",
     "deploy:devnet": "anchor deploy --provider.cluster devnet",
-    "deploy:mainnet": "anchor deploy --provider.cluster mainnet --provider.wallet usb://ledger"
+    "deploy:mainnet": "anchor deploy --provider.cluster mainnet --provider.wallet 'usb://ledger?key=1'"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.30.1",

@@ -7,6 +7,7 @@ test-ledger/
 
 # Node.js
 node_modules/
+.next/
 .npm
 npm-debug.log*
 yarn-error.log*
@@ -18,7 +19,16 @@ yarn-error.log*
 .env
 .env.local
 .env.*.local
+*.env.local
+.secrets/
 *.pem
+*.keystore
+publisher.json
+dapp-store-publishing/publisher*.json
+backend/seek-hot*.json
+backend/*hot-authority*.json
+backend/seek-hot*.env.local
+backend/seek-hot*.pub
 
 # React Native / Expo
 .expo/

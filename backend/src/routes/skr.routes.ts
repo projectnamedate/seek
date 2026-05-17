@@ -10,6 +10,10 @@ const router = Router();
 // All SKR routes go through the rate limiter — every endpoint hits mainnet
 // RPC for resolution. Cap per-IP at 60/min.
 router.use(skrLookupLimiter);
+router.use((_req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  next();
+});
 
 // Hard cap on input length — base58 wallets max 44 chars, .skr domains
 // realistically < 64. Anything longer is malformed; reject early to keep

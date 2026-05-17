@@ -31,6 +31,7 @@ const envSchema = z.object({
   MAX_PHOTO_AGE_SECONDS: z.string().default('300'),
   MIN_CONFIDENCE_SCORE: z.string().default('0.7'),
   MAX_BOUNTIES_PER_WALLET_PER_DAY: z.string().default('20'),
+  CHALLENGE_PERIOD_SECONDS: z.string().default('0'),
 
   // SGT Verification (optional)
   HELIUS_API_KEY: z.string().optional(),
@@ -76,7 +77,8 @@ function loadConfig() {
     throw new Error(
       'HOT_AUTHORITY_PRIVATE_KEY must be DIFFERENT from AUTHORITY_PRIVATE_KEY on mainnet. ' +
       'They are the same — backup deploy mistake. Generate a fresh hot keypair: ' +
-      '`solana-keygen new --outfile ./seek-hot.json` and use its base58 secret.'
+      '`solana-keygen new --outfile .secrets/solana/seek-hot.json`, set 0600, ' +
+      'verify the pubkey, back it up, and use its base58 secret.'
     );
   }
 
@@ -109,10 +111,11 @@ function loadConfig() {
       heliusApiKey: parsed.data.HELIUS_API_KEY || '',
       bonusConfidenceReduction: parseFloat(parsed.data.SGT_BONUS_CONFIDENCE_REDUCTION),
     },
-    // Protocol parameters — must match the on-chain CHALLENGE_PERIOD constant
-    // in the contract (300s on mainnet, 10s on devnet).
+    // Protocol parameters. Public disputes are disabled in the current mainnet
+    // program, so finalization is immediate and this must match the on-chain
+    // CHALLENGE_PERIOD const.
     protocol: {
-      challengePeriodSeconds: parsed.data.SOLANA_NETWORK === 'mainnet-beta' ? 300 : 10,
+      challengePeriodSeconds: parseInt(parsed.data.CHALLENGE_PERIOD_SECONDS, 10),
     },
     sentry: {
       dsn: parsed.data.SENTRY_DSN || '',

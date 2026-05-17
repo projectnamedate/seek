@@ -4,11 +4,17 @@
        unless a feature genuinely needs them. Over-permissioned apps are a
        common Solana dApp Store rejection reason. -->
   <uses-permission android:name="android.permission.CAMERA"/>
+  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
   <uses-permission android:name="android.permission.INTERNET"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
   <!-- Photo picker access (Android 14+ scoped). Replaces legacy READ_EXTERNAL_STORAGE. -->
   <uses-permission android:name="android.permission.READ_MEDIA_IMAGES"/>
   <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED"/>
+  <!-- Explicitly remove permissions injected by Expo modules but unused by Seek. -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" tools:node="remove"/>
+  <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" tools:node="remove"/>
+  <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
   <queries>
     <intent>
       <action android:name="android.intent.action.VIEW"/>
@@ -31,14 +37,6 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="seek"/>
-      </intent-filter>
-      <!-- Expo dev-client scheme; strip for dApp Store submission if paranoid,
-           but typically unused at runtime in release builds. -->
-      <intent-filter>
-        <action android:name="android.intent.action.VIEW"/>
-        <category android:name="android.intent.category.DEFAULT"/>
-        <category android:name="android.intent.category.BROWSABLE"/>
-        <data android:scheme="exp+seek"/>
       </intent-filter>
     </activity>
   </application>

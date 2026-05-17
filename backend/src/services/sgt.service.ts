@@ -9,6 +9,13 @@
  * Docs: https://docs.solanamobile.com/marketing/engaging-seeker-users
  */
 import { PublicKey } from '@solana/web3.js';
+import {
+  getGroupMemberPointerState,
+  getMetadataPointerState,
+  getTokenGroupMemberState,
+  TOKEN_2022_PROGRAM_ID,
+  unpackMint,
+} from '@solana/spl-token';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { randomBytes } from 'crypto';
@@ -24,8 +31,43 @@ const HELIUS_TIMEOUT_MS = 15_000;
 const SGT_VERIFICATION_TTL_SECONDS = 30 * 24 * 60 * 60; // 30d — re-prove monthly
 
 // SGT on-chain constants
+const SGT_MINT_AUTHORITY = 'GT2zuHVaZQYZSyQMgJPLzvkmyztfyXg2NJunqFp4p3A4';
+const SGT_METADATA_ADDRESS = 'GT22s89nU4iWFkNXj1Bw6uYhJJWDRPpShHt4Bk8f99Te';
 const SGT_GROUP_ADDRESS = 'GT22s89nU4iWFkNXj1Bw6uYhJJWDRPpShHt4Bk8f99Te';
-const TOKEN_2022_PROGRAM_ID = new PublicKey('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
+const TOKEN_2022_PROGRAM_ID_STR = TOKEN_2022_PROGRAM_ID.toBase58();
+
+interface SGTMintCandidate {
+  mintAddress: string;
+  supply: bigint;
+  decimals: number;
+  mintAuthority: string | null;
+  metadataPointerAuthority: string | null;
+  metadataPointerAddress: string | null;
+  groupMemberPointerAuthority: string | null;
+  groupMemberPointerAddress: string | null;
+  tokenGroupMemberMint: string | null;
+  tokenGroupMemberGroup: string | null;
+}
+
+/**
+ * Official Seeker Genesis Tokens are Token-2022 NFTs whose mint is a member of
+ * the shared Solana Mobile Genesis Token group. The group-member extension is
+ * the important common proof because initializing it requires the group's
+ * update authority, not just arbitrary metadata text.
+ */
+export function isSeekerGenesisMintCandidate(candidate: SGTMintCandidate): boolean {
+  return (
+    candidate.supply === 1n &&
+    candidate.decimals === 0 &&
+    candidate.mintAuthority === SGT_MINT_AUTHORITY &&
+    candidate.metadataPointerAuthority === SGT_MINT_AUTHORITY &&
+    candidate.metadataPointerAddress === SGT_METADATA_ADDRESS &&
+    candidate.groupMemberPointerAuthority === SGT_MINT_AUTHORITY &&
+    candidate.groupMemberPointerAddress === candidate.mintAddress &&
+    candidate.tokenGroupMemberMint === candidate.mintAddress &&
+    candidate.tokenGroupMemberGroup === SGT_GROUP_ADDRESS
+  );
+}
 
 // Types
 export interface SGTVerificationResult {
@@ -83,7 +125,7 @@ export function buildSIWSMessage(walletAddress: string, nonce: string): SIWSMess
   return {
     domain: 'seek.mythx.art',
     address: walletAddress,
-    statement: 'Verify Seeker device ownership for Seek Protocol',
+    statement: 'Confirm Seeker ownership for Seek Protocol',
     uri: 'https://seek.mythx.art',
     version: '1',
     chainId: config.solana.network === 'mainnet-beta' ? 'solana:mainnet' : 'solana:devnet',
@@ -188,12 +230,22 @@ export async function checkSGTOwnership(
   walletAddress: string
 ): Promise<{ hasSGT: boolean; mintAddress: string | null }> {
   try {
-    // Try Helius DAS API first (if key configured)
     if (config.sgt.heliusApiKey) {
-      return await checkSGTViaHelius(walletAddress);
+      try {
+        const heliusResult = await checkSGTViaHelius(walletAddress);
+        if (heliusResult.hasSGT) {
+          return heliusResult;
+        }
+
+        log.info({ walletAddress }, 'Helius SGT lookup found no match; falling back to direct RPC');
+      } catch (error) {
+        log.warn(
+          { err: error instanceof Error ? error.message : error },
+          'Helius SGT lookup failed; falling back to direct RPC',
+        );
+      }
     }
 
-    // Fallback: direct RPC query for Token-2022 accounts
     return await checkSGTViaRPC(walletAddress);
   } catch (error) {
     log.error({ err: error instanceof Error ? error.message : error }, 'ownership check error');
@@ -208,44 +260,58 @@ async function checkSGTViaHelius(
   walletAddress: string
 ): Promise<{ hasSGT: boolean; mintAddress: string | null }> {
   const url = `https://mainnet.helius-rpc.com/?api-key=${config.sgt.heliusApiKey}`;
+  const mintPubkeys: PublicKey[] = [];
+  let paginationKey: string | null = null;
+  let page = 0;
 
-  const controller = new AbortController();
-  const response = await withTimeout(
-    fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        jsonrpc: '2.0',
-        id: 'sgt-check',
-        method: 'getAssetsByOwner',
-        params: {
-          ownerAddress: walletAddress,
-          displayOptions: { showFungible: false, showNativeBalance: false },
-        },
+  do {
+    page++;
+    const controller = new AbortController();
+    const response = await withTimeout(
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: `sgt-token-accounts-${page}`,
+          method: 'getTokenAccountsByOwnerV2',
+          params: [
+            walletAddress,
+            { programId: TOKEN_2022_PROGRAM_ID_STR },
+            {
+              encoding: 'jsonParsed',
+              limit: 1000,
+              ...(paginationKey ? { paginationKey } : {}),
+            },
+          ],
+        }),
+        signal: controller.signal,
       }),
-      signal: controller.signal,
-    }),
-    HELIUS_TIMEOUT_MS,
-    'helius-getAssetsByOwner',
-  ).catch((err) => {
-    controller.abort();
-    throw err;
-  });
+      HELIUS_TIMEOUT_MS,
+      'helius-getTokenAccountsByOwnerV2',
+    ).catch((err) => {
+      controller.abort();
+      throw err;
+    });
 
-  const data: any = await response.json();
-  const items = data?.result?.items || [];
+    const data: any = await response.json();
+    if (data?.error) {
+      throw new Error(data.error.message || 'Helius SGT query failed');
+    }
 
-  // Look for an asset in the SGT group
-  for (const asset of items) {
-    const grouping = asset.grouping || [];
-    for (const group of grouping) {
-      if (group.group_key === 'collection' && group.group_value === SGT_GROUP_ADDRESS) {
-        return { hasSGT: true, mintAddress: asset.id };
+    const accounts = data?.result?.value?.accounts ?? data?.result?.value ?? [];
+    for (const accountInfo of accounts) {
+      const mint = accountInfo?.account?.data?.parsed?.info?.mint;
+      if (typeof mint === 'string') {
+        try {
+          mintPubkeys.push(new PublicKey(mint));
+        } catch { /* ignore malformed mint */ }
       }
     }
-  }
+    paginationKey = data?.result?.paginationKey ?? null;
+  } while (paginationKey);
 
-  return { hasSGT: false, mintAddress: null };
+  return checkMintPubkeysForSGT(mintPubkeys);
 }
 
 /**
@@ -262,10 +328,7 @@ async function checkSGTViaRPC(
     programId: TOKEN_2022_PROGRAM_ID,
   });
 
-  // Check each account for SGT characteristics
-  // In a full implementation, we'd decode the Token-2022 extensions
-  // to verify the group membership. For now, check if any Token-2022
-  // token account has a balance of 1 (SGT is a unique NFT).
+  const mintPubkeys: PublicKey[] = [];
   for (const { account } of accounts.value) {
     // Token accounts have a standard layout; amount is at offset 64 (8 bytes LE)
     const data = account.data;
@@ -274,8 +337,60 @@ async function checkSGTViaRPC(
       if (amount === 1n) {
         // Extract mint address (first 32 bytes of token account data)
         const mintBytes = data.subarray(0, 32);
-        const mintAddress = new PublicKey(mintBytes).toBase58();
-        return { hasSGT: true, mintAddress };
+        mintPubkeys.push(new PublicKey(mintBytes));
+      }
+    }
+  }
+
+  return checkMintPubkeysForSGT(mintPubkeys);
+}
+
+async function checkMintPubkeysForSGT(
+  mintPubkeys: PublicKey[]
+): Promise<{ hasSGT: boolean; mintAddress: string | null }> {
+  const uniqueMintPubkeys = Array.from(
+    new Map(mintPubkeys.map((mint) => [mint.toBase58(), mint])).values(),
+  );
+  if (uniqueMintPubkeys.length === 0) {
+    return { hasSGT: false, mintAddress: null };
+  }
+
+  const conn = getConnection();
+  const batchSize = 100;
+  for (let offset = 0; offset < uniqueMintPubkeys.length; offset += batchSize) {
+    const batch = uniqueMintPubkeys.slice(offset, offset + batchSize);
+    const accountInfos = await conn.getMultipleAccountsInfo(batch, 'confirmed');
+
+    for (let i = 0; i < batch.length; i++) {
+      const mintPubkey = batch[i];
+      const accountInfo = accountInfos[i];
+      if (!accountInfo) continue;
+
+      try {
+        const mint = unpackMint(mintPubkey, accountInfo, TOKEN_2022_PROGRAM_ID);
+        const metadataPointer = getMetadataPointerState(mint);
+        const groupMemberPointer = getGroupMemberPointerState(mint);
+        const tokenGroupMemberState = getTokenGroupMemberState(mint);
+
+        if (isSeekerGenesisMintCandidate({
+          mintAddress: mintPubkey.toBase58(),
+          supply: mint.supply,
+          decimals: mint.decimals,
+          mintAuthority: mint.mintAuthority?.toBase58() ?? null,
+          metadataPointerAuthority: metadataPointer?.authority?.toBase58() ?? null,
+          metadataPointerAddress: metadataPointer?.metadataAddress?.toBase58() ?? null,
+          groupMemberPointerAuthority: groupMemberPointer?.authority?.toBase58() ?? null,
+          groupMemberPointerAddress: groupMemberPointer?.memberAddress?.toBase58() ?? null,
+          tokenGroupMemberMint: tokenGroupMemberState?.mint?.toBase58() ?? null,
+          tokenGroupMemberGroup: tokenGroupMemberState?.group?.toBase58() ?? null,
+        })) {
+          return { hasSGT: true, mintAddress: mintPubkey.toBase58() };
+        }
+      } catch (err) {
+        log.debug(
+          { mint: mintPubkey.toBase58(), err: err instanceof Error ? err.message : err },
+          'skipping non-SGT Token-2022 mint',
+        );
       }
     }
   }
@@ -303,7 +418,19 @@ export async function verifySGTForWallet(
     };
   }
 
-  // Step 2: Check SGT ownership
+  return verifySGTOwnershipForWallet(walletAddress);
+}
+
+/**
+ * Passive SGT verification: wallet address -> Token-2022 ownership check.
+ *
+ * This does not require a transaction or a signing prompt. It is safe to use
+ * after MWA wallet connect because the actual paid hunt routes still verify
+ * wallet authority through signed/on-chain actions.
+ */
+export async function verifySGTOwnershipForWallet(
+  walletAddress: string
+): Promise<SGTVerificationResult> {
   const { hasSGT, mintAddress } = await checkSGTOwnership(walletAddress);
   if (!hasSGT || !mintAddress) {
     return {
@@ -315,7 +442,7 @@ export async function verifySGTForWallet(
     };
   }
 
-  // Step 3: Anti-sybil — Redis-backed mint→wallet mapping. Check Redis first
+  // Anti-sybil — Redis-backed mint→wallet mapping. Check Redis first
   // (source of truth across instances + restarts), fall back to in-memory.
   const r = await getRedis();
   let existingOwner: string | null = sgtMintToWallet.get(mintAddress) ?? null;
@@ -333,7 +460,6 @@ export async function verifySGTForWallet(
     };
   }
 
-  // All checks passed
   const result: SGTVerificationResult = {
     verified: true,
     sgtMintAddress: mintAddress,

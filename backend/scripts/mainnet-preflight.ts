@@ -158,9 +158,11 @@ async function main() {
     'contracts/programs/seek-protocol/src/lib.rs'
   );
   const anchorToml = readRelative('contracts/Anchor.toml');
+  const contractsPackage = JSON.parse(readRelative('contracts/package.json'));
   const expectedInitialAuthority = findExpectedInitialAuthority(contractSource);
   const declareId = findDeclareId(contractSource);
   const anchorMainnetProgramId = findAnchorMainnetProgramId(anchorToml);
+  const deployMainnetCommand = contractsPackage.scripts?.['deploy:mainnet'];
 
   pushCheck(
     checks,
@@ -209,6 +211,28 @@ async function main() {
     'EXPECTED_INITIAL_AUTHORITY matches Ledger',
     expectedInitialAuthority === ledgerPubkey.toBase58(),
     `contract=${expectedInitialAuthority} ledger=${ledgerPubkey.toBase58()}`
+  );
+  pushCheck(
+    checks,
+    'deploy command stays upgradeable',
+    typeof deployMainnetCommand === 'string' &&
+      !deployMainnetCommand.includes('--final'),
+    `deploy:mainnet=${deployMainnetCommand ?? '(missing)'}`
+  );
+  pushCheck(
+    checks,
+    'active liability reserve present',
+    contractSource.includes('active_payout_liability') &&
+      contractSource.includes('reserve_bounty_liability'),
+    'accept_bounty must reserve worst-case payout exposure'
+  );
+  pushCheck(
+    checks,
+    'cold emergency controls present',
+    contractSource.includes('set_protocol_paused') &&
+      contractSource.includes('withdraw_unreserved_house') &&
+      contractSource.includes('withdraw_singularity'),
+    'pause/resume plus explicit withdrawal controls'
   );
 
   if (!offline) {

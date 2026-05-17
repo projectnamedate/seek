@@ -2,7 +2,7 @@
   "expo": {
     "name": "Seek",
     "slug": "seek",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "scheme": "seek",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -29,6 +29,8 @@
       "package": "app.seek.mobile",
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.INTERNET",
         "android.permission.VIBRATE",
         "android.permission.READ_MEDIA_IMAGES",
@@ -48,6 +50,12 @@
         "expo-image-picker",
         {
           "photosPermission": "Seek needs photo library access"
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Seek uses location at capture time to verify real-world bounty photos."
         }
       ]
     ],

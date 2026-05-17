@@ -103,7 +103,7 @@ app.get('/', (req, res) => {
   res.json({
     name: 'Seek Protocol API',
     version: '0.1.0',
-    description: 'Pokemon GO for crypto scavenger hunts',
+    description: 'Real-world scavenger hunts with SKR rewards on Solana',
     endpoints: {
       health: '/api/health',
       stats: '/api/health/stats',

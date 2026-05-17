@@ -41,8 +41,9 @@ if (!__DEV__ && (NETWORK as string) !== 'mainnet-beta' && !process.env.EXPO_PUBL
 export const GAME_CONFIG = {
   MIN_CONFIDENCE: 0.70, // 70% AI confidence required
   SINGULARITY_ODDS: 500, // 1 in 500 chance
-  // Must match the on-chain CHALLENGE_PERIOD (contract: 300s mainnet, 10s devnet).
-  CHALLENGE_PERIOD: NETWORK === 'mainnet-beta' ? 300 : 10,
+  // Must match the upgraded on-chain CHALLENGE_PERIOD while public disputes
+  // are disabled.
+  CHALLENGE_PERIOD: 0,
 };
 
 // Tier Configuration - Solana Mobile colors
@@ -54,13 +55,13 @@ export const TIERS = {
     color: '#cfe6e4', // light teal (Easy)
   },
   2: {
-    entry: 2000,
+    entry: 3000,
     timeLimit: 120, // 2 minutes
     difficulty: 'Medium',
     color: '#95d2e6', // sky blue (Medium)
   },
   3: {
-    entry: 3000,
+    entry: 5000,
     timeLimit: 60, // 1 minute
     difficulty: 'Hard',
     color: '#61afbd', // bright cyan (Hard)

@@ -15,6 +15,7 @@ export type BountyStatus =
   | 'validating'     // AI analyzing
   | 'won'            // Success!
   | 'lost'           // Failed
+  | 'disputed'       // Legacy/admin review state
   | 'expired';       // Ran out of time
 
 // Bounty data from backend
@@ -28,6 +29,11 @@ export interface Bounty {
   status: BountyStatus;
   entryAmount: number;
   potentialReward: number;
+  bountyPda?: string;
+  submitToken?: string;
+  challengeEndsAt?: number;
+  resolutionTransactionSignature?: string;
+  disputeTransactionSignature?: string;
 }
 
 // Validation result from AI
@@ -36,6 +42,11 @@ export interface ValidationResult {
   confidence: number;
   reasoning: string;
   timestamp: number;
+  transactionSignature?: string;
+  payout?: string;
+  singularityWon?: boolean;
+  bountyPda?: string;
+  challengeEndsAt?: number;
 }
 
 // API response types
@@ -62,13 +73,43 @@ export interface WalletState {
   sgtVerified?: boolean;        // Seeker Genesis Token verified
 }
 
+export interface CaptureLocation {
+  latitude: number;
+  longitude: number;
+  accuracy?: number | null;
+}
+
 // Camera attestation payload (sent with photo submission).
 // 'tee' has been removed pending the Seeker Camera SDK ship — re-add when ready.
 export interface AttestationPayload {
   type: 'standard';
   photoHash: string;
   timestamp: number;
+  capturedAt?: number;
   deviceModel?: string;
+  deviceMake?: string;
+  deviceBrand?: string;
+  deviceManufacturer?: string;
+  latitude?: number;
+  longitude?: number;
+  locationAccuracyMeters?: number;
+  exif?: {
+    DateTimeOriginal?: string | number;
+    CreateDate?: string | number;
+    ModifyDate?: string | number;
+    Make?: string;
+    Model?: string;
+    GPSLatitude?: number;
+    GPSLongitude?: number;
+  };
+  platformConstants?: {
+    Model?: string;
+    Brand?: string;
+    Manufacturer?: string;
+    Release?: string;
+    Fingerprint?: string;
+    Version?: number;
+  };
 }
 
 // Navigation types

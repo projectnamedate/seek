@@ -76,17 +76,17 @@ const styles = StyleSheet.create({
   },
   // Variants
   primary: {
-    backgroundColor: colors.gold,
+    backgroundColor: colors.frost,
     ...shadows.md,
   },
   secondary: {
-    backgroundColor: colors.purple,
+    backgroundColor: colors.aqua,
     ...shadows.md,
   },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: colors.frost,
   },
   ghost: {
     backgroundColor: 'transparent',
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   outlineText: {
-    color: colors.gold,
+    color: colors.frost,
   },
   ghostText: {
     color: colors.textSecondary,

@@ -4,7 +4,7 @@
     "name": "seek_protocol",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "Seek Protocol - Pokemon GO for crypto scavenger hunts on Solana",
+    "description": "Seek Protocol - real-world scavenger hunts with SKR rewards on Solana",
     "repository": "https://github.com/seek-protocol/seek"
   },
   "instructions": [
@@ -68,7 +68,7 @@
       "docs": [
         "Accept a bounty - player submits their entry and starts the hunt.",
         "entry_amount must be exactly TIER_1_ENTRY / TIER_2_ENTRY / TIER_3_ENTRY",
-        "(1000 / 2000 / 3000 SKR in base units — multiplier depends on SKR_DECIMALS).",
+        "(1000 / 3000 / 5000 SKR in base units — multiplier depends on SKR_DECIMALS).",
         "mission_commitment is hash(mission_id || salt) for commit-reveal.",
         "timestamp must be within 60 seconds of current time (for PDA derivation)."
       ],
@@ -419,8 +419,9 @@
     {
       "name": "dispute_bounty",
       "docs": [
-        "Dispute a bounty result - player stakes additional SKR to challenge",
-        "Can only dispute LOSS results during challenge period"
+        "Dispute a bounty result - player commits an additional review deposit",
+        "Legacy dispute path. With a zero-length window, public disputes are",
+        "effectively disabled until the economics are redesigned."
       ],
       "discriminator": [
         240,
@@ -444,7 +445,7 @@
         {
           "name": "global_state",
           "docs": [
-            "Global state PDA (mut to track dispute stake)"
+            "Global state PDA (mut to track dispute review deposit)"
           ],
           "writable": true,
           "pda": {
@@ -479,14 +480,14 @@
         {
           "name": "player_token_account",
           "docs": [
-            "Player's token account for stake — pinned to canonical ATA."
+            "Player's token account for review deposit — pinned to canonical ATA."
           ],
           "writable": true
         },
         {
           "name": "house_vault",
           "docs": [
-            "House vault to receive stake"
+            "House vault to receive review deposit"
           ],
           "writable": true,
           "pda": {
@@ -523,7 +524,7 @@
     {
       "name": "finalize_bounty",
       "docs": [
-        "Finalize bounty - called after challenge period ends (if no dispute)",
+        "Finalize bounty immediately after resolution if no dispute exists.",
         "Actually executes the payout or distribution"
       ],
       "discriminator": [
@@ -540,7 +541,7 @@
         {
           "name": "caller",
           "docs": [
-            "Anyone can finalize after challenge period (permissionless)"
+            "Anyone can finalize a non-disputed pending bounty (permissionless)"
           ],
           "signer": true
         },
@@ -616,7 +617,7 @@
         {
           "name": "singularity_vault",
           "docs": [
-            "Singularity vault for jackpot"
+            "Singularity bonus vault"
           ],
           "writable": true,
           "pda": {
@@ -1085,8 +1086,8 @@
     {
       "name": "propose_resolution",
       "docs": [
-        "Propose bounty resolution (OPTIMISTIC) - starts challenge period",
-        "Result is NOT final until challenge period ends",
+        "Propose bounty resolution. Public disputes are disabled, so",
+        "non-disputed results can finalize immediately.",
         "success = true: proposes win",
         "success = false: proposes loss"
       ],
@@ -1154,8 +1155,8 @@
       "name": "resolve_dispute",
       "docs": [
         "Resolve a dispute - authority reviews and decides",
-        "player_wins = true: player gets original entry back + dispute stake",
-        "player_wins = false: dispute stake forfeited, loss stands"
+        "player_wins = true: player gets original entry back plus any dispute deposit",
+        "player_wins = false: unsuccessful result stands and any dispute deposit is forfeited"
       ],
       "discriminator": [
         231,
@@ -1434,6 +1435,66 @@
       ]
     },
     {
+      "name": "set_protocol_paused",
+      "docs": [
+        "Pause or resume new bounty acceptance. Cold authority only.",
+        "Does not block reveal/propose/finalize/cancel paths for already-active bounties."
+      ],
+      "discriminator": [
+        47,
+        62,
+        75,
+        69,
+        166,
+        0,
+        147,
+        157
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Cold authority setting the pause flag."
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "paused",
+          "type": "bool"
+        }
+      ]
+    },
+    {
       "name": "set_treasury",
       "docs": [
         "Rotate the protocol_treasury recipient. Cold authority only.",
@@ -1499,6 +1560,215 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "withdraw_singularity",
+      "docs": [
+        "Withdraw Singularity bonus funds. Cold authority only, only while paused,",
+        "and only after all active bounties have resolved. This is an explicit",
+        "public emergency/admin operation, not a hidden path."
+      ],
+      "discriminator": [
+        88,
+        195,
+        130,
+        226,
+        92,
+        90,
+        78,
+        31
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Cold authority withdrawing Singularity funds while paused."
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_token_account",
+          "docs": [
+            "Cold authority's canonical SKR ATA."
+          ],
+          "writable": true
+        },
+        {
+          "name": "singularity_vault",
+          "docs": [
+            "Singularity vault to withdraw from."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  105,
+                  110,
+                  103,
+                  117,
+                  108,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "withdraw_unreserved_house",
+      "docs": [
+        "Withdraw only the unreserved portion of the house vault. Cold authority only.",
+        "Active payout liability stays locked so already-accepted bounties remain covered."
+      ],
+      "discriminator": [
+        124,
+        33,
+        128,
+        54,
+        237,
+        123,
+        58,
+        109
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Cold authority withdrawing only unreserved house funds."
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "authority_token_account",
+          "docs": [
+            "Cold authority's canonical SKR ATA."
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault to withdraw from."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program."
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1661,6 +1931,19 @@
       ]
     },
     {
+      "name": "HouseWithdrawn",
+      "discriminator": [
+        207,
+        57,
+        254,
+        62,
+        148,
+        108,
+        100,
+        178
+      ]
+    },
+    {
       "name": "MissionRevealed",
       "discriminator": [
         229,
@@ -1671,6 +1954,32 @@
         106,
         191,
         22
+      ]
+    },
+    {
+      "name": "ProtocolPauseSet",
+      "discriminator": [
+        88,
+        186,
+        42,
+        175,
+        234,
+        40,
+        83,
+        247
+      ]
+    },
+    {
+      "name": "SingularityWithdrawn",
+      "discriminator": [
+        141,
+        31,
+        7,
+        160,
+        210,
+        244,
+        27,
+        243
       ]
     },
     {
@@ -1691,7 +2000,7 @@
     {
       "code": 6000,
       "name": "InvalidEntryAmount",
-      "msg": "Invalid entry amount. Must be 1000, 2000, or 3000 SKR"
+      "msg": "Invalid entry amount. Must be 1000, 3000, or 5000 SKR"
     },
     {
       "code": 6001,
@@ -1720,71 +2029,101 @@
     },
     {
       "code": 6006,
+      "name": "InsufficientHouseReserve",
+      "msg": "Insufficient unreserved house funds for worst-case active payouts"
+    },
+    {
+      "code": 6007,
+      "name": "ProtocolPaused",
+      "msg": "Protocol is paused"
+    },
+    {
+      "code": 6008,
+      "name": "ProtocolNotPaused",
+      "msg": "Protocol must be paused for this operation"
+    },
+    {
+      "code": 6009,
+      "name": "InvalidWithdrawalAmount",
+      "msg": "Invalid withdrawal amount"
+    },
+    {
+      "code": 6010,
+      "name": "InsufficientSingularityFunds",
+      "msg": "Insufficient funds in Singularity vault"
+    },
+    {
+      "code": 6011,
+      "name": "ActiveBountiesExist",
+      "msg": "Cannot withdraw Singularity funds while active bounties exist"
+    },
+    {
+      "code": 6012,
       "name": "MathOverflow",
       "msg": "Arithmetic overflow occurred"
     },
     {
-      "code": 6007,
+      "code": 6013,
       "name": "InvalidMint",
       "msg": "Invalid token mint. Must be SKR"
     },
     {
-      "code": 6008,
+      "code": 6014,
       "name": "Unauthorized",
       "msg": "Unauthorized access"
     },
     {
-      "code": 6009,
+      "code": 6015,
       "name": "InvalidMissionHash",
       "msg": "Invalid mission commitment hash"
     },
     {
-      "code": 6010,
+      "code": 6016,
       "name": "MissionAlreadyRevealed",
       "msg": "Mission already revealed"
     },
     {
-      "code": 6011,
+      "code": 6017,
       "name": "MissionNotRevealed",
       "msg": "Mission not yet revealed"
     },
     {
-      "code": 6012,
+      "code": 6018,
       "name": "ChallengePeriodActive",
       "msg": "Challenge period has not ended"
     },
     {
-      "code": 6013,
+      "code": 6019,
       "name": "ChallengePeriodEnded",
       "msg": "Challenge period has ended"
     },
     {
-      "code": 6014,
+      "code": 6020,
       "name": "AlreadyDisputed",
       "msg": "Bounty already disputed"
     },
     {
-      "code": 6015,
+      "code": 6021,
       "name": "NotDisputed",
       "msg": "Bounty not in disputed state"
     },
     {
-      "code": 6016,
+      "code": 6022,
       "name": "InvalidTimestamp",
       "msg": "Timestamp is too far from current time"
     },
     {
-      "code": 6017,
+      "code": 6023,
       "name": "BountyCooldown",
       "msg": "Bounty close cooldown has not elapsed (24h after creation)"
     },
     {
-      "code": 6018,
+      "code": 6024,
       "name": "InvalidTreasuryOwner",
       "msg": "Invalid protocol treasury owner"
     },
     {
-      "code": 6019,
+      "code": 6025,
       "name": "InvalidTreasuryAccount",
       "msg": "Protocol treasury must be the canonical SKR associated token account for its owner"
     }
@@ -1834,14 +2173,14 @@
           {
             "name": "entry_amount",
             "docs": [
-              "Entry amount in SKR lamports (1000B, 2000B, or 3000B)"
+              "Entry amount in SKR base units (1000, 3000, or 5000 whole SKR)"
             ],
             "type": "u64"
           },
           {
             "name": "payout_amount",
             "docs": [
-              "Potential reward (3x entry: entry back + 2x profit)"
+              "Full return amount (2x entry: entry back + 1x profit)"
             ],
             "type": "u64"
           },
@@ -1880,7 +2219,7 @@
           {
             "name": "singularity_won",
             "docs": [
-              "Whether this bounty won the singularity jackpot"
+              "Whether this bounty received the Singularity bonus"
             ],
             "type": "bool"
           },
@@ -1925,21 +2264,21 @@
           {
             "name": "resolved_at",
             "docs": [
-              "Timestamp when resolution was submitted (challenge period starts)"
+              "Timestamp when resolution was submitted"
             ],
             "type": "i64"
           },
           {
             "name": "challenge_ends_at",
             "docs": [
-              "Timestamp when challenge period ends"
+              "Timestamp when the result becomes finalizable"
             ],
             "type": "i64"
           },
           {
             "name": "proposed_win",
             "docs": [
-              "Whether the proposed result was a win"
+              "Whether the proposed result was a successful completion"
             ],
             "type": "bool"
           },
@@ -1953,7 +2292,7 @@
           {
             "name": "dispute_stake",
             "docs": [
-              "Dispute stake amount (if disputed)"
+              "Dispute review deposit amount (if disputed)"
             ],
             "type": "u64"
           },
@@ -2047,7 +2386,7 @@
     {
       "name": "BountyFinalized",
       "docs": [
-        "Emitted when bounty is finalized after challenge period"
+        "Emitted when bounty is finalized"
       ],
       "type": {
         "kind": "struct",
@@ -2105,7 +2444,7 @@
     {
       "name": "BountyResolutionProposed",
       "docs": [
-        "Emitted when bounty enters challenge period (optimistic resolution)"
+        "Emitted when bounty resolution is proposed"
       ],
       "type": {
         "kind": "struct",
@@ -2233,7 +2572,8 @@
           {
             "name": "authority",
             "docs": [
-              "Cold authority. Signs admin ops: fund_house, set_hot_authority,",
+              "Cold authority. Signs admin ops: fund_house, set_protocol_paused,",
+              "withdraw_unreserved_house, withdraw_singularity, set_hot_authority,",
               "set_treasury, propose/accept/cancel_authority_transfer, resolve_dispute.",
               "Should be a hardware wallet (Ledger) on mainnet."
             ],
@@ -2266,7 +2606,7 @@
           {
             "name": "singularity_vault",
             "docs": [
-              "Singularity (jackpot) vault token account (PDA-owned)"
+              "Singularity bonus vault token account (PDA-owned)"
             ],
             "type": "pubkey"
           },
@@ -2285,9 +2625,25 @@
             "type": "u64"
           },
           {
+            "name": "active_payout_liability",
+            "docs": [
+              "Sum of full payout liabilities for active bounties not yet finalized,",
+              "dispute-resolved, or cancelled. New bounties are accepted only if the",
+              "vault can cover every active bounty as a win."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "active_bounty_count",
+            "docs": [
+              "Number of active bounties contributing to active_payout_liability."
+            ],
+            "type": "u64"
+          },
+          {
             "name": "singularity_balance",
             "docs": [
-              "Total SKR in singularity jackpot pool"
+              "Total SKR in Singularity bonus pool"
             ],
             "type": "u64"
           },
@@ -2322,9 +2678,16 @@
           {
             "name": "total_singularity_wins",
             "docs": [
-              "Total singularity jackpots won"
+              "Total Singularity bonuses awarded"
             ],
             "type": "u64"
+          },
+          {
+            "name": "paused",
+            "docs": [
+              "Emergency switch. When true, new accept_bounty calls are rejected."
+            ],
+            "type": "bool"
           },
           {
             "name": "bump",
@@ -2360,6 +2723,29 @@
       }
     },
     {
+      "name": "HouseWithdrawn",
+      "docs": [
+        "Emitted when the cold authority withdraws unreserved house funds."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_balance",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
       "name": "MissionRevealed",
       "docs": [
         "Emitted when mission is revealed (commit-reveal)"
@@ -2383,6 +2769,48 @@
           {
             "name": "commitment_verified",
             "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ProtocolPauseSet",
+      "docs": [
+        "Emitted when the cold authority pauses or resumes new bounty acceptance."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "paused",
+            "type": "bool"
+          }
+        ]
+      }
+    },
+    {
+      "name": "SingularityWithdrawn",
+      "docs": [
+        "Emitted when the cold authority withdraws Singularity funds while paused."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "amount",
+            "type": "u64"
+          },
+          {
+            "name": "remaining_balance",
+            "type": "u64"
           }
         ]
       }

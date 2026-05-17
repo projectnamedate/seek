@@ -13,8 +13,8 @@ export const SKR_MULTIPLIER = BigInt(10) ** BigInt(SKR_DECIMALS);
 // Entry amounts in base units (whole SKR × SKR_MULTIPLIER).
 export const ENTRY_AMOUNTS: Record<Tier, bigint> = {
   1: 1000n * SKR_MULTIPLIER,
-  2: 2000n * SKR_MULTIPLIER,
-  3: 3000n * SKR_MULTIPLIER,
+  2: 3000n * SKR_MULTIPLIER,
+  3: 5000n * SKR_MULTIPLIER,
 };
 
 // Timer durations in seconds (must match mobile TIERS config)
@@ -35,7 +35,7 @@ export const TIER_CONFIDENCE_THRESHOLDS: Record<Tier, number> = {
 };
 
 // Bounty status
-export type BountyStatus = 'pending' | 'validating' | 'won' | 'lost' | 'expired';
+export type BountyStatus = 'pending' | 'validating' | 'won' | 'lost' | 'disputed' | 'expired';
 
 // Mission definition (what player needs to find)
 export interface Mission {
@@ -59,6 +59,9 @@ export interface ActiveBounty {
   expiresAt: Date;
   bountyPda: string; // On-chain PDA address
   transactionSignature?: string;
+  disputeTransactionSignature?: string;
+  challengeEndsAt?: Date;
+  disputedAt?: Date;
   sgtVerified?: boolean; // Seeker Genesis Token verified
   attestationType?: 'none' | 'standard'; // Camera attestation type used
 }
@@ -76,8 +79,10 @@ export interface PhotoMetadata {
   timestamp?: Date;
   latitude?: number;
   longitude?: number;
+  locationAccuracyMeters?: number;
   deviceMake?: string;
   deviceModel?: string;
+  source?: 'exif' | 'attestation' | 'merged';
 }
 
 // AI validation result
@@ -88,6 +93,7 @@ export interface ValidationResult {
   detectedObjects: string[];
   isScreenshot: boolean;
   matchesTarget: boolean;
+  hardReject?: boolean;
 }
 
 // API response types
@@ -110,6 +116,7 @@ export interface StartBountyResponse {
   };
   expiresAt: string;
   bountyPda: string;
+  submitToken?: string;
 }
 
 export interface SubmitPhotoResponse {
@@ -118,4 +125,6 @@ export interface SubmitPhotoResponse {
   payout?: string;
   singularityWon?: boolean;
   transactionSignature?: string;
+  bountyPda?: string;
+  challengeEndsAt?: number;
 }

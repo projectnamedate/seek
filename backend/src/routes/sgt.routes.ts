@@ -4,6 +4,7 @@ import {
   generateSIWSNonce,
   buildSIWSMessage,
   verifySGTForWallet,
+  verifySGTOwnershipForWallet,
   isWalletSGTVerified,
   getSGTStats,
 } from '../services/sgt.service';
@@ -110,7 +111,9 @@ router.post('/verify', validate(verifySchema), async (req: Request, res: Respons
 
 /**
  * GET /api/sgt/status/:wallet
- * Check cached SGT verification status (no network calls)
+ * Passively check SGT verification status. Cached verifications return without
+ * RPC; otherwise the backend reads Token-2022 ownership for the connected
+ * wallet. No transaction or signing prompt is required.
  */
 router.get('/status/:wallet', async (req: Request, res: Response) => {
   const { wallet } = req.params;
@@ -122,7 +125,8 @@ router.get('/status/:wallet', async (req: Request, res: Response) => {
     });
   }
 
-  const result = await isWalletSGTVerified(wallet);
+  const cached = await isWalletSGTVerified(wallet);
+  const result = cached?.verified ? cached : await verifySGTOwnershipForWallet(wallet);
 
   return res.status(200).json({
     success: true,

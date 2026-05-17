@@ -49,8 +49,8 @@ cd mobile/android
 ```
 
 The build script at `mobile/android/app/build.gradle` automatically uses the
-release signing config when `SEEK_KEYSTORE_PATH` is set. Without the env vars,
-it falls back to debug signing so local developers can still build.
+release signing config when `SEEK_KEYSTORE_PATH` is set. Release artifact tasks
+fail if the env vars are missing. Use debug builds for local developer testing.
 
 ## Verify the signature
 

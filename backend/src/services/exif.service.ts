@@ -32,7 +32,7 @@ export async function extractExifMetadata(imageBuffer: Buffer): Promise<PhotoMet
       return {};
     }
 
-    const metadata: PhotoMetadata = {};
+    const metadata: PhotoMetadata = { source: 'exif' };
 
     // Extract timestamp (prefer DateTimeOriginal)
     const timestamp = exif.DateTimeOriginal || exif.CreateDate || exif.ModifyDate;

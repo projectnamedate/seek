@@ -52,12 +52,16 @@ export async function closeRedis(): Promise<void> {
 export const RK = {
   missionSecrets: (bountyId: string) => `seek:mission:${bountyId}`,
   preparedBounty: (bountyPda: string) => `seek:prepared:${bountyPda}`,
+  preparedBountyById: (prepareId: string) => `seek:prepared:id:${prepareId}`,
   activeBounty: (bountyId: string) => `seek:bounty:${bountyId}`,
   activeBountiesSet: () => `seek:bounties:active`,
   activeBountyByPlayer: (wallet: string) => `seek:bounty:player:${wallet}`,
+  bountySubmitToken: (bountyId: string) => `seek:bounty:submit-token:${bountyId}`,
   walletDailyBountyLimit: (wallet: string, day: string) => `seek:bounty:daily:${day}:${wallet}`,
   finalizerQueue: () => `seek:finalizer:queue`, // sorted set by challengeEndsAt
   finalizerMeta: (bountyPda: string) => `seek:finalizer:meta:${bountyPda}`,
+  finalizerLock: (bountyPda: string) => `seek:lock:finalizer:${bountyPda}`,
+  finalizerSafetyPause: () => `seek:finalizer:safety-pause`,
   walletLock: (wallet: string) => `seek:lock:wallet:${wallet}`,
   bountyLock: (bountyId: string) => `seek:lock:bounty:${bountyId}`,
   authNonce: (wallet: string, ts: string, op: string) => `seek:nonce:${op}:${wallet}:${ts}`,

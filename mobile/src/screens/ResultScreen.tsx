@@ -8,7 +8,6 @@ import {
   ScrollView,
   Animated,
   Easing,
-  Alert,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -34,14 +33,7 @@ export default function ResultScreen({ navigation, route }: Props) {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const bgFlashAnim = useRef(new Animated.Value(0)).current;
-  const confettiAnims = useRef(
-    [...Array(30)].map(() => ({
-      x: new Animated.Value(0),
-      y: new Animated.Value(0),
-      rotate: new Animated.Value(0),
-      opacity: new Animated.Value(1),
-    }))
-  ).current;
+  const settlementRings = useRef([...Array(3)].map(() => new Animated.Value(0))).current;
 
   useEffect(() => {
     // Play sound effect
@@ -55,12 +47,12 @@ export default function ResultScreen({ navigation, route }: Props) {
     Animated.sequence([
       Animated.timing(bgFlashAnim, {
         toValue: 1,
-        duration: 200,
+        duration: 260,
         useNativeDriver: true,
       }),
       Animated.timing(bgFlashAnim, {
         toValue: 0,
-        duration: 400,
+        duration: 520,
         useNativeDriver: true,
       }),
     ]).start();
@@ -68,14 +60,15 @@ export default function ResultScreen({ navigation, route }: Props) {
     // Main reveal animation
     Animated.sequence([
       Animated.timing(scaleAnim, {
-        toValue: 1.3,
-        duration: 400,
-        easing: Easing.out(Easing.back(2)),
+        toValue: 1.04,
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
       Animated.timing(scaleAnim, {
         toValue: 1,
-        duration: 200,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
         useNativeDriver: true,
       }),
     ]).start();
@@ -83,97 +76,51 @@ export default function ResultScreen({ navigation, route }: Props) {
     Animated.timing(fadeAnim, {
       toValue: 1,
       duration: 600,
-      delay: 400,
+      delay: 260,
       useNativeDriver: true,
     }).start();
 
-    // Win: continuous pulse, Lose: shake effect
+    // Completion: restrained settlement pulse, miss: short shake effect
     if (isWin) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, {
-            toValue: 1.1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 800,
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    } else {
-      // Shake animation for loss
       Animated.sequence([
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 5, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: -5, duration: 50, useNativeDriver: true }),
-        Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+        Animated.timing(pulseAnim, {
+          toValue: 1.025,
+          duration: 700,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
       ]).start();
-    }
 
-    // Confetti for wins
-    if (isWin) {
-      confettiAnims.forEach((anim, i) => {
-        const xTarget = (Math.random() - 0.5) * 400;
-        const yTarget = Math.random() * 600 + 200;
-        const delay = i * 50;
-
-        Animated.parallel([
-          Animated.timing(anim.x, {
-            toValue: xTarget,
-            duration: 2000,
-            delay,
-            easing: Easing.out(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim.y, {
-            toValue: yTarget,
-            duration: 2000,
-            delay,
-            easing: Easing.in(Easing.quad),
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim.rotate, {
-            toValue: Math.random() * 10,
-            duration: 2000,
-            delay,
-            useNativeDriver: true,
-          }),
-          Animated.timing(anim.opacity, {
-            toValue: 0,
-            duration: 2000,
-            delay,
-            useNativeDriver: true,
-          }),
-        ]).start();
+      settlementRings.forEach((ring, i) => {
+        ring.setValue(0);
+        Animated.timing(ring, {
+          toValue: 1,
+          duration: 1250,
+          delay: i * 180,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }).start();
       });
+    } else {
+      // Shake animation for missed missions
+      Animated.sequence([
+        Animated.timing(shakeAnim, { toValue: 6, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -6, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 3, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: -3, duration: 60, useNativeDriver: true }),
+        Animated.timing(shakeAnim, { toValue: 0, duration: 80, useNativeDriver: true }),
+      ]).start();
     }
   }, [isWin]);
 
   const handlePlayAgain = () => {
     navigation.popToTop();
-  };
-
-  const handleChallenge = () => {
-    Alert.alert(
-      'Challenge Result',
-      `Challenge this result? You'll need to stake an additional ${bounty.entryAmount} $SKR. An independent review will determine the outcome.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Challenge',
-          style: 'destructive',
-          onPress: () => {
-            Alert.alert('Coming Soon', 'The dispute system is not yet available. Stay tuned!');
-          },
-        },
-      ]
-    );
   };
 
   const confidencePercent = Math.round(validation.confidence * 100);
@@ -185,33 +132,6 @@ export default function ResultScreen({ navigation, route }: Props) {
         { backgroundColor: isWin ? colors.dark : colors.dark },
       ]}
     >
-      {/* Confetti (wins only) */}
-      {isWin &&
-        confettiAnims.map((anim, i) => (
-          <Animated.View
-            key={i}
-            style={[
-              styles.confetti,
-              {
-                backgroundColor: [colors.cyan, colors.cyanLight, colors.success, colors.textPrimary][
-                  i % 4
-                ],
-                transform: [
-                  { translateX: anim.x },
-                  { translateY: anim.y },
-                  {
-                    rotate: anim.rotate.interpolate({
-                      inputRange: [0, 10],
-                      outputRange: ['0deg', '720deg'],
-                    }),
-                  },
-                ],
-                opacity: anim.opacity,
-              },
-            ]}
-          />
-        ))}
-
       {/* Background Flash */}
       <Animated.View
         style={[
@@ -220,7 +140,7 @@ export default function ResultScreen({ navigation, route }: Props) {
             backgroundColor: isWin ? colors.success : colors.error,
             opacity: bgFlashAnim.interpolate({
               inputRange: [0, 1],
-              outputRange: [0, 0.3],
+              outputRange: [0, 0.12],
             }),
           },
         ]}
@@ -238,6 +158,29 @@ export default function ResultScreen({ navigation, route }: Props) {
           },
         ]}
       >
+        {isWin &&
+          settlementRings.map((ring, i) => (
+            <Animated.View
+              key={i}
+              style={[
+                styles.settlementRing,
+                {
+                  opacity: ring.interpolate({
+                    inputRange: [0, 0.25, 1],
+                    outputRange: [0, 0.42 - i * 0.08, 0],
+                  }),
+                  transform: [
+                    {
+                      scale: ring.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0.82 + i * 0.04, 1.5 + i * 0.16],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
+          ))}
         <View
           style={[
             styles.iconCircle,
@@ -252,7 +195,7 @@ export default function ResultScreen({ navigation, route }: Props) {
       <Animated.View style={[styles.resultContent, { opacity: fadeAnim }]}>
         <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.resultTitle, { color: isWin ? colors.success : colors.error }]}>
-          {isWin ? 'BOUNTY COMPLETE!' : 'BOUNTY FAILED'}
+          {isWin ? 'BOUNTY COMPLETE' : 'MISSION MISSED'}
         </Text>
 
         <Text style={styles.targetText}>
@@ -261,7 +204,7 @@ export default function ResultScreen({ navigation, route }: Props) {
 
         {/* Amount */}
         <View style={styles.amountContainer}>
-          <Text style={styles.amountLabel}>{isWin ? 'You Won' : 'You Lost'}</Text>
+          <Text style={styles.amountLabel}>{isWin ? 'Return' : 'Entry'}</Text>
           <Text
             style={[
               styles.amountValue,
@@ -306,7 +249,7 @@ export default function ResultScreen({ navigation, route }: Props) {
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statItem}>
-              <Text style={styles.statLabel}>Jackpot?</Text>
+              <Text style={styles.statLabel}>Bonus Pool</Text>
               <Text style={styles.statValue}>Keep hunting!</Text>
             </View>
           </View>
@@ -329,21 +272,10 @@ export default function ResultScreen({ navigation, route }: Props) {
           </Text>
         </TouchableOpacity>
 
-        {/* Challenge Button (loss only) */}
-        {!isWin && (
-          <TouchableOpacity
-            style={styles.challengeButton}
-            onPress={handleChallenge}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.challengeButtonText}>CHALLENGE</Text>
-          </TouchableOpacity>
-        )}
-
         {/* Compliance Disclaimer */}
         {isWin && (
           <Text style={styles.disclaimerText}>
-            Reward based on successful completion of skill challenge
+            Return based on successful completion of skill challenge
           </Text>
         )}
       </Animated.View>
@@ -365,14 +297,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: spacing.xxl,
   },
-  confetti: {
-    position: 'absolute',
-    top: 100,
-    left: '50%',
-    width: 12,
-    height: 12,
-    borderRadius: 2,
-  },
   bgFlash: {
     position: 'absolute',
     top: 0,
@@ -382,6 +306,18 @@ const styles = StyleSheet.create({
   },
   iconContainer: {
     marginTop: spacing.xxl,
+    width: 148,
+    height: 148,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settlementRing: {
+    position: 'absolute',
+    width: 132,
+    height: 132,
+    borderRadius: 66,
+    borderWidth: 2,
+    borderColor: colors.frost,
   },
   iconCircle: {
     width: 120,
@@ -513,21 +449,6 @@ const styles = StyleSheet.create({
   },
   playAgainText: {
     color: colors.dark,
-    fontSize: fontSize.lg,
-    fontWeight: '800',
-    letterSpacing: 2,
-  },
-  challengeButton: {
-    marginTop: spacing.md,
-    padding: spacing.lg,
-    borderRadius: borderRadius.lg,
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: colors.error,
-  },
-  challengeButtonText: {
-    color: colors.error,
     fontSize: fontSize.lg,
     fontWeight: '800',
     letterSpacing: 2,

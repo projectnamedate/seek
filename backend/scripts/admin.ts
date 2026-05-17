@@ -9,8 +9,14 @@
  *   npx ts-node scripts/admin.ts status                           Protocol state
  *   npx ts-node scripts/admin.ts balances                         All vault balances
  *   npx ts-node scripts/admin.ts fund <amount>                    Fund house vault (SKR)
+ *   npx ts-node scripts/admin.ts pause                            Pause new bounty acceptance
+ *   npx ts-node scripts/admin.ts resume                           Resume new bounty acceptance
+ *   npx ts-node scripts/admin.ts withdraw-house <amount>          Withdraw unreserved house SKR
+ *   npx ts-node scripts/admin.ts withdraw-singularity <amount>    Withdraw Singularity SKR while paused with no active bounties
  *   npx ts-node scripts/admin.ts set-hot <pubkey>                 Rotate hot authority
  *   npx ts-node scripts/admin.ts set-treasury <wallet_pubkey>     Rotate fees wallet (cold-signed)
+ *   npx ts-node scripts/admin.ts resolve-dispute <bounty_pda> <win|loss>
+ *                                                               Resolve disputed bounty (cold-signed)
  *   npx ts-node scripts/admin.ts propose-transfer <pubkey>        Propose cold-auth rotation
  *   npx ts-node scripts/admin.ts accept-transfer                  Accept a pending transfer (run AS the new authority)
  *   npx ts-node scripts/admin.ts cancel-transfer                  Cancel a pending transfer
@@ -113,6 +119,36 @@ function formatSkr(lamports: bigint | number | BN, decimals: number): string {
   );
 }
 
+async function getOrCreateAuthorityAta(
+  s: Awaited<ReturnType<typeof setup>>
+): Promise<PublicKey> {
+  const authorityAta = await getAssociatedTokenAddress(
+    SKR_MINT,
+    s.authority.publicKey
+  );
+
+  try {
+    await getAccount(s.connection, authorityAta);
+    return authorityAta;
+  } catch {
+    console.log(
+      `Authority SKR ATA missing. Creating ${authorityAta.toBase58()}...`
+    );
+    const createIx = createAssociatedTokenAccountInstruction(
+      s.authority.publicKey,
+      authorityAta,
+      s.authority.publicKey,
+      SKR_MINT
+    );
+    const tx = new Transaction().add(createIx);
+    const sig = await sendAuthorityTransaction(s.connection, s.authority, tx, {
+      preflightCommitment: 'confirmed'
+    });
+    console.log(`  Authority ATA created. TX: ${sig}`);
+    return authorityAta;
+  }
+}
+
 async function showStatus() {
   return withSetup(async (s) => {
     console.log('=== Seek Protocol Status ===\n');
@@ -148,7 +184,26 @@ async function showStatus() {
       console.log(`  Singularity Vault:  ${state.singularityVault.toBase58()}`);
       console.log(`  Protocol Treasury:  ${state.protocolTreasury.toBase58()}`);
       console.log(
+        `  Paused:             ${state.paused === undefined ? '(legacy binary)' : state.paused ? 'yes' : 'no'}`
+      );
+      console.log(
         `  House Balance:      ${formatSkr(state.houseFundBalance, s.decimals)}`
+      );
+      const activeLiability = state.activePayoutLiability
+        ? BigInt(state.activePayoutLiability.toString())
+        : 0n;
+      const activeCount = state.activeBountyCount
+        ? state.activeBountyCount.toString()
+        : '0';
+      const trackedHouse = BigInt(state.houseFundBalance.toString());
+      const unreserved =
+        trackedHouse > activeLiability ? trackedHouse - activeLiability : 0n;
+      console.log(
+        `  Active Liability:   ${formatSkr(activeLiability, s.decimals)}`
+      );
+      console.log(`  Active Bounties:    ${activeCount}`);
+      console.log(
+        `  Unreserved House:   ${formatSkr(unreserved, s.decimals)}`
       );
       console.log(
         `  Singularity Pool:   ${formatSkr(state.singularityBalance, s.decimals)}`
@@ -173,7 +228,7 @@ async function showStatus() {
       const lost = Number(state.totalBountiesLost);
       if (won + lost > 0) {
         const winRate = (won / (won + lost)) * 100;
-        console.log(`  Win Rate:           ${winRate.toFixed(1)}%`);
+        console.log(`  Completion Rate:    ${winRate.toFixed(1)}%`);
       }
     } catch (e: any) {
       console.log(
@@ -228,6 +283,29 @@ async function showBalances() {
     } catch {
       console.log(`Singularity Pool: not initialized`);
     }
+
+    try {
+      const state = await (s.program.account as any).globalState.fetch(
+        s.globalStatePda
+      );
+      const activeLiability = state.activePayoutLiability
+        ? BigInt(state.activePayoutLiability.toString())
+        : 0n;
+      const activeCount = state.activeBountyCount
+        ? state.activeBountyCount.toString()
+        : '0';
+      const trackedHouse = BigInt(state.houseFundBalance.toString());
+      const unreserved =
+        trackedHouse > activeLiability ? trackedHouse - activeLiability : 0n;
+      console.log(
+        `Active Liability: ${formatSkr(activeLiability, s.decimals)} (${activeCount} active bounties)`
+      );
+      console.log(
+        `Unreserved House: ${formatSkr(unreserved, s.decimals)} (tracked)`
+      );
+    } catch {
+      // Protocol not initialized yet.
+    }
   });
 }
 
@@ -272,6 +350,75 @@ async function fundHouse(amountSkr: number) {
     console.log(
       `House vault balance: ${formatSkr(BigInt(newBalance.value.amount), s.decimals)}`
     );
+  });
+}
+
+async function setProtocolPaused(paused: boolean) {
+  return withSetup(async (s) => {
+    console.log(`${paused ? 'Pausing' : 'Resuming'} new bounty acceptance...`);
+
+    const sig = await (s.program.methods as any)
+      .setProtocolPaused(paused)
+      .accounts({
+        authority: s.authority.publicKey,
+        globalState: s.globalStatePda
+      })
+      .rpc();
+
+    console.log(`${paused ? 'Paused' : 'Resumed'}! TX: ${sig}`);
+  });
+}
+
+async function withdrawUnreservedHouse(amountSkr: number) {
+  return withSetup(async (s) => {
+    const amountLamports = new BN(Math.round(amountSkr * s.multiplier));
+    const authorityAta = await getOrCreateAuthorityAta(s);
+
+    console.log(
+      `Withdrawing ${amountSkr} SKR (${amountLamports.toString()} base units) from unreserved house funds...`
+    );
+    console.log(`Destination ATA: ${authorityAta.toBase58()}`);
+
+    const sig = await (s.program.methods as any)
+      .withdrawUnreservedHouse(amountLamports)
+      .accounts({
+        authority: s.authority.publicKey,
+        globalState: s.globalStatePda,
+        authorityTokenAccount: authorityAta,
+        houseVault: s.houseVaultPda,
+        tokenProgram: TOKEN_PROGRAM_ID
+      })
+      .rpc();
+
+    console.log(`Withdrawn! TX: ${sig}`);
+  });
+}
+
+async function withdrawSingularity(amountSkr: number) {
+  return withSetup(async (s) => {
+    const amountLamports = new BN(Math.round(amountSkr * s.multiplier));
+    const authorityAta = await getOrCreateAuthorityAta(s);
+
+    console.log(
+      `Withdrawing ${amountSkr} SKR (${amountLamports.toString()} base units) from Singularity pool...`
+    );
+    console.log(
+      'Protocol must already be paused with zero active bounties for this instruction.'
+    );
+    console.log(`Destination ATA: ${authorityAta.toBase58()}`);
+
+    const sig = await (s.program.methods as any)
+      .withdrawSingularity(amountLamports)
+      .accounts({
+        authority: s.authority.publicKey,
+        globalState: s.globalStatePda,
+        authorityTokenAccount: authorityAta,
+        singularityVault: s.singularityVaultPda,
+        tokenProgram: TOKEN_PROGRAM_ID
+      })
+      .rpc();
+
+    console.log(`Withdrawn! TX: ${sig}`);
   });
 }
 
@@ -355,6 +502,48 @@ async function setTreasury(newWallet: string) {
     console.log(
       'Funds already in the old treasury are unaffected — sweep them separately if needed.'
     );
+  });
+}
+
+async function resolveDispute(bountyPda: string, outcome: string) {
+  return withSetup(async (s) => {
+    const normalized = outcome.trim().toLowerCase();
+    if (!['win', 'won', 'true', 'loss', 'lost', 'false'].includes(normalized)) {
+      throw new Error('Outcome must be one of: win, loss');
+    }
+    const playerWins = ['win', 'won', 'true'].includes(normalized);
+    const bountyPk = new PublicKey(bountyPda);
+
+    const bounty = await (s.program.account as any).bounty.fetch(bountyPk);
+    const state = await (s.program.account as any).globalState.fetch(
+      s.globalStatePda
+    );
+    const playerTokenAccount = await getAssociatedTokenAddress(
+      SKR_MINT,
+      bounty.player as PublicKey
+    );
+
+    console.log(
+      `Resolving dispute ${bountyPk.toBase58()} as ${playerWins ? 'PLAYER WIN' : 'PLAYER LOSS'}...`
+    );
+    console.log(`Player: ${bounty.player.toBase58()}`);
+    console.log(`Player SKR ATA: ${playerTokenAccount.toBase58()}`);
+
+    const sig = await (s.program.methods as any)
+      .resolveDispute(playerWins)
+      .accounts({
+        authority: s.authority.publicKey,
+        globalState: s.globalStatePda,
+        bounty: bountyPk,
+        playerTokenAccount,
+        houseVault: s.houseVaultPda,
+        singularityVault: s.singularityVaultPda,
+        protocolTreasury: state.protocolTreasury,
+        tokenProgram: TOKEN_PROGRAM_ID
+      })
+      .rpc();
+
+    console.log(`Resolved! TX: ${sig}`);
   });
 }
 
@@ -517,6 +706,30 @@ switch (command) {
     }
     fundHouse(Number(arg)).catch(console.error);
     break;
+  case 'pause':
+    setProtocolPaused(true).catch(console.error);
+    break;
+  case 'resume':
+    setProtocolPaused(false).catch(console.error);
+    break;
+  case 'withdraw-house':
+    if (!arg || isNaN(Number(arg))) {
+      console.error(
+        'Usage: npx ts-node scripts/admin.ts withdraw-house <amount_in_skr>'
+      );
+      process.exit(1);
+    }
+    withdrawUnreservedHouse(Number(arg)).catch(console.error);
+    break;
+  case 'withdraw-singularity':
+    if (!arg || isNaN(Number(arg))) {
+      console.error(
+        'Usage: npx ts-node scripts/admin.ts withdraw-singularity <amount_in_skr>'
+      );
+      process.exit(1);
+    }
+    withdrawSingularity(Number(arg)).catch(console.error);
+    break;
   case 'set-hot':
     if (!arg) {
       console.error(
@@ -541,6 +754,18 @@ switch (command) {
     }
     setTreasury(arg).catch(console.error);
     break;
+  case 'resolve-dispute': {
+    const bountyPda = arg;
+    const outcome = process.argv[4];
+    if (!bountyPda || !outcome) {
+      console.error(
+        'Usage: npx ts-node scripts/admin.ts resolve-dispute <bounty_pda> <win|loss>'
+      );
+      process.exit(1);
+    }
+    resolveDispute(bountyPda, outcome).catch(console.error);
+    break;
+  }
   case 'propose-transfer':
     if (!arg) {
       console.error(
@@ -589,9 +814,20 @@ switch (command) {
     console.log('  status                    Show protocol state and stats');
     console.log('  balances                  Show all vault balances');
     console.log('  fund <amount>             Fund house vault (SKR)');
+    console.log('  pause                     Pause new bounty acceptance');
+    console.log('  resume                    Resume new bounty acceptance');
+    console.log(
+      '  withdraw-house <amount>  Withdraw unreserved house funds (SKR)'
+    );
+    console.log(
+      '  withdraw-singularity <amount> Withdraw Singularity funds while paused and idle (SKR)'
+    );
     console.log('  set-hot <pubkey>          Rotate hot authority');
     console.log(
       '  set-treasury <pubkey>     Rotate fees wallet (protocol_treasury recipient)'
+    );
+    console.log(
+      '  resolve-dispute <bounty> <win|loss> Resolve disputed bounty'
     );
     console.log('  propose-transfer <pubkey> Propose cold-auth rotation');
     console.log(

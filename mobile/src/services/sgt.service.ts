@@ -90,6 +90,7 @@ export async function verifySGT(
     const messageBytes = new TextEncoder().encode(messageString);
     const signatureBytes = await signMessage(messageBytes);
     const signatureBase58 = encodeBase58(signatureBytes);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     // Step 3: Submit to backend
     const verifyRes = await axios.post(`${API_BASE_URL}/sgt/verify`, {

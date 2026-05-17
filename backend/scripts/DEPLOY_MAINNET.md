@@ -4,7 +4,7 @@ Step-by-step to take Seek from the devnet hackathon state to a live mainnet
 deployment with Ledger-backed cold authority + Railway-hosted backend.
 
 Prereqs (user-side):
-- **Cold authority Ledger** (Ledger #1) with Solana app installed — used for admin ops (fund_house, set_hot_authority, set_treasury, propose/accept_authority_transfer, resolve_dispute) AND program upgrade authority by default
+- **Cold authority Ledger** (Ledger #1) with Solana app installed — used for admin ops (fund_house, pause/resume, withdraw unreserved house funds, withdraw Singularity while paused with zero active bounties, set_hot_authority, set_treasury, propose/accept_authority_transfer, resolve_dispute) AND program upgrade authority by default
 - **Fees wallet Ledger** (Ledger #2): `Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr` — separate Ledger that owns the SKR ATA receiving the 10% rake. Signs nothing on-chain in the Seek protocol; rake accumulates as SKR, user periodically swaps to USDC/SOL on a DEX (Ledger-signed) and off-ramps to fiat. Operating expenses are funded separately, not paid from this wallet. **Rotatable** post-init via `admin.ts set-treasury` (cold-signed) — not locked forever.
 - ~5 SOL mainnet on cold Ledger for program deploy + rent
 - $SKR tokens for house vault (**launch starter ~58,824 SKR ≈ $1000 at $0.017** — intentionally small; mission pool + AI thresholds tuned for ruin avoidance)
@@ -14,7 +14,7 @@ Prereqs (user-side):
 - Sentry project DSN
 - Domain `api.seek.mythx.art` DNS-ready to CNAME → Railway
 
-**House vault is NOT an EOA.** It is a PDA token account; win payouts are PDA-signed CPIs from the protocol — no human ever signs payouts, so no "hot" wallet for the house is needed.
+**House vault is NOT an EOA.** It is a PDA token account; win payouts are PDA-signed CPIs from the protocol — no human ever signs payouts, so no "hot" wallet for the house is needed. The cold Ledger can withdraw only unreserved house surplus; active payout liability remains locked for accepted bounties.
 
 ## 1. Build the mainnet contract binary
 
@@ -26,9 +26,16 @@ The TypeScript init/admin scripts now support `AUTHORITY_SIGNER=ledger`.
 Use the same Ledger pubkey here, in `AUTHORITY_LEDGER_PUBKEY`, and on the
 physical Ledger prompt.
 
+Current Seek cold-authority selection for launch:
+- CLI signer URL: `'usb://ledger?key=1'`
+- Ledger app derivation path for backend init/admin scripts: `44'/501'/1'`
+- Cold authority pubkey: `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`
+
 ```bash
 # Get the Ledger pubkey
-LEDGER_PUBKEY=$(solana-keygen pubkey usb://ledger)
+LEDGER_URL='usb://ledger?key=1'
+LEDGER_PATH="44'/501'/1'"
+LEDGER_PUBKEY=$(solana-keygen pubkey "$LEDGER_URL")
 echo "Cold Ledger pubkey: $LEDGER_PUBKEY"
 
 # Edit contracts/programs/seek-protocol/src/lib.rs and replace the
@@ -52,6 +59,7 @@ export SEEK_PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
 export SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3
 export FEES_WALLET=Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr
 export AUTHORITY_SIGNER=ledger
+export AUTHORITY_LEDGER_PATH=$LEDGER_PATH
 export AUTHORITY_LEDGER_PUBKEY=$LEDGER_PUBKEY
 npm run preflight:mainnet -- --offline
 cd ../contracts
@@ -75,8 +83,9 @@ program keypair at `contracts/target/deploy/seek_protocol-keypair.json`.
 Install Solana app on the Ledger. Get your pubkey:
 
 ```bash
-solana-keygen pubkey usb://ledger       # → COLD_AUTHORITY_PUBKEY
-solana config set --keypair usb://ledger
+LEDGER_URL='usb://ledger?key=1'
+solana-keygen pubkey "$LEDGER_URL"       # → COLD_AUTHORITY_PUBKEY
+solana config set --keypair "$LEDGER_URL"
 ```
 
 Send ~5 SOL to that pubkey (mainnet).
@@ -85,23 +94,60 @@ Send ~5 SOL to that pubkey (mainnet).
 
 This is the big irreversible step. Program ID stays the same as devnet
 (`DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v`) — Anchor uses the
-existing `target/deploy/seek_protocol-keypair.json`. The deploy authority
-is initially the Ledger.
+existing `target/deploy/seek_protocol-keypair.json`.
+
+**2026-05-17 custody rule:** never create, store, or fund deploy, buffer,
+fee-payer, hot-authority, or publisher keypairs in `/tmp`, `/private/tmp`,
+shell heredocs, terminal scrollback, or chat. Direct Ledger deploy can ask for
+repeated approvals during buffer upload. If a non-Ledger buffer or fee-payer key
+is needed to avoid repeated approvals, create it directly under durable
+git-ignored storage, set `0600`, verify the pubkey, define a backup or drain
+plan, and drain remaining SOL after the upgrade. Do not use `--final`.
 
 ```bash
-# Confirm cluster
-solana config set --url mainnet-beta
-solana config set --keypair usb://ledger
+# Confirm cluster. Set RPC_URL in your shell or load it from an ignored env file;
+# do not paste private RPC keys in chat or docs.
+: "${RPC_URL:?set RPC_URL to a mainnet RPC endpoint first}"
+LEDGER_PUBKEY=GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY
+UPGRADE_KEYPAIR=../.secrets/solana/seek-upgrade-fee-payer.json
 
-# Deploy (~3-4 SOL for buffer + rent). Do NOT add --final; the program must
+mkdir -p ../.secrets/solana
+chmod 700 ../.secrets ../.secrets/solana
+test "$(git check-ignore -q ../.secrets/solana/seek-upgrade-fee-payer.json; echo $?)" = "0"
+
+# Create only if this durable ignored key does not already exist.
+test -f "$UPGRADE_KEYPAIR" || solana-keygen new --outfile "$UPGRADE_KEYPAIR"
+chmod 600 "$UPGRADE_KEYPAIR"
+UPGRADE_PUBKEY=$(solana-keygen pubkey "$UPGRADE_KEYPAIR")
+solana-keygen verify "$UPGRADE_PUBKEY" "$UPGRADE_KEYPAIR"
+# Fund only after the path, permissions, pubkey, and drain/backup plan are verified.
+
+# Deploy with durable non-Ledger authority. Do NOT add --final; the program must
 # remain upgradeable while mainnet economics and UX settle.
 cd contracts
-npm run deploy:mainnet
+solana -u "$RPC_URL" \
+  -k "$UPGRADE_KEYPAIR" \
+  program deploy target/deploy/seek_protocol.so \
+  --program-id target/deploy/seek_protocol-keypair.json \
+  --upgrade-authority "$UPGRADE_KEYPAIR" \
+  --fee-payer "$UPGRADE_KEYPAIR" \
+  --use-rpc
+
+# Immediately transfer upgrade authority to the cold Ledger.
+solana -u "$RPC_URL" \
+  -k "$UPGRADE_KEYPAIR" \
+  program set-upgrade-authority \
+  DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v \
+  --new-upgrade-authority "$LEDGER_PUBKEY"
+
+# Verify ProgramData upgrade authority is the Ledger and the program is not final.
+solana -u "$RPC_URL" \
+  program show DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
 
 # Publish IDL on-chain (so indexers/explorers can decode)
 anchor idl init \
   --provider.cluster mainnet \
-  --provider.wallet usb://ledger \
+  --provider.wallet "$LEDGER_URL" \
   --filepath target/idl/seek_protocol.json \
   DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
 ```
@@ -116,7 +162,7 @@ cargo install solana-verify
 solana-verify build --library-name seek_protocol
 solana-verify upload \
   --url https://api.mainnet-beta.solana.com \
-  --wallet usb://ledger \
+  --wallet "$LEDGER_URL" \
   DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
 ```
 
@@ -124,14 +170,17 @@ solana-verify upload \
 
 The hot authority lives on the backend and signs only `reveal_mission` +
 `propose_resolution` + `finalize_bounty` (the last is permissionless but
-we use this key by default).
+we use this key by default). Generate it only under durable ignored storage.
 
 ```bash
-solana-keygen new --outfile ./seek-hot.json
-solana-keygen pubkey ./seek-hot.json   # → HOT_AUTHORITY_PUBKEY
+mkdir -p ../.secrets/solana && chmod 700 ../.secrets ../.secrets/solana
+solana-keygen new --outfile ../.secrets/solana/seek-hot.json
+chmod 600 ../.secrets/solana/seek-hot.json
+solana-keygen pubkey ../.secrets/solana/seek-hot.json   # → HOT_AUTHORITY_PUBKEY
+solana-keygen verify <HOT_AUTHORITY_PUBKEY> ../.secrets/solana/seek-hot.json
 
 # Fund with 0.3 SOL for tx fees. Top up monthly via a cron.
-solana transfer <HOT_AUTHORITY_PUBKEY> 0.3 --url mainnet-beta --keypair usb://ledger
+solana transfer <HOT_AUTHORITY_PUBKEY> 0.3 --url mainnet-beta --keypair "$LEDGER_URL"
 ```
 
 ## 6. Initialize protocol on mainnet
@@ -153,6 +202,7 @@ export SEEK_PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
 # Triple-check before init anyway.
 export FEES_WALLET=Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr
 export AUTHORITY_SIGNER=ledger
+export AUTHORITY_LEDGER_PATH="44'/501'/1'"
 export AUTHORITY_LEDGER_PUBKEY=$LEDGER_PUBKEY
 # Optional; defaults to true on mainnet-beta. Leave true for launch so the
 # Ledger displays the pubkey before signing.
@@ -191,6 +241,29 @@ npx ts-node scripts/admin.ts set-treasury <NEW_FEES_WALLET_PUBKEY>
 
 All future protocol-treasury inflows redirect to the new ATA. Funds already in the old ATA stay under the old wallet's control — sweep them separately via the old Ledger if recoverable.
 
+### 7c. Cold-Ledger emergency controls
+
+These are explicit public admin instructions. They are not hidden backdoors:
+
+```bash
+# Stop or resume new accept_bounty calls. Existing bounties can still resolve.
+npx ts-node scripts/admin.ts pause
+npx ts-node scripts/admin.ts resume
+
+# Withdraw only house funds not reserved for active payout liability.
+npx ts-node scripts/admin.ts withdraw-house <AMOUNT_IN_SKR>
+
+# Withdraw Singularity funds. Protocol must be paused with zero active bounties.
+npx ts-node scripts/admin.ts withdraw-singularity <AMOUNT_IN_SKR>
+```
+
+Before withdrawing, check:
+
+```bash
+npx ts-node scripts/admin.ts status
+npx ts-node scripts/admin.ts balances
+```
+
 ## 8. Rotate cold authority to Ledger (only if an interim keypair was used)
 
 Preferred path after B0a: initialize directly with the Ledger, so this step is
@@ -204,6 +277,7 @@ npx ts-node scripts/admin.ts propose-transfer <LEDGER_PUBKEY>
 
 # Switch to Ledger signing for the accept step.
 export AUTHORITY_SIGNER=ledger
+export AUTHORITY_LEDGER_PATH="44'/501'/1'"
 export AUTHORITY_LEDGER_PUBKEY=$LEDGER_PUBKEY
 npx ts-node scripts/admin.ts accept-transfer
 ```
@@ -217,12 +291,12 @@ npx ts-node scripts/admin.ts accept-transfer
 solana program show DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v --url mainnet-beta
 
 # Optional later: set to a different Ledger account.
-# solana program set-upgrade-authority -k usb://ledger \
+# solana program set-upgrade-authority -k "$LEDGER_URL" \
 #   DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v \
 #   --new-upgrade-authority <NEW_LEDGER_PUBKEY>
 
 # To revoke (make program immutable — CAREFUL, no future upgrades):
-# solana program set-upgrade-authority -k usb://ledger \
+# solana program set-upgrade-authority -k "$LEDGER_URL" \
 #   DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v --final
 ```
 
@@ -231,7 +305,7 @@ separate irreversible-lock decision.
 
 ## 10. Fund house vault
 
-**Launch starter is ~58,824 SKR (≈ $1000)** — intentionally small. Do NOT seed at $170k; the mission pool + AI thresholds + 8-12% target win rate are designed for a small float that grows organically. See `tasks/roadmap.md § B7` and `memory/project_economic_model.md`.
+**Launch starter is ~58,824 SKR (≈ $1000)** — intentionally small. Do NOT seed at $170k; the mission pool + AI thresholds + 8-12% target completion rate are designed for a small float that grows organically. See `tasks/roadmap.md § B7` and `memory/project_economic_model.md`.
 
 ```bash
 # First, transfer your SKR holdings to the cold authority's ATA
@@ -245,6 +319,7 @@ npx ts-node scripts/admin.ts fund 58824    # ~$1k starter
 Verify:
 ```bash
 npx ts-node scripts/admin.ts balances
+npx ts-node scripts/admin.ts status
 ```
 
 ## 11. Deploy backend to Railway
@@ -300,10 +375,10 @@ Smoke-test the full flow end-to-end with real SKR before submitting.
 ## 13. Submit to Solana dApp Store
 
 Follow `dapp-store-publishing/README.md`:
-1. Fund publisher wallet with 0.5 SOL, back up `publisher.json`, and finish Publisher Portal KYC/KYB.
+1. Fund publisher wallet with 0.5 SOL, back up `.secrets/dapp-store/publisher.json`, and finish Publisher Portal KYC/KYB.
 2. Add icon, required banner, and at least 4 screenshots/videos; run `cd dapp-store-publishing && node check-assets.mjs`.
 3. Export `DAPP_STORE_API_KEY` from Publisher Portal.
-4. Publish the signed release APK with `dapp-store --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk --keypair ./publisher.json --whats-new "..."`
+4. Publish the signed release APK with `dapp-store --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk --keypair ../.secrets/dapp-store/publisher.json --whats-new "..."`
 5. If using the direct NFT/config flow, run `create publisher`, `create app`, `create release`, then `publish submit --requestor-is-authorized --complies-with-solana-dapp-store-policies`.
 6. Wait 3-5 business days for review.
 
@@ -311,8 +386,8 @@ Follow `dapp-store-publishing/README.md`:
 
 - Railway logs: live tail for error bursts
 - Sentry: new issues, crash-free session rate
-- `npx ts-node scripts/admin.ts status` — watch house balance, win rate, total bounties
+- `npx ts-node scripts/admin.ts status` — watch house balance, completion rate, total bounties
 - Upstash dashboard — Redis memory + request count
 - Helius dashboard — RPC request volume
 
-Set alerts: house balance < 1M SKR, finalizer queue depth > 50, error rate > 1%.
+Set alerts: house balance < 30,000 SKR, active liability near available house balance, finalizer queue depth > 50, error rate > 1%.

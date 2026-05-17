@@ -11,7 +11,7 @@ interface LoaderProps {
 export default function Loader({
   text,
   size = 'medium',
-  color = colors.purple,
+  color = colors.aqua,
 }: LoaderProps) {
   const spinAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -31,13 +31,13 @@ export default function Loader({
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 800,
+          toValue: 1.035,
+          duration: 1200,
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 800,
+          duration: 1200,
           useNativeDriver: true,
         }),
       ])

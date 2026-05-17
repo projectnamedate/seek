@@ -1,17 +1,52 @@
 # Lessons Learned
 
+## Keypair Custody
+
+### Never put funded keypairs in temp
+- A 2026-05-17 Seek upgrade attempt staged real SOL to keypairs generated under
+  temp paths. After restart, the local temp key files were not present.
+- **Rule:** Never create, store, or fund crypto keypairs in `/tmp`,
+  `/private/tmp`, shell heredocs, terminal scrollback, chat, or any ephemeral
+  path.
+- **Rule:** This applies to fee payers, deploy authorities, hot wallets,
+  publisher wallets, burner wallets, backend wallets, and anything described as
+  temporary.
+- **Rule:** Before funds, authority, deploy role, publisher role, backend
+  signing role, or hot-wallet duties touch a generated keypair, it must live in
+  a durable ignored secrets directory, have `0600` permissions, have a verified
+  pubkey, and have a recovery/backup or drain plan.
+- **Rule:** If a keypair is already in an ephemeral path, move it to durable
+  ignored storage and verify it before funding or assigning authority. If that
+  cannot be done, stop.
+
+## Brand + dApp Store Screenshot Sequencing
+
+### Preserve the app during screenshot review
+- User reaffirmed on 2026-05-03 that the existing app design is fine and does
+  not need drastic changes.
+- **Rule:** Finish/approve the Seek brand system first, then do a narrow app
+  screenshot review. Preserve the current mobile UI unless there is a clear
+  dApp Store rejection risk, broken state, unreadable screenshot, or copy/legal
+  consistency issue.
+- **Rule:** Generated comps can be useful for planning, but submission
+  screenshots should be captured from a running app. If dApp Store access blocks
+  organic Seeker screenshots, use a disposable capture fork that preserves the
+  real app layout and stages only wallet-gated data.
+
 ## MWA (Mobile Wallet Adapter) — Critical Rules
 
 ### No back-to-back transact sessions
-- Each `signMessage` and `signAndSendTransaction` opens a separate deep-link to Phantom
-- Calling them sequentially causes the second to **hang silently** — Phantom never opens
+- Each `signMessage` and `signAndSendTransaction` opens a separate Mobile Wallet
+  Adapter approval in the wallet app
+- Calling them sequentially can cause the second wallet approval to hang silently
 - **Rule**: Only ONE MWA call per user action. If you need both auth signing and tx signing, either:
   - Remove auth from the endpoint (on-chain tx already proves ownership)
   - Use a single low-level `transact` session for both operations
 - We removed `requireWalletAuth` from `/start` and `/submit` for this reason
 
 ### Post-deep-link network delay
-- After Phantom returns control via deep-link, React Native's network stack needs ~1-2s to stabilize
+- After the wallet app returns control via deep-link, React Native's network
+  stack needs ~1-2s to stabilize
 - **Rule**: Add `await new Promise(r => setTimeout(r, 1500))` before making HTTP calls after MWA returns
 
 ## Auth Middleware Removal Checklist
@@ -54,8 +89,8 @@ When removing `requireWalletAuth` from a route, you MUST also update:
 - `(slot + timestamp) % 500` is publicly-predictable — any reader can grind for favorable slots before they're produced.
 - `SlotHashes` sysvar only keeps 150 slots (~60s). Challenge-period-delayed finalize misses that window for any realistic mainnet challenge window (300s = 750 slots).
 - Commit-reveal with player-committed entropy: only works if the player can't withhold the reveal step, which is always contestable.
-- **Pragmatic v1:** strengthen by mixing entropy (`hash(mission_commitment || bounty_pda || slot || timestamp)`). Still grindable by current slot leader, but grinding requires matching a specific bounty's commitment + PDA, raising attack bar above launch jackpot sizes. Document upgrade to Switchboard On-Demand VRF once jackpot pool > $50k.
-- **Rule:** Document the threat model + the jackpot-size trigger for the upgrade explicitly in code comments. A future maintainer needs to know WHY this is "fine for now" and what changes the threshold.
+- **Pragmatic v1:** strengthen by mixing entropy (`hash(mission_commitment || bounty_pda || slot || timestamp)`). Still grindable by current slot leader, but grinding requires matching a specific bounty's commitment + PDA, raising attack bar above launch Singularity-pool sizes. Document upgrade to Switchboard On-Demand VRF once the Singularity pool exceeds ~$50k.
+- **Rule:** Document the threat model + the Singularity-pool-size trigger for the upgrade explicitly in code comments. A future maintainer needs to know WHY this is "fine for now" and what changes the threshold.
 
 ### In-memory state is a restart bomb
 - All 7 Maps in the hackathon backend (`activeBounties`, `bountyByPlayer`, `missionSecrets`, `preparedBounties`, `walletLocks`, `bountyLocks`, `pendingFinalizations`) were lost on every restart.

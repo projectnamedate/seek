@@ -105,6 +105,9 @@ async function main() {
       singularityVault: state.singularityVault.toBase58(),
       protocolTreasury: state.protocolTreasury.toBase58(),
       houseFundBalance: state.houseFundBalance.toString(),
+      activePayoutLiability: state.activePayoutLiability?.toString?.() ?? '0',
+      activeBountyCount: state.activeBountyCount?.toString?.() ?? '0',
+      paused: state.paused ?? false,
       totalBountiesCreated: state.totalBountiesCreated.toString()
     });
 
@@ -187,6 +190,9 @@ async function main() {
     houseVault: state.houseVault.toBase58(),
     singularityVault: state.singularityVault.toBase58(),
     protocolTreasury: state.protocolTreasury.toBase58(),
+    activePayoutLiability: state.activePayoutLiability.toString(),
+    activeBountyCount: state.activeBountyCount.toString(),
+    paused: state.paused,
     bump: state.bump
   });
 

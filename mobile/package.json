@@ -1,6 +1,6 @@
 {
   "name": "mobile",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
@@ -26,6 +26,7 @@
     "expo-dev-client": "^6.0.20",
     "expo-file-system": "^19.0.21",
     "expo-image-picker": "^17.0.10",
+    "expo-location": "~19.0.8",
     "expo-media-library": "^18.2.1",
     "expo-status-bar": "~3.0.9",
     "react": "19.1.0",

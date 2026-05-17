@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1120" role="img" aria-label="Seek six blade iris logo options">
+  <defs>
+    <linearGradient id="sheetBg" x1="0" y1="0" x2="1600" y2="1120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#020101"/>
+      <stop offset="0.52" stop-color="#071314"/>
+      <stop offset="1" stop-color="#10282c"/>
+    </linearGradient>
+    <linearGradient id="panelGradient" x1="0" y1="0" x2="480" y2="390" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#101618"/>
+      <stop offset="0.5" stop-color="#0b3446"/>
+      <stop offset="0.74" stop-color="#0f0704"/>
+      <stop offset="1" stop-color="#247b71"/>
+    </linearGradient>
+    <linearGradient id="seekerTraceStroke" x1="74" y1="64" x2="438" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#cfe6e4"/>
+      <stop offset="0.5" stop-color="#95d2e6"/>
+      <stop offset="1" stop-color="#61afbd"/>
+    </linearGradient>
+    <radialGradient id="seekLensDepth" cx="50%" cy="48%" r="68%">
+      <stop offset="0" stop-color="#101618"/>
+      <stop offset="0.55" stop-color="#071314"/>
+      <stop offset="1" stop-color="#010101"/>
+    </radialGradient>
+    <clipPath id="traceClip">
+      <circle cx="256" cy="256" r="205"/>
+    </clipPath>
+    <path id="traceSeparator" d="M256 56C334 67 398 126 416 202C399 249 361 282 314 298"/>
+    <path id="traceOpening" d="M314 214L326 277L270 326L207 303L188 239L242 184Z"/>
+
+    <symbol id="referenceTrace" viewBox="0 0 512 512">
+      <circle cx="256" cy="256" r="236" fill="#010101"/>
+      <circle cx="256" cy="256" r="209" fill="#010101" stroke="#f6f6f5" stroke-width="15"/>
+      <circle cx="256" cy="256" r="195" fill="none" stroke="#010101" stroke-width="10"/>
+      <g clip-path="url(#traceClip)" fill="none" stroke="#f6f6f5" stroke-width="7" stroke-linecap="round">
+        <use href="#traceSeparator" transform="rotate(0 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(60 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(120 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(180 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(240 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(300 256 256)"/>
+      </g>
+      <use href="#traceOpening" fill="#f6f6f5"/>
+    </symbol>
+
+    <symbol id="seekTrace" viewBox="0 0 512 512">
+      <circle cx="256" cy="256" r="236" fill="#010101"/>
+      <circle cx="256" cy="256" r="220" fill="#10282c"/>
+      <circle cx="256" cy="256" r="209" fill="url(#seekLensDepth)" stroke="url(#seekerTraceStroke)" stroke-width="10"/>
+      <circle cx="256" cy="256" r="195" fill="none" stroke="#010101" stroke-width="10"/>
+      <g clip-path="url(#traceClip)" fill="none" stroke-linecap="round">
+        <use href="#traceSeparator" stroke="#cfe6e4" stroke-width="7" opacity="0.95" transform="rotate(0 256 256)"/>
+        <use href="#traceSeparator" stroke="#95d2e6" stroke-width="7" opacity="0.9" transform="rotate(60 256 256)"/>
+        <use href="#traceSeparator" stroke="#61afbd" stroke-width="7" opacity="0.85" transform="rotate(120 256 256)"/>
+        <use href="#traceSeparator" stroke="#cfe6e4" stroke-width="7" opacity="0.95" transform="rotate(180 256 256)"/>
+        <use href="#traceSeparator" stroke="#95d2e6" stroke-width="7" opacity="0.9" transform="rotate(240 256 256)"/>
+        <use href="#traceSeparator" stroke="#61afbd" stroke-width="7" opacity="0.85" transform="rotate(300 256 256)"/>
+      </g>
+      <use href="#traceOpening" fill="#f6f6f5"/>
+    </symbol>
+
+    <symbol id="seekGraphite" viewBox="0 0 512 512">
+      <circle cx="256" cy="256" r="236" fill="#010101"/>
+      <circle cx="256" cy="256" r="220" fill="#101618"/>
+      <circle cx="256" cy="256" r="209" fill="#010101" stroke="#373c3e" stroke-width="11"/>
+      <circle cx="256" cy="256" r="195" fill="none" stroke="#010101" stroke-width="10"/>
+      <g clip-path="url(#traceClip)" fill="none" stroke="#cfe6e4" stroke-width="7" stroke-linecap="round" opacity="0.82">
+        <use href="#traceSeparator" transform="rotate(0 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(60 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(120 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(180 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(240 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(300 256 256)"/>
+      </g>
+      <use href="#traceOpening" fill="#f6f6f5"/>
+    </symbol>
+
+    <symbol id="seekLight" viewBox="0 0 512 512">
+      <circle cx="256" cy="256" r="236" fill="#010101"/>
+      <circle cx="256" cy="256" r="209" fill="#010101" stroke="#f6f6f5" stroke-width="15"/>
+      <circle cx="256" cy="256" r="195" fill="none" stroke="#010101" stroke-width="10"/>
+      <g clip-path="url(#traceClip)" fill="none" stroke="#f6f6f5" stroke-width="7" stroke-linecap="round">
+        <use href="#traceSeparator" transform="rotate(0 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(60 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(120 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(180 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(240 256 256)"/>
+        <use href="#traceSeparator" transform="rotate(300 256 256)"/>
+      </g>
+      <use href="#traceOpening" fill="#f6f6f5"/>
+    </symbol>
+
+    <style>
+      .tile { fill: rgba(16, 22, 24, 0.9); stroke: rgba(207, 230, 228, 0.14); stroke-width: 2; }
+      .label { fill: #f6f6f5; font-family: Arial, Helvetica, sans-serif; font-size: 26px; font-weight: 800; letter-spacing: 2.4px; }
+      .note { fill: #99b3be; font-family: Arial, Helvetica, sans-serif; font-size: 17px; font-weight: 500; }
+      .small { fill: #99b3be; font-family: Arial, Helvetica, sans-serif; font-size: 17px; letter-spacing: 2px; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1120" fill="url(#sheetBg)"/>
+  <path d="M0 280h1600M0 560h1600M0 840h1600M400 0v1120M800 0v1120M1200 0v1120" stroke="#cfe6e4" stroke-width="2" opacity="0.045"/>
+  <text x="80" y="86" fill="#f6f6f5" font-family="Arial Black, Arial, Helvetica, sans-serif" font-size="54" font-weight="900" letter-spacing="8">SEEK IRIS TRACE</text>
+  <text x="84" y="124" class="small">six curved separator paths rotated every 60 degrees from one traced aperture reference</text>
+
+  <g transform="translate(80 170)">
+    <rect class="tile" width="440" height="390" rx="8"/>
+    <use href="#referenceTrace" x="92" y="30" width="256" height="256"/>
+    <use href="#referenceTrace" x="358" y="38" width="48" height="48"/>
+    <text class="label" x="34" y="318">A. REFERENCE TRACE</text>
+    <text class="note" x="34" y="350">geometry study, not production trademark</text>
+  </g>
+
+  <g transform="translate(580 170)">
+    <rect class="tile" width="440" height="390" rx="8"/>
+    <use href="#seekTrace" x="92" y="30" width="256" height="256"/>
+    <use href="#seekTrace" x="358" y="38" width="48" height="48"/>
+    <text class="label" x="34" y="318">B. SEEK TRACE</text>
+    <text class="note" x="34" y="350">recommended Seek-owned direction</text>
+  </g>
+
+  <g transform="translate(1080 170)">
+    <rect width="440" height="390" rx="8" fill="url(#panelGradient)" stroke="rgba(207,230,228,0.16)" stroke-width="2"/>
+    <use href="#seekTrace" x="92" y="30" width="256" height="256"/>
+    <use href="#seekTrace" x="358" y="38" width="48" height="48"/>
+    <text class="label" x="34" y="318">C. SEEKER PANEL</text>
+    <text class="note" x="34" y="350">same mark on extracted Seeker gradient</text>
+  </g>
+
+  <g transform="translate(80 620)">
+    <rect class="tile" width="440" height="390" rx="8"/>
+    <rect x="116" y="46" width="208" height="208" rx="44" fill="#010101" stroke="#373c3e" stroke-width="7"/>
+    <use href="#seekTrace" x="116" y="46" width="208" height="208"/>
+    <use href="#seekTrace" x="358" y="38" width="48" height="48"/>
+    <text class="label" x="34" y="318">D. APP TILE</text>
+    <text class="note" x="34" y="350">mask-safe trace version</text>
+  </g>
+
+  <g transform="translate(580 620)">
+    <rect class="tile" width="440" height="390" rx="8"/>
+    <use href="#seekGraphite" x="92" y="30" width="256" height="256"/>
+    <use href="#seekGraphite" x="358" y="38" width="48" height="48"/>
+    <text class="label" x="34" y="318">E. GRAPHITE TRACE</text>
+    <text class="note" x="34" y="350">quieter dark editorial variant</text>
+  </g>
+
+  <g transform="translate(1080 620)">
+    <rect class="tile" width="440" height="390" rx="8"/>
+    <use href="#seekLight" x="92" y="30" width="256" height="256"/>
+    <use href="#seekLight" x="358" y="38" width="48" height="48"/>
+    <text class="label" x="34" y="318">F. MONO TRACE</text>
+    <text class="note" x="34" y="350">single-color trademark fallback</text>
+  </g>
+</svg>

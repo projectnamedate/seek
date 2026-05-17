@@ -9,6 +9,7 @@ import { childLogger } from './logger.service';
 const log = childLogger('ai');
 
 const CLAUDE_VISION_TIMEOUT_MS = 45_000;
+const CLAUDE_VISION_MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
 // Initialize Anthropic client
 const anthropic = new Anthropic({
@@ -158,7 +159,7 @@ export async function validatePhoto(
 
     const response = await withTimeout(
       anthropic.messages.create({
-        model: 'claude-sonnet-4-6-20251001',
+        model: CLAUDE_VISION_MODEL,
         max_tokens: 500,
         messages: [
           {
@@ -222,10 +223,19 @@ export async function validatePhoto(
   }
 }
 
+export function canApplySgtConfidenceBonus(validation: ValidationResult): boolean {
+  return (
+    !validation.isValid &&
+    !validation.hardReject &&
+    !validation.isScreenshot &&
+    validation.matchesTarget
+  );
+}
+
 /**
  * Pre-validation checks before sending to AI
  */
-function performPreChecks(metadata: PhotoMetadata, bountyStartTime?: Date): {
+export function performPreChecks(metadata: PhotoMetadata, bountyStartTime?: Date): {
   passed: boolean;
   result: ValidationResult;
 } {
@@ -234,11 +244,12 @@ function performPreChecks(metadata: PhotoMetadata, bountyStartTime?: Date): {
       passed: false,
       result: {
         isValid: false,
-        confidence: 0.9,
+        confidence: 0,
         reasoning: 'Photo metadata indicates this is likely a screenshot (no GPS, no device info)',
         detectedObjects: [],
         isScreenshot: true,
         matchesTarget: false,
+        hardReject: true,
       },
     };
   }
@@ -248,11 +259,12 @@ function performPreChecks(metadata: PhotoMetadata, bountyStartTime?: Date): {
       passed: false,
       result: {
         isValid: false,
-        confidence: 0.9,
+        confidence: 0,
         reasoning: `Photo timestamp is too old or in the future (max age: ${config.validation.maxPhotoAgeSeconds}s)`,
         detectedObjects: [],
         isScreenshot: false,
         matchesTarget: false,
+        hardReject: true,
       },
     };
   }
@@ -266,11 +278,12 @@ function performPreChecks(metadata: PhotoMetadata, bountyStartTime?: Date): {
         passed: false,
         result: {
           isValid: false,
-          confidence: 0.95,
+          confidence: 0,
           reasoning: 'Photo was taken before the bounty started — possible pre-captured image',
           detectedObjects: [],
           isScreenshot: false,
           matchesTarget: false,
+          hardReject: true,
         },
       };
     }

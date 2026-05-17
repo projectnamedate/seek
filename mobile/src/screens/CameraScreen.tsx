@@ -11,6 +11,7 @@ import {
 import { CameraView, CameraType, useCameraPermissions } from 'expo-camera';
 import * as FileSystem from 'expo-file-system';
 import { Asset } from 'expo-asset';
+import * as Location from 'expo-location';
 import { createAttestation } from '../services/attestation.service';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
@@ -36,6 +37,50 @@ export default function CameraScreen({ navigation, route }: Props) {
   // Timer animation
   const timerPulse = useRef(new Animated.Value(1)).current;
   const captureScale = useRef(new Animated.Value(1)).current;
+
+  const getCaptureLocation = async () => {
+    try {
+      let permission = await Location.getForegroundPermissionsAsync();
+      if (!permission.granted) {
+        permission = await Location.requestForegroundPermissionsAsync();
+      }
+      if (!permission.granted) {
+        return null;
+      }
+
+      const freshLocation = await Promise.race([
+        Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        }),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3500)),
+      ]);
+
+      if (freshLocation) {
+        return {
+          latitude: freshLocation.coords.latitude,
+          longitude: freshLocation.coords.longitude,
+          accuracy: freshLocation.coords.accuracy,
+        };
+      }
+
+      const lastKnown = await Location.getLastKnownPositionAsync({
+        maxAge: 5 * 60 * 1000,
+        requiredAccuracy: 500,
+      });
+      if (!lastKnown) {
+        return null;
+      }
+
+      return {
+        latitude: lastKnown.coords.latitude,
+        longitude: lastKnown.coords.longitude,
+        accuracy: lastKnown.coords.accuracy,
+      };
+    } catch (error) {
+      console.log('[Camera] Location capture skipped:', error);
+      return null;
+    }
+  };
 
   // Countdown timer
   useEffect(() => {
@@ -109,14 +154,18 @@ export default function CameraScreen({ navigation, route }: Props) {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
         base64: false,
-        exif: false,
+        exif: true,
       });
 
       if (photo?.uri) {
+        const location = await getCaptureLocation();
         // Create attestation payload (hash + device info)
         let attestation;
         try {
-          attestation = await createAttestation(photo.uri);
+          attestation = await createAttestation(photo.uri, {
+            exif: photo.exif ?? null,
+            location,
+          });
         } catch (e) {
           console.log('[Camera] Attestation creation skipped:', e);
         }
@@ -218,13 +267,22 @@ export default function CameraScreen({ navigation, route }: Props) {
           <View style={styles.targetContainer}>
             <View style={styles.targetBox}>
               <Text style={styles.targetLabel}>FIND</Text>
-              <Text style={styles.targetText}>{bounty.target}</Text>
+              <Text
+                style={styles.targetText}
+                numberOfLines={3}
+                adjustsFontSizeToFit
+                minimumFontScale={0.58}
+              >
+                {bounty.target}
+              </Text>
             </View>
           </View>
 
           {/* Hint */}
           <View style={styles.hintContainer}>
-            <Text style={styles.hintText}>{bounty.targetHint}</Text>
+            <Text style={styles.hintText} numberOfLines={2} adjustsFontSizeToFit>
+              {bounty.targetHint}
+            </Text>
           </View>
 
           {/* Bottom Controls */}
@@ -285,7 +343,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
   },
   timerBox: {
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgba(16, 22, 24, 0.9)',
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.xl,
     borderRadius: borderRadius.lg,
@@ -300,13 +358,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   targetBox: {
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgba(16, 22, 24, 0.9)',
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.md,
     borderRadius: borderRadius.lg,
     borderWidth: 2,
     borderColor: colors.cyan,
     alignItems: 'center',
+    maxWidth: '92%',
   },
   targetLabel: {
     color: colors.textMuted,
@@ -315,10 +374,12 @@ const styles = StyleSheet.create({
   },
   targetText: {
     color: colors.cyan,
-    fontSize: fontSize.xl,
+    fontSize: fontSize.md,
     fontWeight: '800',
     marginTop: spacing.xs,
     textTransform: 'uppercase',
+    textAlign: 'center',
+    lineHeight: 20,
   },
   controls: {
     flexDirection: 'row',
@@ -330,13 +391,13 @@ const styles = StyleSheet.create({
   flipButton: {
     width: 60,
     height: 60,
-    backgroundColor: 'rgba(15, 23, 42, 0.8)',
+    backgroundColor: 'rgba(16, 22, 24, 0.82)',
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
   },
   testButton: {
-    backgroundColor: 'rgba(139, 92, 246, 0.8)',
+    backgroundColor: 'rgba(97, 175, 189, 0.82)',
     borderWidth: 1,
     borderColor: colors.cyan,
   },

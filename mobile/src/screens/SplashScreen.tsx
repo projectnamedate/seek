@@ -6,7 +6,6 @@ import {
   Animated,
   Easing,
 } from 'react-native';
-import { Audio } from 'expo-av';
 import { colors, spacing, fontSize, shadows } from '../theme';
 
 interface Props {
@@ -17,26 +16,13 @@ export default function SplashScreen({ onFinish }: Props) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const textFadeAnim = useRef(new Animated.Value(0)).current;
-  const sparkleAnim = useRef(new Animated.Value(0)).current;
+  const glintAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const shutterRotateAnim = useRef(new Animated.Value(0)).current;
   const shutterScaleAnim = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
-    // Play sparkle sound
-    const playSound = async () => {
-      try {
-        const { sound } = await Audio.Sound.createAsync(
-          require('../../assets/sounds/sparkle.mp3')
-        );
-        await sound.playAsync();
-      } catch (error) {
-        console.log('[Splash] Sound error:', error);
-      }
-    };
-    playSound();
-
     // Start glow pulse loop
     Animated.loop(
       Animated.sequence([
@@ -67,14 +53,14 @@ export default function SplashScreen({ onFinish }: Props) {
     Animated.loop(
       Animated.sequence([
         Animated.timing(shutterScaleAnim, {
-          toValue: 1.05,
-          duration: 1500,
+          toValue: 1.025,
+          duration: 1800,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(shutterScaleAnim, {
-          toValue: 0.95,
-          duration: 1500,
+          toValue: 0.985,
+          duration: 1800,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -110,8 +96,8 @@ export default function SplashScreen({ onFinish }: Props) {
         friction: 8,
         useNativeDriver: true,
       }),
-      // Sparkle effect
-      Animated.timing(sparkleAnim, {
+      // Sensor glint
+      Animated.timing(glintAnim, {
         toValue: 1,
         duration: 400,
         easing: Easing.out(Easing.ease),
@@ -207,12 +193,12 @@ export default function SplashScreen({ onFinish }: Props) {
         <Text style={styles.logo}>SEEK</Text>
         <Animated.View
           style={[
-            styles.sparkle,
+            styles.glint,
             {
-              opacity: sparkleAnim,
+              opacity: glintAnim,
               transform: [
                 {
-                  scale: sparkleAnim.interpolate({
+                  scale: glintAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [0.5, 1],
                   }),
@@ -221,7 +207,7 @@ export default function SplashScreen({ onFinish }: Props) {
             },
           ]}
         >
-          <Text style={styles.sparkleIcon}>✦</Text>
+          <View style={styles.signalGlintCore} />
         </Animated.View>
       </Animated.View>
 
@@ -248,15 +234,15 @@ export default function SplashScreen({ onFinish }: Props) {
         </View>
         <View style={styles.stepContainer}>
           <Text style={styles.stepNumber}>4</Text>
-          <Text style={styles.stepText}>Earn 2x your entry!</Text>
+          <Text style={styles.stepText}>Settle rewards on Solana</Text>
         </View>
         </View>
       </Animated.View>
 
       {/* Credits */}
       <Animated.View style={[styles.creditsContainer, { opacity: textFadeAnim }]}>
-        <Text style={styles.createdBy}>Created by Projectname_date</Text>
-        <Text style={styles.poweredBy}>Powered by Solana</Text>
+        <Text style={styles.createdBy}>Created by Projectnamedate LLC</Text>
+        <Text style={styles.poweredBy}>Built for Solana Mobile</Text>
       </Animated.View>
     </Animated.View>
   );
@@ -288,7 +274,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    backgroundColor: 'rgba(0, 240, 255, 0.03)',
+    backgroundColor: 'rgba(97, 175, 189, 0.04)',
   },
   shutterBladeGroup: {
     position: 'absolute',
@@ -305,7 +291,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.cyan,
     opacity: 0.25,
     borderWidth: 1,
-    borderColor: 'rgba(0, 240, 255, 0.4)',
+    borderColor: 'rgba(207, 230, 228, 0.24)',
   },
   shutterAperture: {
     width: 36,
@@ -315,7 +301,7 @@ const styles = StyleSheet.create({
     borderColor: colors.cyan,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(15, 23, 42, 0.9)',
+    backgroundColor: 'rgba(16, 22, 24, 0.92)',
     ...shadows.glow(colors.cyan),
   },
   shutterApertureInner: {
@@ -332,7 +318,7 @@ const styles = StyleSheet.create({
     height: 166,
     borderRadius: 83,
     borderWidth: 1,
-    borderColor: 'rgba(0, 240, 255, 0.2)',
+    borderColor: 'rgba(207, 230, 228, 0.18)',
   },
   logoContainer: {
     position: 'relative',
@@ -344,14 +330,18 @@ const styles = StyleSheet.create({
     letterSpacing: 12,
     ...shadows.glow(colors.cyan),
   },
-  sparkle: {
+  glint: {
     position: 'absolute',
     top: -10,
     right: -20,
   },
-  sparkleIcon: {
-    fontSize: 24,
-    color: colors.cyanLight,
+  signalGlintCore: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: colors.frost,
+    backgroundColor: 'rgba(97, 175, 189, 0.22)',
   },
   tagline: {
     fontSize: fontSize.lg,

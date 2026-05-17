@@ -25,6 +25,22 @@ test('parses ProgramData account with active upgrade authority', () => {
   const authority = new PublicKey(
     'Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr'
   );
+  const data = Buffer.alloc(45);
+  data.writeUInt32LE(3, 0);
+  data.writeBigUInt64LE(42n, 4);
+  data.writeUInt8(1, 12);
+  authority.toBuffer().copy(data, 13);
+
+  assert.equal(
+    parseProgramDataUpgradeAuthority(data)?.toBase58(),
+    authority.toBase58()
+  );
+});
+
+test('parses legacy ProgramData account with u32 option tag', () => {
+  const authority = new PublicKey(
+    'Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr'
+  );
   const data = Buffer.alloc(48);
   data.writeUInt32LE(3, 0);
   data.writeBigUInt64LE(42n, 4);
@@ -38,10 +54,10 @@ test('parses ProgramData account with active upgrade authority', () => {
 });
 
 test('returns null for immutable ProgramData account', () => {
-  const data = Buffer.alloc(16);
+  const data = Buffer.alloc(13);
   data.writeUInt32LE(3, 0);
   data.writeBigUInt64LE(42n, 4);
-  data.writeUInt32LE(0, 12);
+  data.writeUInt8(0, 12);
 
   assert.equal(parseProgramDataUpgradeAuthority(data), null);
 });

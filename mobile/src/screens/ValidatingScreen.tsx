@@ -22,10 +22,10 @@ type Props = {
 
 // Validation stages for visual feedback
 const STAGES = [
-  { key: 'upload', text: 'Uploading photo...', icon: '📤' },
-  { key: 'meta', text: 'Checking metadata...', icon: '🔍' },
-  { key: 'ai', text: 'AI analyzing image...', icon: '🤖' },
-  { key: 'verify', text: 'Verifying target match...', icon: '✅' },
+  { key: 'upload', text: 'Uploading photo...', code: '01' },
+  { key: 'meta', text: 'Checking metadata...', code: '02' },
+  { key: 'ai', text: 'AI analyzing image...', code: '03' },
+  { key: 'verify', text: 'Verifying target match...', code: '04' },
 ];
 
 export default function ValidatingScreen({ navigation, route }: Props) {
@@ -56,13 +56,15 @@ export default function ValidatingScreen({ navigation, route }: Props) {
     Animated.loop(
       Animated.sequence([
         Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1000,
+          toValue: 1.035,
+          duration: 1400,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
-          duration: 1000,
+          duration: 1400,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ])
@@ -98,10 +100,11 @@ export default function ValidatingScreen({ navigation, route }: Props) {
       }).start();
 
       try {
-        // Auth headers are required; without a wallet address, /submit will 401.
-        const authOptions = wallet.fullAddress
-          ? { signMessage, walletAddress: wallet.fullAddress }
-          : undefined;
+        const authOptions = bounty.submitToken
+          ? { submitToken: bounty.submitToken, walletAddress: wallet.fullAddress || undefined }
+          : wallet.fullAddress
+            ? { signMessage, walletAddress: wallet.fullAddress }
+            : undefined;
         const result = await apiService.submitPhoto(bounty.id, photoUri, attestation, authOptions);
 
         if (!isMounted) return;
@@ -121,6 +124,9 @@ export default function ValidatingScreen({ navigation, route }: Props) {
           bounty: {
             ...bounty,
             status: result.validation?.isValid ? 'won' : 'lost',
+            bountyPda: result.bountyPda || result.validation?.bountyPda || bounty.bountyPda,
+            challengeEndsAt: result.challengeEndsAt || result.validation?.challengeEndsAt,
+            resolutionTransactionSignature: result.transactionSignature || result.validation?.transactionSignature,
           },
           validation: result.validation || {
             isValid: false,
@@ -194,7 +200,14 @@ export default function ValidatingScreen({ navigation, route }: Props) {
         {/* Target being verified */}
         <View style={styles.targetInfo}>
           <Text style={styles.targetLabel}>Verifying:</Text>
-          <Text style={styles.targetText}>{bounty.target}</Text>
+          <Text
+            style={styles.targetText}
+            numberOfLines={3}
+            adjustsFontSizeToFit
+            minimumFontScale={0.58}
+          >
+            {bounty.target}
+          </Text>
         </View>
 
         {/* Spinner */}
@@ -222,9 +235,23 @@ export default function ValidatingScreen({ navigation, route }: Props) {
                 index < currentStage && styles.stageComplete,
               ]}
             >
-              <Text style={styles.stageIcon}>
-                {index < currentStage ? '✓' : stage.icon}
-              </Text>
+              <View
+                style={[
+                  styles.stageCode,
+                  index <= currentStage && styles.stageCodeActive,
+                  index < currentStage && styles.stageCodeComplete,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.stageCodeText,
+                    index <= currentStage && styles.stageCodeTextActive,
+                    index < currentStage && styles.stageCodeTextComplete,
+                  ]}
+                >
+                  {index < currentStage ? 'OK' : stage.code}
+                </Text>
+              </View>
               <Text
                 style={[
                   styles.stageText,
@@ -286,7 +313,7 @@ const styles = StyleSheet.create({
   },
   photoOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(139, 92, 246, 0.1)',
+    backgroundColor: 'rgba(16, 40, 44, 0.18)',
     overflow: 'hidden',
   },
   scanLine: {
@@ -300,6 +327,7 @@ const styles = StyleSheet.create({
   targetInfo: {
     marginTop: spacing.xl,
     alignItems: 'center',
+    paddingHorizontal: spacing.lg,
   },
   targetLabel: {
     color: colors.textMuted,
@@ -307,10 +335,12 @@ const styles = StyleSheet.create({
   },
   targetText: {
     color: colors.cyan,
-    fontSize: fontSize.xl,
+    fontSize: fontSize.md,
     fontWeight: '700',
     textTransform: 'uppercase',
     marginTop: spacing.xs,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   spinnerContainer: {
     marginTop: spacing.xxl,
@@ -321,7 +351,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    borderWidth: 4,
+    borderWidth: 3,
     borderColor: colors.cyan,
     borderTopColor: 'transparent',
     alignItems: 'center',
@@ -331,8 +361,8 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    borderWidth: 3,
-    borderColor: colors.cyan,
+    borderWidth: 2,
+    borderColor: colors.frost,
     borderBottomColor: 'transparent',
   },
   stagesContainer: {
@@ -352,9 +382,35 @@ const styles = StyleSheet.create({
   stageComplete: {
     opacity: 0.7,
   },
-  stageIcon: {
-    fontSize: 20,
-    width: 30,
+  stageCode: {
+    width: 34,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.darkLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  stageCodeActive: {
+    borderColor: colors.aqua,
+    backgroundColor: 'rgba(97, 175, 189, 0.12)',
+  },
+  stageCodeComplete: {
+    borderColor: colors.frost,
+    backgroundColor: colors.frost,
+  },
+  stageCodeText: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  stageCodeTextActive: {
+    color: colors.frost,
+  },
+  stageCodeTextComplete: {
+    color: colors.dark,
   },
   stageText: {
     color: colors.textSecondary,

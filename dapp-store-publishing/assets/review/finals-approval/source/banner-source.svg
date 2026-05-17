@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600" role="img" aria-label="Seek dApp Store banner with app home screenshot">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="600" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#010101"/>
+      <stop offset="0.42" stop-color="#061c22"/>
+      <stop offset="0.7" stop-color="#092b34"/>
+      <stop offset="1" stop-color="#12383d"/>
+    </linearGradient>
+    <radialGradient id="bottomLift" cx="12%" cy="108%" r="64%">
+      <stop offset="0" stop-color="#61afbd" stop-opacity="0.34"/>
+      <stop offset="0.4" stop-color="#10282c" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#010101" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="rightAura" cx="83%" cy="45%" r="50%">
+      <stop offset="0" stop-color="#61afbd" stop-opacity="0.24"/>
+      <stop offset="0.48" stop-color="#10282c" stop-opacity="0.24"/>
+      <stop offset="1" stop-color="#010101" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="68" y1="70" x2="690" y2="494" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f6f6f5"/>
+      <stop offset="0.58" stop-color="#cfe6e4"/>
+      <stop offset="1" stop-color="#95d2e6"/>
+    </linearGradient>
+    <linearGradient id="cyanLine" x1="72" y1="0" x2="704" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#61afbd"/>
+      <stop offset="0.62" stop-color="#95d2e6"/>
+      <stop offset="1" stop-color="#61afbd" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="searchBeam" x1="430" y1="60" x2="860" y2="560" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#95d2e6" stop-opacity="0.1"/>
+      <stop offset="0.58" stop-color="#61afbd" stop-opacity="0.045"/>
+      <stop offset="1" stop-color="#010101" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="seekLensDepth" cx="50%" cy="48%" r="68%">
+      <stop offset="0" stop-color="#101618"/>
+      <stop offset="0.55" stop-color="#071314"/>
+      <stop offset="1" stop-color="#010101"/>
+    </radialGradient>
+    <filter id="screenShadow" x="-40%" y="-20%" width="180%" height="140%">
+      <feDropShadow dx="-18" dy="24" stdDeviation="26" flood-color="#000000" flood-opacity="0.5"/>
+      <feDropShadow dx="0" dy="0" stdDeviation="16" flood-color="#61afbd" flood-opacity="0.22"/>
+    </filter>
+    <clipPath id="screenClip">
+      <rect x="812" y="46" width="322" height="614" rx="34"/>
+    </clipPath>
+    <clipPath id="seekTraceClip">
+      <circle cx="256" cy="256" r="205"/>
+    </clipPath>
+    <path id="seekTraceSeparator" d="M256 56C334 67 398 126 416 202C399 249 361 282 314 298"/>
+    <path id="seekTraceOpening" d="M314 214L326 277L270 326L207 303L188 239L242 184Z"/>
+    <symbol id="seekIrisTrace" viewBox="0 0 512 512">
+      <circle cx="256" cy="256" r="236" fill="#010101"/>
+      <circle cx="256" cy="256" r="220" fill="#10282c"/>
+      <circle cx="256" cy="256" r="209" fill="url(#seekLensDepth)" stroke="#95d2e6" stroke-width="10"/>
+      <circle cx="256" cy="256" r="195" fill="none" stroke="#010101" stroke-width="10"/>
+      <g clip-path="url(#seekTraceClip)" fill="none" stroke-linecap="round">
+        <use href="#seekTraceSeparator" stroke="#cfe6e4" stroke-width="7" opacity="0.95" transform="rotate(0 256 256)"/>
+        <use href="#seekTraceSeparator" stroke="#95d2e6" stroke-width="7" opacity="0.9" transform="rotate(60 256 256)"/>
+        <use href="#seekTraceSeparator" stroke="#61afbd" stroke-width="7" opacity="0.85" transform="rotate(120 256 256)"/>
+        <use href="#seekTraceSeparator" stroke="#cfe6e4" stroke-width="7" opacity="0.95" transform="rotate(180 256 256)"/>
+        <use href="#seekTraceSeparator" stroke="#95d2e6" stroke-width="7" opacity="0.9" transform="rotate(240 256 256)"/>
+        <use href="#seekTraceSeparator" stroke="#61afbd" stroke-width="7" opacity="0.85" transform="rotate(300 256 256)"/>
+      </g>
+      <use href="#seekTraceOpening" fill="#f6f6f5"/>
+    </symbol>
+  </defs>
+
+  <rect width="1200" height="600" fill="url(#bg)"/>
+  <rect width="1200" height="600" fill="url(#bottomLift)"/>
+  <rect width="1200" height="600" fill="url(#rightAura)"/>
+  <path d="M0 120h1200M0 240h1200M0 360h1200M0 480h1200M0 560h1200M300 0v600M600 0v600M900 0v600" stroke="#cfe6e4" stroke-width="2" opacity="0.026"/>
+  <path d="M640 -20L782 18L632 600L488 580Z" fill="url(#searchBeam)"/>
+  <g transform="translate(-146 326) scale(0.9)" fill="none" stroke-linecap="round" opacity="0.13">
+    <circle cx="256" cy="256" r="222" stroke="#95d2e6" stroke-width="5"/>
+    <circle cx="256" cy="256" r="192" stroke="#61afbd" stroke-width="3" opacity="0.72"/>
+    <use href="#seekTraceSeparator" stroke="#cfe6e4" stroke-width="8" opacity="0.9" transform="rotate(0 256 256)"/>
+    <use href="#seekTraceSeparator" stroke="#95d2e6" stroke-width="8" opacity="0.82" transform="rotate(60 256 256)"/>
+    <use href="#seekTraceSeparator" stroke="#61afbd" stroke-width="8" opacity="0.78" transform="rotate(120 256 256)"/>
+    <use href="#seekTraceSeparator" stroke="#cfe6e4" stroke-width="8" opacity="0.9" transform="rotate(180 256 256)"/>
+    <use href="#seekTraceSeparator" stroke="#95d2e6" stroke-width="8" opacity="0.82" transform="rotate(240 256 256)"/>
+    <use href="#seekTraceSeparator" stroke="#61afbd" stroke-width="8" opacity="0.78" transform="rotate(300 256 256)"/>
+    <use href="#seekTraceOpening" stroke="#f6f6f5" stroke-width="9" stroke-linejoin="round" opacity="0.9"/>
+  </g>
+  <use href="#seekIrisTrace" x="104" y="88" width="126" height="126"/>
+  <text x="256" y="192" fill="url(#accent)" font-family="Avenir Next, Arial" font-size="124" font-weight="500" letter-spacing="-1">Seek</text>
+  <text x="104" y="306" fill="#f6f6f5" font-family="Avenir Next, Arial" font-size="50" font-weight="500" letter-spacing="0">Hunt. Capture. Win.</text>
+  <rect x="104" y="340" width="600" height="2" rx="1" fill="url(#cyanLine)" opacity="0.82"/>
+  <g filter="url(#screenShadow)">
+    <rect x="780" y="0" width="390" height="692" rx="62" fill="#010101" opacity="0.98"/>
+    <rect x="794" y="16" width="362" height="662" rx="52" fill="#10282c" stroke="#61afbd" stroke-width="2.5" opacity="0.98"/>
+    <image href="../../../screenshots/en-US/01-home.png" x="812" y="46" width="322" height="716" preserveAspectRatio="xMidYMin meet" clip-path="url(#screenClip)"/>
+    <rect x="812" y="46" width="322" height="614" rx="34" fill="none" stroke="#cfe6e4" stroke-width="1.5" opacity="0.44"/>
+  </g>
+</svg>

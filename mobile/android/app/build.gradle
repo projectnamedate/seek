@@ -3,6 +3,27 @@ apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
 def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
+def releaseKeystorePath = System.getenv('SEEK_KEYSTORE_PATH') ?: ''
+def useReleaseSigner = releaseKeystorePath != ''
+
+gradle.taskGraph.whenReady { taskGraph ->
+    def buildsReleaseArtifact = taskGraph.allTasks.any { task ->
+        def taskName = task.name.toLowerCase()
+        taskName.contains('release') && (
+            taskName.contains('assemble') ||
+            taskName.contains('bundle') ||
+            taskName.contains('package') ||
+            taskName.contains('install')
+        )
+    }
+
+    if (buildsReleaseArtifact && !useReleaseSigner) {
+        throw new GradleException(
+            'Release builds require SEEK_KEYSTORE_PATH, SEEK_KEYSTORE_PASSWORD, ' +
+            'SEEK_KEY_ALIAS, and SEEK_KEY_PASSWORD. Use debug builds for local testing.'
+        )
+    }
+}
 
 /**
  * This is the configuration block to customize your React Native Android app.
@@ -92,8 +113,8 @@ android {
         applicationId 'app.seek.mobile'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0.0"
+        versionCode 3
+        versionName "1.0.2"
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
     }
@@ -112,9 +133,8 @@ android {
         //   SEEK_KEY_ALIAS         key alias inside the keystore
         //   SEEK_KEY_PASSWORD      key passphrase
         release {
-            def keystorePath = System.getenv('SEEK_KEYSTORE_PATH')
-            if (keystorePath != null && !keystorePath.isEmpty()) {
-                storeFile file(keystorePath)
+            if (useReleaseSigner) {
+                storeFile file(releaseKeystorePath)
                 storePassword System.getenv('SEEK_KEYSTORE_PASSWORD') ?: ''
                 keyAlias System.getenv('SEEK_KEY_ALIAS') ?: 'seek'
                 keyPassword System.getenv('SEEK_KEY_PASSWORD') ?: ''
@@ -126,12 +146,11 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // If SEEK_KEYSTORE_PATH is set we use the release signer; otherwise
-            // fall back to debug so local `./gradlew assembleRelease` still works
-            // for developer testing. dApp Store submissions MUST use the release
-            // signer (debug-signed APKs are auto-rejected).
-            def useReleaseSigner = (System.getenv('SEEK_KEYSTORE_PATH') ?: '') != ''
-            signingConfig useReleaseSigner ? signingConfigs.release : signingConfigs.debug
+            // Fail closed for release artifacts. Debug-signed APKs are rejected
+            // by the Solana dApp Store, so release tasks require keystore env.
+            if (useReleaseSigner) {
+                signingConfig signingConfigs.release
+            }
             def enableShrinkResources = findProperty('android.enableShrinkResourcesInReleaseBuilds') ?: 'false'
             shrinkResources enableShrinkResources.toBoolean()
             minifyEnabled enableMinifyInReleaseBuilds

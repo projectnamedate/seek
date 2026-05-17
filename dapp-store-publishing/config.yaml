@@ -8,11 +8,11 @@
 #
 # Pipeline:
 #   npx dapp-store init                           # scaffolds this file
-#   npx dapp-store create publisher -k publisher.json
-#   npx dapp-store create app -k publisher.json
-#   npx dapp-store create release -k publisher.json
+#   npx dapp-store create publisher -k ../.secrets/dapp-store/publisher.json
+#   npx dapp-store create app -k ../.secrets/dapp-store/publisher.json
+#   npx dapp-store create release -k ../.secrets/dapp-store/publisher.json
 #   npx dapp-store publish submit \
-#       -k publisher.json \
+#       -k ../.secrets/dapp-store/publisher.json \
 #       --requestor-is-authorized \
 #       --complies-with-solana-dapp-store-policies
 #
@@ -22,16 +22,11 @@ publisher:
   # Your publisher identity (NFT owner). This keypair must stay funded with
   # ~0.5 SOL. BACK IT UP — losing it means losing control of the listing.
   #
-  # MAINNET LAUNCH BLOCKER: Replace `PLACEHOLDER_PUBLISHER_PUBKEY` with the
-  # base58 pubkey of a freshly generated publisher keypair before running
-  # `npx dapp-store create publisher`:
-  #   solana-keygen new --outfile ./publisher.json
-  #   solana-keygen pubkey ./publisher.json   # paste the result below
-  #   solana airdrop 0.5 <pubkey>             # mainnet: actually transfer 0.5 SOL
-  # Then back up `publisher.json` to 1Password (or equivalent) — losing the
-  # private key = losing the ability to publish updates forever.
-  address: PLACEHOLDER_PUBLISHER_PUBKEY
-  name: Projectnamedate
+  # Generated 2026-05-05 at `.secrets/dapp-store/publisher.json`; back it up
+  # before first submission. Losing the private key = losing the ability to
+  # publish updates forever.
+  address: Dzbqbjh8qowVK7x89vj1vo1ApUz7LNRqmR39yYXehenR
+  name: Projectnamedate LLC
   website: https://seek.mythx.art
   email: jeff@projectname.date
 
@@ -55,10 +50,6 @@ release:
     - purpose: screenshot
       uri: assets/screenshots/en-US/01-home.png
     - purpose: screenshot
-      uri: assets/screenshots/en-US/02-connect-wallet.png
-    - purpose: screenshot
-      uri: assets/screenshots/en-US/03-start-hunt.png
-    - purpose: screenshot
       uri: assets/screenshots/en-US/04-mission.png
     - purpose: screenshot
       uri: assets/screenshots/en-US/05-validation.png
@@ -70,26 +61,26 @@ release:
   catalog:
     en-US:
       name: Seek
-      short_description: Pokemon GO for crypto. Hunt real-world targets, win 2x your $SKR entry.
+      short_description: Real-world scavenger hunts on Seeker with on-chain SKR rewards.
       long_description: |
-        Seek turns your Seeker phone into a real-world treasure-hunting device.
+        Seek turns your Seeker phone into a real-world scavenger-hunt device.
 
         HOW IT WORKS
         1. Connect your Solana wallet with MWA (no browser, no extension).
-        2. Pick a tier: Easy (1000 $SKR / 3 min), Medium (2000 $SKR / 2 min), or Hard (3000 $SKR / 1 min).
+        2. Pick a tier: Easy (1000 $SKR / 3 min), Medium (3000 $SKR / 2 min), or Hard (5000 $SKR / 1 min).
         3. Pay your entry and receive a randomly-assigned target.
         4. Race the clock. Find it in the real world. Photograph it.
         5. AI (Claude Vision) verifies.
-        6. Win = claim 2x your entry. Fail = entry fuels the ecosystem.
+        6. Complete the mission = claim your return. Miss the mission = entry fuels the ecosystem.
 
         SKILL-BASED, ON-CHAIN, PHONE-NATIVE
         All bounties are on-chain transactions on Solana. Commit-reveal mission
         assignment, AI + EXIF cross-check, Seeker Genesis Token verification.
 
         ECONOMICS
-        Win: keep your entry + earn 2x more from the house pool. Jackpot:
-        1-in-500 chance on every win. Loss: 70% house / 20% jackpot / 10%
-        treasury.
+        Complete: keep your entry + earn 1x more from the reward pool.
+        Singularity pool: eligible completions can receive an additional bonus.
+        Missed mission: 70% reward pool / 20% Singularity pool / 10% treasury.
 
         BUILT FOR SEEKER
         Native MWA, .SKR name resolution, camera attestation. Can only exist
@@ -97,7 +88,9 @@ release:
 
         18+ only. Skill-based competition. Not available where skill-based
         contests with cash prizes are restricted.
-      new_in_version: Initial mainnet launch.
+      # Must be shown to the user and approved before upload. Do not mention
+      # payout math or 2x total return in this store changelog.
+      new_in_version: Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow.
       saga_features_localized: Native Mobile Wallet Adapter, .SKR name resolution, Seeker Genesis Token bonus, camera attestation.
 
 solana_mobile_dapp_publisher_portal:
@@ -108,15 +101,16 @@ solana_mobile_dapp_publisher_portal:
     real on-chain SKR; the app does NOT support a dev/test mode.
     To run a complete flow:
     1. Launch the app (age gate on first run — accept 18+)
-    2. Tap Connect Wallet → approve MWA prompt in Phantom
-    3. (Optional) verify Seeker Genesis Token if the test device holds one
-    4. Pick Easy tier (1,000 SKR) → Start Hunt → approve accept_bounty tx
+    2. Tap Connect Wallet → approve the Mobile Wallet Adapter prompt in Seeker Wallet
+    3. Seeker Genesis Token verification runs passively when the connected wallet holds one
+    4. Pick Easy tier (1,000 SKR) → Start Hunt → approve the accept_bounty tx
     5. Accept the random mission (commit-revealed by backend)
     6. Tap camera → capture any photo matching the mission target
     7. AI (Claude Vision) validates in ~3 seconds
-    8. On win: +2,000 SKR profit pays out from house pool after the 5-minute
-       challenge period. On loss: entry distributed 70/20/10 across house,
-       jackpot, treasury.
+    8. On Easy win: the completion return pays out from the house pool after
+       finalization. On missed mission: entry distributed 70/20/10 across
+       reward, Singularity, and treasury pools. Public disputes are disabled in
+       this release, so there is no extra challenge/deposit transaction.
 
     Source: github.com/projectnamedate/seek. Questions: jeff@projectname.date.
 
@@ -124,7 +118,7 @@ solana_mobile_dapp_publisher_portal:
 iarc_rating_system:
   age_rating: EIGHTEEN_PLUS
   reasons:
-    - SIMULATED_GAMBLING        # skill-based stakes
+    - SIMULATED_GAMBLING        # paid-entry skill contest rating flag
     - USER_GENERATED_CONTENT    # photos uploaded for validation
 
 # Required attestations (submit flow). Keep these as-is — the CLI injects

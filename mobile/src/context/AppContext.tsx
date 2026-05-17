@@ -31,6 +31,7 @@ interface AppContextType {
 
   // SGT verification
   sgtVerified: boolean;
+  isVerifyingSgt: boolean;
 
   // Loading states
   isLoading: boolean;
@@ -67,6 +68,7 @@ export function AppProvider({ children }: AppProviderProps) {
     lastPlayedAt: null,
   });
   const [sgtVerified, setSgtVerified] = useState(false);
+  const [isVerifyingSgt, setIsVerifyingSgt] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Mirror state into walletService singleton for non-React consumers.
@@ -92,7 +94,6 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // Track whether we've started a balance fetch to avoid duplicates
   const balanceFetchRef = useRef<string | null>(null);
-
   // Sync MWA state to wallet state
   useEffect(() => {
     if (mwa.account) {
@@ -133,17 +134,25 @@ export function AppProvider({ children }: AppProviderProps) {
     }
   }, [mwa.account, mwa.connection]);
 
-  // Auto-check SGT verification when wallet connects
+  // Passively check SGT ownership when wallet connects.
   useEffect(() => {
     const checkSGT = async () => {
       const addr = wallet.fullAddress || wallet.address;
       if (wallet.connected && addr) {
-        const cached = await sgtService.getCachedVerification();
-        if (cached.verified && cached.walletAddress === addr) {
-          setSgtVerified(true);
-        } else {
-          const status = await sgtService.checkSGTStatus(addr);
+        setIsVerifyingSgt(true);
+        try {
+          const cached = await sgtService.getCachedVerification();
+          const status = cached.verified && cached.walletAddress === addr
+            ? cached
+            : await sgtService.checkSGTStatus(addr);
           setSgtVerified(status.verified);
+          setWallet((prev) => prev.connected ? { ...prev, sgtVerified: status.verified } : prev);
+        } catch (error) {
+          if (__DEV__) console.log('[AppContext] passive SGT check failed:', error);
+          setSgtVerified(false);
+          setWallet((prev) => prev.connected ? { ...prev, sgtVerified: false } : prev);
+        } finally {
+          setIsVerifyingSgt(false);
         }
       } else {
         setSgtVerified(false);
@@ -198,6 +207,7 @@ export function AppProvider({ children }: AppProviderProps) {
     refreshStats,
     recordResult,
     sgtVerified,
+    isVerifyingSgt,
     isLoading,
   };
 

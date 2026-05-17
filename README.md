@@ -1,33 +1,33 @@
 # Seek
 
-Pokemon GO for crypto. Enter bounties with $SKR, find real-world objects, earn 2x your entry. Built for the Solana Seeker phone.
+Real-world scavenger hunts with on-chain SKR rewards. Complete missions by finding physical targets, capturing proof, and settling results on Solana Seeker.
 
 ## How It Works
 
-1. **Select Tier** - Choose your challenge level (1000/2000/3000 $SKR)
+1. **Select Tier** - Choose your challenge level (1000/3000/5000 $SKR)
 2. **Accept Bounty** - Wallet approves entry, you get a random target
 3. **Hunt** - Find the object in the real world before time runs out
 4. **Capture** - Take a photo with your camera
 5. **Validate** - AI verifies your photo is legit
-6. **Complete/Fail** - Earn 2x your entry or entry forfeited
+6. **Complete/Miss** - Earn a completion reward or miss the mission window
 
 ## The Three Tiers
 
 | Tier | Entry | Time | Difficulty | Example Bounties |
 |------|-------|------|------------|------------------|
-| 1 | 1000 $SKR | 3 min | Easy | Fire hydrant, blue car, dog |
-| 2 | 2000 $SKR | 2 min | Medium | Starbucks cup, golden retriever |
-| 3 | 3000 $SKR | 1 min | Hard | Dog jumping, person on bicycle |
+| 1 | 1000 $SKR | 3 min | Easy | Public bench, doorway number, transit stop sign |
+| 2 | 3000 $SKR | 2 min | Medium | Route map beside ticket machine, shelf price label |
+| 3 | 5000 $SKR | 1 min | Hard | Park map plus bench plus bin, station concourse combo |
 
 ## Economics
 
-**Bounty Completed (8–12% target win rate at launch):**
-- Get 3x your entry back (entry + 2x profit)
-- 1-in-500 chance to win the Singularity jackpot
+**Bounty Completed (8–12% target completion rate at launch):**
+- Get 2x total return: your entry back plus 1x net profit
+- Eligible completions can receive the Singularity bonus pool
 
 **Bounty Failed:**
 - 70% stays in house vault (funds future rewards)
-- 20% goes to Singularity jackpot pool
+- 20% goes to the Singularity bonus pool
 - 10% protocol treasury
 
 ## Tech Stack
@@ -52,7 +52,7 @@ seek/
 ├── backend/                # Node.js API server
 │   └── src/
 │       ├── config/         # Environment configuration
-│       ├── data/           # Mission pool (300 bounties)
+│       ├── data/           # Mission pool (600 bounties)
 │       ├── routes/         # API endpoints
 │       ├── services/       # Business logic
 │       │   ├── ai.service.ts       # Claude Vision validation
@@ -76,14 +76,17 @@ seek/
 
 ## Smart Contract Features
 
-- Variable entry validation (1000/2000/3000 SKR only)
-- 3x reward on success (entry returned + 2x profit from house vault)
+- Variable entry validation (1000/3000/5000 SKR only)
+- 2x total return on success (entry returned + 1x profit from house vault)
 - Automatic 70/20/10 distribution on failure
-- Singularity jackpot (1-in-500 on every completion)
+- Singularity bonus pool for eligible completions
 - Commit-reveal mission assignment (SHA-256 + random salt)
 - Player cancel after expiry + grace period (reclaim stuck funds)
-- Dispute resolution with on-chain arbitration
+- Legacy dispute/admin review instructions retained for compatibility; public
+  dispute entry is disabled in the app and backend for the current release
 - Two-step authority rotation via `propose_authority_transfer` + `accept_authority_transfer`
+- Active payout-liability reserve before accepting new hunts
+- Cold-Ledger pause/resume plus liability-safe admin withdrawals
 - Bounty account closing to reclaim rent
 - PDA-based account management
 - Event emission for real-time tracking
@@ -118,16 +121,16 @@ The app runs fully on-chain. Production is mainnet-beta by default; devnet is
 available only through the explicit devnet build/config path:
 
 1. Mobile calls `/prepare` → backend generates commitment + returns account addresses
-2. Mobile builds `accept_bounty` instruction → MWA (Phantom) signs via Solana Mobile Stack
+2. Mobile builds `accept_bounty` instruction → Seeker Wallet signs through Mobile Wallet Adapter
 3. `/start` verifies the on-chain transaction → hunt begins with timer
 4. Player finds target, takes photo → `/submit` with AI validation
 5. Backend reveals the mission, proposes the result, then the finalizer cranks
-   `finalize_bounty` after the challenge window → tokens transferred
+   `finalize_bounty` immediately while public disputes are disabled → tokens transferred
 
-**Mainnet deploy status:** the program is intentionally not deployed until the
-cold Ledger pubkey is pasted into `EXPECTED_INITIAL_AUTHORITY`; see
+**Mainnet deploy status:** the program is deployed and initialized at
+`DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v`; it remains upgradeable under
+the cold Ledger. Never deploy with `--final`. See
 [`backend/scripts/DEPLOY_MAINNET.md`](backend/scripts/DEPLOY_MAINNET.md).
-The historical devnet program is `DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v`.
 
 ```bash
 # 1. Start backend
@@ -208,12 +211,14 @@ Full audit trail in [`tasks/audit-2026-04-22.md`](tasks/audit-2026-04-22.md)
 - [x] Commit-reveal mission assignment (prevents front-running)
 - [x] Two-step authority transfer (propose → accept, prevents typo-induced loss)
 - [x] Hot/cold authority split (backend-held `hot_authority` scoped to reveal + propose only; cold `authority` for admin ops + treasury)
-- [x] 300-second challenge window with optimistic resolve + dispute stake
+- [x] Public disputes disabled for launch; optimistic results finalize immediately
+  once proposed
 - [x] Player `cancel_bounty` after expiry + 1h grace period
-- [x] Dispute accounting with proper loss distribution
+- [x] Legacy dispute/admin accounting retained for compatibility, not exposed in
+  the public app
 - [x] Bounty account closing (rent reclaim)
 - [x] Actual vault balance checks (not tracked balance)
-- [x] Strengthened jackpot RNG (`hash(mission_commitment || bounty_pda || slot || ts) % 500`)
+- [x] Strengthened Singularity bonus RNG (`hash(mission_commitment || bounty_pda || slot || ts) % 500`)
 - [x] Feature-gated SKR mint + decimals (mainnet 6 / devnet 9) — no accidental constant bleed
 - [x] Per-IP rate limiting on `/prepare`, `/start`, `/submit`
 - [x] Magic-byte image validation + Claude Vision prompt-injection resistance

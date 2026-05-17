@@ -18,6 +18,8 @@ import idl from '../idl/seek_protocol.json';
 
 const log = childLogger('solana');
 
+const ACCEPT_BOUNTY_DISCRIMINATOR = Buffer.from([165, 37, 99, 130, 123, 244, 67, 35]);
+
 // Initialize connection (singleton)
 let connection: Connection;
 
@@ -200,7 +202,7 @@ export async function revealMissionOnChain(
 
 /**
  * Propose resolution on-chain (after AI validation)
- * Part 2 of resolution: proposes win/loss, starts challenge period
+ * Part 2 of resolution: proposes win/loss and queues finalization.
  */
 export async function proposeResolutionOnChain(
   bountyPda: string,
@@ -229,10 +231,6 @@ export async function proposeResolutionOnChain(
 /**
  * Resolve bounty on-chain (called after AI validation)
  * Full flow: reveal_mission → propose_resolution → finalize_bounty
- *
- * Note: In production with real challenge periods, finalize would be
- * called separately after the challenge period. For devnet testing,
- * we call all three in sequence.
  */
 export async function resolveBountyOnChain(
   bountyPda: string,
@@ -240,20 +238,19 @@ export async function resolveBountyOnChain(
   success: boolean,
   missionIdBytes?: Buffer,
   salt?: Buffer
-): Promise<{ signature: string; singularityWon?: boolean }> {
+): Promise<{ signature: string; challengeEndsAt: number; singularityWon?: boolean }> {
   try {
     // Step 1: Reveal mission (if mission bytes provided)
     if (missionIdBytes && salt) {
       await revealMissionOnChain(bountyPda, missionIdBytes, salt);
     }
 
-    // Step 2: Propose resolution (starts challenge period)
+    // Step 2: Propose resolution.
     const proposeSig = await proposeResolutionOnChain(bountyPda, success);
 
-    // Step 3: Queue finalization durably (awaited Redis persist) for after the
-    // challenge period. Must mirror the on-chain CHALLENGE_PERIOD const
-    // (mainnet: 300s, devnet: 10s). If this throws, we have a stuck on-chain
-    // bounty — Sentry will capture and the on-chain reconciler picks it up.
+    // Step 3: Queue finalization durably (awaited Redis persist). With public
+    // disputes disabled, this should be immediate and must mirror the on-chain
+    // CHALLENGE_PERIOD const.
     const challengeEndsAt = Math.floor(Date.now() / 1000) + config.protocol.challengePeriodSeconds;
     await queueFinalization(bountyPda, playerWallet, challengeEndsAt);
 
@@ -261,6 +258,7 @@ export async function resolveBountyOnChain(
 
     return {
       signature: proposeSig,
+      challengeEndsAt,
       singularityWon: false, // Will be determined at finalization
     };
   } catch (error: any) {
@@ -316,7 +314,7 @@ export async function getHouseVaultBalance(): Promise<bigint> {
 }
 
 /**
- * Get singularity vault balance (jackpot pool - real on-chain query)
+ * Get singularity vault balance (bonus pool - real on-chain query)
  */
 export async function getSingularityVaultBalance(): Promise<bigint> {
   const conn = getConnection();
@@ -369,10 +367,25 @@ export async function getBountyOnChain(bountyPda: string): Promise<any> {
  *   3. The bountyPda appears in the instruction's account list
  *   4. The expectedPlayer's pubkey appears in the instruction's account list
  */
+function getInstructionData(ix: any): Buffer {
+  if (Buffer.isBuffer(ix.data)) return ix.data;
+  if (ix.data instanceof Uint8Array) return Buffer.from(ix.data);
+  if (Array.isArray(ix.data)) return Buffer.from(ix.data);
+  if (typeof ix.data === 'string') {
+    try {
+      return Buffer.from(bs58.decode(ix.data));
+    } catch {
+      return Buffer.alloc(0);
+    }
+  }
+  return Buffer.alloc(0);
+}
+
 export async function verifyTransaction(
   signature: string,
   expectedPlayer: string,
   expectedBountyPda: string,
+  expectedDiscriminator: Buffer = ACCEPT_BOUNTY_DISCRIMINATOR,
 ): Promise<boolean> {
   try {
     const conn = getConnection();
@@ -397,7 +410,17 @@ export async function verifyTransaction(
     const seekIxFound = instructions.some((ix: any) => {
       const programIdIndex = ix.programIdIndex;
       const ixProgram = accountStrings[programIdIndex];
-      return ixProgram === programIdStr;
+      if (ixProgram !== programIdStr) return false;
+
+      const ixAccountIndexes = ix.accountKeyIndexes ?? ix.accounts ?? [];
+      const ixAccountStrings = ixAccountIndexes.map((i: number) => accountStrings[i]);
+      if (ixAccountStrings.length > 0) {
+        if (!ixAccountStrings.includes(expectedPlayer)) return false;
+        if (!ixAccountStrings.includes(expectedBountyPda)) return false;
+      }
+
+      const data = getInstructionData(ix);
+      return data.subarray(0, 8).equals(expectedDiscriminator);
     });
 
     return seekIxFound;

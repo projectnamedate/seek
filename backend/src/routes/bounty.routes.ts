@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
+import { randomBytes } from 'crypto';
 import {
   ApiResponse,
   StartBountyResponse,
@@ -21,21 +22,36 @@ import {
   getMissionSecrets,
   storePreparedBounty,
   getPreparedBounty,
+  getPreparedBountyById,
   acquireWalletLock,
   releaseWalletLock,
   acquireBountyLock,
   releaseBountyLock,
+  issueBountySubmitToken,
+  verifyBountySubmitToken,
 } from '../services/bounty.service';
 import { extractExifMetadata, formatMetadata } from '../services/exif.service';
-import { validatePhoto, isValidImageFormat, checkImageSize } from '../services/ai.service';
-import { resolveBountyOnChain, generateMissionCommitment, formatSkr, getCurrentSlotAndTimestamp, deriveBountyPda, verifyTransaction } from '../services/solana.service';
+import { validatePhoto, isValidImageFormat, checkImageSize, canApplySgtConfidenceBonus } from '../services/ai.service';
+import {
+  deriveBountyPda,
+  formatSkr,
+  generateMissionCommitment,
+  getCurrentSlotAndTimestamp,
+  resolveBountyOnChain,
+  verifyTransaction,
+} from '../services/solana.service';
+import { getFinalizerSafetyPause } from '../services/finalizer.service';
 import { getRandomMission } from '../data/missions';
 import { PublicKey } from '@solana/web3.js';
-import { isWalletSGTVerified } from '../services/sgt.service';
-import { attestationService, AttestationPayload } from '../services/attestation.service';
-import { reserveWalletDailyBounty } from '../services/wallet-bounty-limit.service';
+import { isWalletSGTVerified, verifySGTOwnershipForWallet } from '../services/sgt.service';
+import {
+  attestationService,
+  AttestationPayload,
+  mergeAttestationMetadata,
+} from '../services/attestation.service';
+import { getWalletDailyBountyStatus, reserveWalletDailyBounty } from '../services/wallet-bounty-limit.service';
 import { validate } from '../middleware/validate.middleware';
-import { requireWalletAuth } from '../middleware/auth.middleware';
+import { verifyWalletAuthRequest } from '../middleware/auth.middleware';
 import { bountyPrepareLimiter, bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
 import { childLogger } from '../services/logger.service';
 import { config } from '../config';
@@ -61,11 +77,13 @@ const startBountySchema = z.object({
   playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address (base58, 32-44 chars)'),
   bountyPda: z.string().regex(base58Pattern, 'Invalid PDA address (base58, 32-44 chars)'),
   transactionSignature: z.string().optional(),
+  prepareId: z.string().min(32).max(128).optional(),
 });
 
 const submitPhotoSchema = z.object({
   bountyId: z.string().uuid('Invalid bounty ID format'),
-  playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address'),
+  playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address').optional(),
+  submitToken: z.string().min(32).max(128).optional(),
 });
 
 // Prepare bounty schema (pre-transaction)
@@ -79,12 +97,27 @@ const prepareBountySchema = z.object({
  * Prepare a bounty before on-chain transaction.
  * Returns commitment, timestamp, and bountyPda for the mobile client
  * to build the accept_bounty transaction.
- * Wallet-auth required to prevent targeted PDA-poisoning DoS by anonymous callers.
+ * Anonymous by design: the on-chain accept_bounty transaction in /start is the
+ * wallet authorization. The prepareId prevents anonymous PDA-poisoning from
+ * overwriting another client's prepared commitment.
  */
-router.post('/prepare', bountyPrepareLimiter, requireWalletAuth('prepare'), validate(prepareBountySchema), async (req: Request, res: Response) => {
+router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), async (req: Request, res: Response) => {
   try {
-    const { tier } = req.body as { tier: Tier };
-    const playerWallet = (req as any).verifiedWallet as string;
+    const { tier, playerWallet } = req.body as { tier: Tier; playerWallet: string };
+
+    const finalizerPause = await getFinalizerSafetyPause();
+    if (finalizerPause.paused) {
+      return res.status(503).json({
+        success: false,
+        error: 'Bounty starts are temporarily paused while settlement catches up',
+        data: {
+          reason: finalizerPause.reason,
+          retryAt: finalizerPause.until
+            ? new Date(finalizerPause.until * 1000).toISOString()
+            : null,
+        },
+      });
+    }
 
     // Check for existing active bounty
     const existing = await getPlayerActiveBounty(playerWallet);
@@ -95,7 +128,7 @@ router.post('/prepare', bountyPrepareLimiter, requireWalletAuth('prepare'), vali
       });
     }
 
-    const dailyLimit = await reserveWalletDailyBounty(playerWallet);
+    const dailyLimit = await getWalletDailyBountyStatus(playerWallet);
     if (!dailyLimit.allowed) {
       return res.status(429).json({
         success: false,
@@ -110,16 +143,18 @@ router.post('/prepare', bountyPrepareLimiter, requireWalletAuth('prepare'), vali
     // Get current Solana timestamp for PDA derivation
     const { timestamp } = await getCurrentSlotAndTimestamp();
 
-    // Pick a random mission and generate commitment
+    // Pick the mission and generate commitment.
     const mission = getRandomMission(tier);
     const { commitment, missionIdBytes, salt } = generateMissionCommitment(mission.id);
 
     // Derive bounty PDA
     const playerPubkey = new PublicKey(playerWallet);
     const [bountyPda] = deriveBountyPda(playerPubkey, timestamp);
+    const prepareId = randomBytes(32).toString('hex');
 
     // Store prepared bounty data (keyed by bountyPda) so /start can retrieve it
     await storePreparedBounty(bountyPda.toBase58(), {
+      prepareId,
       tier,
       playerWallet,
       timestamp: Number(timestamp),
@@ -137,6 +172,7 @@ router.post('/prepare', bountyPrepareLimiter, requireWalletAuth('prepare'), vali
       success: true,
       data: {
         commitment: Array.from(commitment),
+        prepareId,
         timestamp: Number(timestamp),
         bountyPda: bountyPda.toBase58(),
         entryAmount: Number(ENTRY_AMOUNTS[tier]),
@@ -161,7 +197,7 @@ router.post('/prepare', bountyPrepareLimiter, requireWalletAuth('prepare'), vali
 // auth would be 3 prompts). The on-chain tx is stronger proof anyway.
 router.post('/start', bountyStartLimiter, validate(startBountySchema), async (req: Request, res: Response) => {
   try {
-    const { tier, bountyPda, transactionSignature, playerWallet } = req.body;
+    const { tier, bountyPda, transactionSignature, playerWallet, prepareId } = req.body;
 
     // Acquire per-wallet lock (Redis-backed; multi-instance safe)
     if (!(await acquireWalletLock(playerWallet))) {
@@ -198,18 +234,33 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
-    // Check SGT verification status (Redis-backed; falls back to in-memory cache)
-    const sgtResult = await isWalletSGTVerified(playerWallet);
+    // Check SGT verification status. If the passive home-screen check has not
+    // populated the cache yet, read Token-2022 ownership directly here. This
+    // route is already bound to an on-chain accept_bounty from the same wallet.
+    const cachedSgtResult = await isWalletSGTVerified(playerWallet);
+    const sgtResult = cachedSgtResult?.verified
+      ? cachedSgtResult
+      : await verifySGTOwnershipForWallet(playerWallet);
     const sgtVerified = sgtResult?.verified || false;
 
-    // Try to use prepared bounty data (from /prepare endpoint)
-    const prepared = await getPreparedBounty(bountyPda);
+    // Try to use prepared bounty data (from /prepare endpoint). New clients send
+    // prepareId so anonymous callers cannot poison a wallet+bountyPda record.
+    const prepared = prepareId
+      ? await getPreparedBountyById(prepareId)
+      : await getPreparedBounty(bountyPda);
 
     if (!prepared) {
       // No prepared data means commitment mismatch — reject
       return res.status(400).json({
         success: false,
         error: 'No prepared bounty data found. Call /prepare first.',
+      } as ApiResponse<never>);
+    }
+
+    if (prepared.bountyPda && prepared.bountyPda !== bountyPda) {
+      return res.status(403).json({
+        success: false,
+        error: 'Prepared bounty ID does not match requested bounty',
       } as ApiResponse<never>);
     }
 
@@ -232,6 +283,18 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
+    const dailyLimit = await reserveWalletDailyBounty(playerWallet);
+    if (!dailyLimit.allowed) {
+      return res.status(429).json({
+        success: false,
+        error: 'Daily bounty limit reached',
+        data: {
+          limit: dailyLimit.limit,
+          resetAt: dailyLimit.resetAt.toISOString(),
+        },
+      });
+    }
+
     // Create bounty using the prepared mission (not a new random one)
     const { bounty, missionDescription } = await createBounty(
       playerWallet,
@@ -244,6 +307,8 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
 
     // Store prepared mission secrets (must match on-chain commitment)
     await storeMissionSecrets(bounty.id, prepared.missionIdBytes, prepared.salt);
+    const submitTokenTtl = Math.ceil((bounty.expiresAt.getTime() - Date.now()) / 1000) + 10 * 60;
+    const submitToken = await issueBountySubmitToken(bounty.id, bounty.playerWallet, submitTokenTtl);
 
     // Return response
     const response: StartBountyResponse = {
@@ -254,6 +319,7 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       },
       expiresAt: bounty.expiresAt.toISOString(),
       bountyPda: bounty.bountyPda,
+      submitToken,
     };
 
     log.info({ bountyId: bounty.id, tier, missionDescription }, 'bounty started');
@@ -278,7 +344,7 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
  * POST /api/bounty/submit
  * Submit a photo for validation
  */
-router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalletAuth('submit'), async (req: Request, res: Response) => {
+router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: Request, res: Response) => {
   try {
     // Validate required fields
     const parsed = submitPhotoSchema.safeParse(req.body);
@@ -289,8 +355,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
       } as ApiResponse<never>);
     }
 
-    const { bountyId } = parsed.data;
-    const submitterWallet = (req as any).verifiedWallet as string;
+    const { bountyId, submitToken } = parsed.data;
 
     // Acquire per-bounty lock (Redis-backed; multi-instance safe)
     if (!(await acquireBountyLock(bountyId))) {
@@ -335,8 +400,31 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
       } as ApiResponse<never>);
     }
 
-    // Verify the wallet owns this bounty
-    if (bounty.playerWallet !== submitterWallet) {
+    const tokenAuthorized = submitToken
+      ? await verifyBountySubmitToken(bountyId, submitToken, bounty.playerWallet)
+      : false;
+
+    let walletAuthorized = false;
+    if (!tokenAuthorized) {
+      const walletAuth = await verifyWalletAuthRequest(req, 'submit');
+      if (walletAuth.ok) {
+        walletAuthorized = walletAuth.walletAddress === bounty.playerWallet;
+      } else if (!req.headers['x-wallet-address']) {
+        return res.status(401).json({
+          success: false,
+          error: 'Missing submit token',
+        } as ApiResponse<never>);
+      } else {
+        return res.status(walletAuth.status).json({
+          success: false,
+          error: walletAuth.error,
+        } as ApiResponse<never>);
+      }
+    }
+
+    // Verify this client is authorized for this bounty. New app builds use the
+    // submit token issued by /start; old builds can still fall back to wallet auth.
+    if (!tokenAuthorized && !walletAuthorized) {
       return res.status(403).json({
         success: false,
         error: 'Wallet does not own this bounty',
@@ -389,6 +477,10 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
     if (attestationResult.confidence !== 'none') {
       log.info({ type: attestationResult.type, confidence: attestationResult.confidence, integrity: attestationResult.photoIntegrity }, 'attestation');
     }
+    const validationMetadata = mergeAttestationMetadata(metadata, attestationPayload, attestationResult);
+    if (validationMetadata !== metadata) {
+      log.info({ metadata: formatMetadata(validationMetadata), source: validationMetadata.source }, 'merged attestation metadata');
+    }
 
     // Log attestation integrity (hard rejection disabled until TEE SDK ships —
     // standard hash check is unreliable across device camera pipelines)
@@ -406,13 +498,17 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
       req.file.buffer,
       req.file.mimetype,
       mission,
-      metadata,
+      validationMetadata,
       bounty.tier,
       bounty.createdAt
     );
 
     // Apply SGT bonus: lower the confidence threshold for verified Seeker users
-    if (bounty.sgtVerified && !validation.isValid) {
+    if (
+      bounty.sgtVerified &&
+      !validation.isValid &&
+      canApplySgtConfidenceBonus(validation)
+    ) {
       const baseThreshold = TIER_CONFIDENCE_THRESHOLDS[bounty.tier];
       const sgtBonus = config.sgt.bonusConfidenceReduction;
       const adjustedThreshold = baseThreshold - sgtBonus;
@@ -428,7 +524,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
     // Resolve on-chain
     const success = validation.isValid;
     const secrets = await getMissionSecrets(bountyId);
-    const { signature, singularityWon } = await resolveBountyOnChain(
+    const { signature, challengeEndsAt, singularityWon } = await resolveBountyOnChain(
       bounty.bountyPda,
       bounty.playerWallet,
       success,
@@ -437,17 +533,24 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
     );
 
     // Update bounty status
-    await updateBountyStatus(bountyId, success ? 'won' : 'lost', signature);
+    await updateBountyStatus(
+      bountyId,
+      success ? 'won' : 'lost',
+      signature,
+      new Date(challengeEndsAt * 1000),
+    );
 
     // Build response
     const response: SubmitPhotoResponse = {
       status: success ? 'won' : 'lost',
       validation,
       transactionSignature: signature,
+      bountyPda: bounty.bountyPda,
+      challengeEndsAt,
     };
 
     if (success) {
-      response.payout = formatSkr(bounty.entryAmount * 3n);
+      response.payout = formatSkr(bounty.entryAmount * 2n);
       response.singularityWon = singularityWon;
 
       if (singularityWon) {
@@ -471,6 +574,18 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), requireWalle
       error: 'Internal server error',
     } as ApiResponse<never>);
   }
+});
+
+/**
+ * POST /api/bounty/dispute
+ * Public disputes are disabled for the current release. Keep the endpoint
+ * fail-closed so older clients do not submit a paid dispute transaction.
+ */
+router.post('/dispute', bountySubmitLimiter, async (_req: Request, res: Response) => {
+  return res.status(410).json({
+    success: false,
+    error: 'Public disputes are disabled in this release',
+  } as ApiResponse<never>);
 });
 
 /**
@@ -498,6 +613,10 @@ router.get('/:id', async (req: Request, res: Response) => {
         expiresAt: bounty.expiresAt.toISOString(),
         isExpired: isBountyExpired(bounty),
         transactionSignature: bounty.transactionSignature,
+        bountyPda: bounty.bountyPda,
+        challengeEndsAt: bounty.challengeEndsAt?.toISOString() ?? null,
+        disputeTransactionSignature: bounty.disputeTransactionSignature ?? null,
+        disputedAt: bounty.disputedAt?.toISOString() ?? null,
       },
     });
   } catch (error) {
@@ -531,6 +650,8 @@ router.get('/player/:wallet', async (req: Request, res: Response) => {
         tier: bounty.tier,
         expiresAt: bounty.expiresAt.toISOString(),
         remainingSeconds: Math.max(0, Math.floor((bounty.expiresAt.getTime() - Date.now()) / 1000)),
+        bountyPda: bounty.bountyPda,
+        challengeEndsAt: bounty.challengeEndsAt?.toISOString() ?? null,
       },
     });
   } catch (error) {

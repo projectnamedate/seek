@@ -1,7 +1,7 @@
 # Seek Roadmap
 
-**Current phase:** mainnet prep → mainnet launch → Solana dApp Store.
-**Snapshot date:** 2026-05-01.
+**Current phase:** live dApp Store -> v1.0.2 official-store smoke.
+**Snapshot date:** 2026-05-17.
 **Timeline target:** 2-week solid launch.
 **Founder/operator:** Jeff (solo). Ledger hot/cold split. External audit skipped.
 
@@ -18,14 +18,15 @@ turned out to be red on every push until 2026-04-27 (see Phase B9 below) —
 roadmap previously misclaimed "green" without actually checking the runs.
 
 ### Contract (`contracts/programs/seek-protocol/`)
-- [x] Feature-gated SKR_MINT + SKR_DECIMALS + CHALLENGE_PERIOD (mainnet default, `--features devnet` for devnet)
-- [x] TIER_*_ENTRY derived from DECIMALS_MULTIPLIER → 1000 SKR = 10⁶ base units on mainnet (was 10¹² — bug)
+- [x] Feature-gated SKR_MINT + SKR_DECIMALS; public-release `CHALLENGE_PERIOD`
+  is zero on mainnet/devnet while public disputes are disabled
+- [x] TIER_*_ENTRY derived from DECIMALS_MULTIPLIER → 1000/3000/5000 SKR use 10⁶ base units on mainnet (was 10¹² — bug)
 - [x] All `msg!` divisors use `DECIMALS_MULTIPLIER` (14 call sites)
 - [x] `GlobalState` extended with `hot_authority` + `pending_authority`; SIZE bumped 193 → 257
 - [x] Two-step authority transfer: `propose_authority_transfer` + `accept_authority_transfer` + `cancel_authority_transfer`
 - [x] Hot/cold auth split: `reveal_mission` + `propose_resolution` now sign with `hot_authority`; admin ops still cold
 - [x] `set_hot_authority` (cold-signed rotation)
-- [x] Strengthened jackpot RNG — `hash(mission_commitment || bounty_pda || slot || timestamp) % 500`
+- [x] Strengthened Singularity bonus RNG — `hash(mission_commitment || bounty_pda || slot || timestamp) % 500`
 - [x] `get_tier_duration` returns `Result` with error on unknown tier
 - [x] 19 client-side unit tests (PDA derivations, decimals math, commit-reveal hash, IDL integrity)
 
@@ -48,7 +49,8 @@ roadmap previously misclaimed "green" without actually checking the runs.
 - [x] `.env.example` rewritten with mainnet defaults
 
 ### Mobile (`mobile/`)
-- [x] `NETWORK` toggle in `src/config/index.ts` drives SKR mint + decimals + challenge period
+- [x] `NETWORK` toggle in `src/config/index.ts` drives SKR mint + decimals;
+  finalization delay is zero while public disputes are disabled
 - [x] `App.tsx` follows NETWORK (was hardcoded devnet)
 - [x] @sentry/react-native JS init wired (native wizard is user-run)
 - [x] Release keystore signing in `android/app/build.gradle` reads from `SEEK_KEYSTORE_*` env vars
@@ -79,10 +81,20 @@ roadmap previously misclaimed "green" without actually checking the runs.
 
 ---
 
-## Phase B — User-gated actions (🔴 BLOCKED ON USER)
+## Phase B — User-gated actions (✅ LIVE; UPGRADE-FIRST PATCH NEXT)
 
-These items need user hardware/funds/decisions. Work queued; once unblocked
-I can execute each in ≤10 minutes except the deploy itself.
+The on-chain hardware/funding actions, Railway/Redis/backend DNS, legal site,
+Publisher Portal app setup, API-key submission, and dApp Store release
+resubmission are complete. User reports the v1.0.1 dApp Store listing is live.
+The first real Solana Mobile runs exposed camera metadata, AI/provider,
+passive-SGT, public-dispute, mission-farmability, stale settlement copy, and
+payout-economics issues now tracked in `tasks/todo.md`. The previous
+mobile-first/no-upgrade path is superseded. Remaining user-gated work is the
+audited mainnet program upgrade that removes the stale finalization delay,
+changes the payout to `2x` total return, removes the success-screen settlement
+note, then another Seeker smoke before any Publisher upload. The Solana Mobile
+Store changelog must be shown to the user and approved before upload, and it
+must not mention payout math or `2x` total return.
 
 **📋 Execution playbook:** [tasks/phase-b-execution.md](phase-b-execution.md) —
 sequenced sub-items B0-B9 with parallelization plan, hard dependencies,
@@ -102,30 +114,38 @@ authority. The signer running init must be the same Ledger.
 
 ### B1. Release keystore generation
 **Runbook:** [mobile/android/SIGNING.md](../mobile/android/SIGNING.md).
-**Needs:** `keytool` on user's laptop + 1Password backup + paper backup.
+**Status:** Generated at `.secrets/android/seek-release.keystore` with env file
+`.secrets/android/seek-release.env`; release APK signing verified by
+`apksigner`. Still needs user backup to 1Password/offline storage before any
+public submission.
 **Unblocks:** release APK builds, dApp Store submission.
 
 ### B2. Production domain — ✅ DECIDED 2026-04-23
 **Structure:** namespaced under user-owned `mythx.art`.
-- `seek.mythx.art` — marketing + legal pages (Vercel one-pager). Brand-facing URL — what wallet shows in SIWS prompt.
+- `seek.mythx.art` — marketing + legal pages on the Helsinki Mythx VPS
+  through Caddy static hosting. Brand-facing URL — what wallet shows in SIWS
+  prompt.
 - `api.seek.mythx.art` — Railway backend.
 
 **App distribution:** Seeker-exclusive via Solana Mobile dApp Store. No iOS, no general Play Store, no web build.
 
 **Done in code:** `PROD_URL`, SIWS domain/uri, MWA `identity.uri`, dApp Store config.yaml + listing copy all reference `seek.mythx.art` / `api.seek.mythx.art`.
 
-**Still TODO (user, post-deploy):**
-1. DNS: CNAME `api.seek.mythx.art` → Railway custom-domain target (Phase C step 11 gives the target).
-2. Build a one-page Vercel site at `seek.mythx.art` containing `/privacy` and `/terms` (use the in-app legal copy as the content). Optional: a brief landing/marketing section on `/`.
+**Done:** `api.seek.mythx.art` is wired to Railway and returns HTTPS 200.
+`seek.mythx.art` static site is deployed on the Mythx VPS at
+`/var/www/seek-web`; Namecheap DNS points `seek` to `204.168.242.220`; Caddy
+issued a Let's Encrypt certificate and the legal URLs return HTTPS 200.
 
 ### B3. Ledger pubkey + funding
 **Runbook:** [backend/scripts/DEPLOY_MAINNET.md](../backend/scripts/DEPLOY_MAINNET.md) § 2.
-**Needs:** Ledger with Solana app installed, ~5 SOL mainnet funded.
+**Status:** Done. Cold Ledger `GkpX...YNtY` is the protocol authority and
+program upgrade authority. Current cold SOL balance verified at
+`1.373232333 SOL`.
 **Unblocks:** mainnet program deploy, cold authority rotation.
 
 ### B4. SKR holdings for house vault
-**Plan:** ~58,824 SKR (≈ $1,000 at $0.017) starter — intentionally small (revised 2026-04-23, was $170k). Mission pool + AI thresholds tuned for 8-12% target win rate to grow this organically.
-**Needs:** user confirms SKR wallet + source (airdrop / DEX buy).
+**Plan:** ~58,824 SKR (≈ $1,000 at $0.017) starter — intentionally small (revised 2026-04-23, was $170k). Mission pool + AI thresholds tuned for 8-12% target completion rate to grow this organically.
+**Status:** User loaded the cold Seek Ledger wallet with ~58k SKR on 2026-05-05.
 **Unblocks:** `admin.ts fund 58824` after protocol init.
 
 ### B4b. Fees wallet wired + ROTATABLE (✅ 2026-04-23)
@@ -137,9 +157,22 @@ authority. The signer running init must be the same Ledger.
 - `backend/scripts/DEPLOY_MAINNET.md` — prereqs + step 6 export + step 7b rotation runbook
 - `memory/project_fees_wallet.md` + `memory/project_ledger_architecture.md`
 
+### B4c. Cold-Ledger emergency controls (✅ 2026-05-05)
+**Status:** Contract and admin CLI expose explicit public controls:
+`set_protocol_paused`, `withdraw_unreserved_house`, and
+`withdraw_singularity`. `accept_bounty` rejects new entries while paused.
+House withdrawals are capped to tracked house balance minus active payout
+liability. Singularity withdrawals require the protocol to be paused with zero
+active bounties.
+
+**CLI:** `admin.ts pause`, `admin.ts resume`,
+`admin.ts withdraw-house <amount>`, `admin.ts withdraw-singularity <amount>`.
+
 ### B5. Publisher wallet for dApp Store
 **Runbook:** [dapp-store-publishing/README.md](../dapp-store-publishing/README.md).
-**Needs:** new Solana keypair + ≥0.5 SOL mainnet + 1Password backup.
+**Status:** Generated at `.secrets/dapp-store/publisher.json`, pubkey
+`Dzbqbjh8qowVK7x89vj1vo1ApUz7LNRqmR39yYXehenR`, balance `0.11787386 SOL`
+after the v1.0.2 store submission. Top up before the next update.
 **Unblocks:** Publisher NFT mint (one-time), App NFT, Release NFT.
 
 ### B6. dApp Store visual assets
@@ -155,42 +188,47 @@ quality should not be assumed good enough for review or launch conversion.
   `https://docs.solanamobile.com/marketing/comarketing-guidelines`,
   `https://solana.com/branding/`.
   Done in `dapp-store-publishing/assets/source/brand-audit.md`.
-- [x] **Seek logo system:** create the production Seek logo/mark, app-icon
-  variant, monochrome variant, dark/light lockups, and usage notes. This should
-  be Seek-owned branding; do not misuse or recolor Solana/Solana Mobile marks.
+- [x] **Seek logo system:** iris mark, wordmark, app-icon variant, monochrome
+  variant, and dark/light lockups are soft-locked by user approval. Keep this
+  Seek-owned branding; do not misuse or recolor Solana/Solana Mobile marks.
 - [x] **New app icon:** `dapp-store-publishing/assets/icon.png`, 512x512 PNG.
-  Needs a cleaner production mark that reads at store/grid size; do not rely on
-  the hackathon-era mobile icon without a design pass.
+  Soft-locked by user approval. Do not churn unless a concrete submission issue
+  appears.
 - [x] **New required banner:** `dapp-store-publishing/assets/banner.png`,
-  1200x600 PNG/JPG. Should communicate "real-world Seeker hunt + SKR stakes"
+  1200x600 PNG/JPG. Should communicate "real-world Seeker hunt + SKR entries"
   immediately, using real app/product visuals rather than generic gradients or
-  over-weighted token/economics messaging.
-- [ ] **Screenshots/videos:** at least 4 real app screenshots/videos under
+  over-weighted token/economics messaging. `source/banner.svg` and
+  `06-dapp-store-banner-1200x600.png` use screenshot 1 as the app visual.
+  Final portal banner was accepted by user and uploaded before submission.
+- [x] **Screenshots/videos:** at least 4 app screenshots/videos under
   `dapp-store-publishing/assets/screenshots/en-US/`; images must be >=1080x1080
-  and share orientation + aspect ratio.
+  and share orientation + aspect ratio. Use
+  `dapp-store-publishing/scripts/capture-screenshot.sh` for the six planned
+  slots. 2026-05-04 submission set was captured from the disposable devnet
+  capture fork with `hammer.skr` because dApp Store submission blocks organic
+  Seeker distribution until screenshots exist. Submission config uses photos 1,
+  4, 5, and 6 only; keep all six PNGs in place for review history.
 - [x] **Optional feature graphic:** `dapp-store-publishing/assets/feature-graphic.png`,
-  1200x1200 for Editor's Choice consideration.
-- [~] **Asset QA:** verify icon legibility at small sizes, banner readability
+  1200x1200 for Editor's Choice consideration. Soft-locked by user approval.
+- [x] **Asset QA:** verify icon legibility at small sizes, banner readability
   in dark/light contexts, screenshot text fit, and contrast/accessibility before
-  running `check-assets.mjs`. Icon/banner/feature graphic dimensions pass; final
-  screenshot QA remains pending real captures.
+  running `check-assets.mjs`. Brand approval comes before screenshot/app-design
+  review; do not use generated comps or phone renders as final submission captures.
 
 **Unblocks:** `dapp-store-publishing/config.yaml` final fill + release NFT mint.
 **Guard:** `cd dapp-store-publishing && node check-assets.mjs`.
 
-### B9. seek.mythx.art marketing + legal site — 🟡 QUEUED (agency-tier build)
+### B9. seek.mythx.art marketing + legal site — ✅ LEGAL URLS LIVE
 
 **Goal:** $100k+ agency-quality landing page that makes Seek look inevitable. Awe-inspiring on first scroll. Solana Mobile Seeker brand language. Required for dApp Store policy compliance (privacy + ToS URLs must resolve to real pages).
 
-**Stack (proposed — confirm before build):**
-- Next.js 15 App Router + TypeScript + Tailwind v4
-- Framer Motion for entrance/scroll animations + Lenis for buttery smooth scroll
-- shadcn/ui primitives (only what's needed — keep bundle small)
-- Three.js / React Three Fiber if we go for a hero 3D scene (e.g. orbiting Seeker phones, particle field, generative SKR coin)
-- Vercel deploy (free tier, edge-rendered, auto SSL on `seek.mythx.art`)
+**Current stack:** Next.js App Router + TypeScript + plain CSS, exported as
+static HTML from `web/` and served by Caddy on the Helsinki Mythx VPS. Server
+files live at `/var/www/seek-web`. DNS and TLS are live for
+`seek.mythx.art`.
 
 **Pages:**
-- `/` — hero (animated headline, CTA "Get on Seeker"), live stats counter (bounties played, SKR in jackpot, biggest win), how-it-works 3-step, mission examples carousel, dApp Store badge + Seeker phone mockup, FAQ, footer
+- `/` — hero (animated headline, CTA "Get on Seeker"), live stats counter (bounties played, SKR in Singularity pool, largest reward), how-it-works 3-step, mission examples carousel, dApp Store badge + Seeker phone mockup, FAQ, footer
 - `/privacy` — privacy policy (lift in-app copy, render in clean typographic layout)
 - `/terms` — terms of service (same treatment)
 - `/license` — license page (referenced by dApp Store config `license_url` + `copyright_url`)
@@ -204,34 +242,41 @@ quality should not be assumed good enough for review or launch conversion.
 **Per CLAUDE.md global "Shipping a Website" rules — bake in from day one:**
 1. **Analytics:** `@vercel/analytics` + `@vercel/speed-insights` installed in root layout. `track()` events on: dApp Store CTA click, "Get on Seeker" CTA, scroll-past-fold, FAQ expand.
 2. **SEO:** `metadata` per route, `app/sitemap.ts`, `app/robots.ts`, OG image (1200×630) generated via `@vercel/og`, JSON-LD `Organization` + `SoftwareApplication`, canonical URLs, alt text on all images, semantic `<h1>` `<nav>` `<main>` `<article>`.
-3. **Vercel SSO:** PATCH project to clear `ssoProtection` after first deploy (per global rule — Vercel auto-applies and gates the URL behind a 401 wall otherwise).
+3. **Static hosting:** use `output: 'export'` and deploy `web/out/` to
+   `/var/www/seek-web`; no long-running Node service is required.
 
-**User needs to provide:**
-- Brand assets if any exist (logo, color palette beyond Solana defaults, screenshots — overlap with B6)
-- Final copy approval (or accept Claude-drafted copy)
-- A Vercel account + `seek.mythx.art` DNS access (I'll do the wiring once user clicks deploy)
+**User needs to provide:** final copy approval for any future marketing polish.
 
-**Effort estimate (after global rule "divide by 10"): ~30-45 min** to scaffold + ship a strong v1, longer for any custom 3D / video work.
+**Current status:** public legal URLs are live and ready for dApp Store review:
+`/privacy`, `/terms`, and `/license`.
 
-**Lives in repo:** new top-level `web/` directory — keeps it separate from `mobile/` and `backend/` and gets its own Vercel project.
+**Lives in repo:** new top-level `web/` directory — separate from `mobile/` and
+`backend/`.
 
 ---
 
-### B7. Mission pool difficulty audit — ✅ COMPLETE 2026-04-23
+### B7. Mission pool difficulty audit — 🟡 REOPENED 2026-05-17
 
-**Target (revised for $1k vault):** 8-12% realistic win rate = 35-45% house edge per bet. Hard ceiling 15%. See [memory/project_economic_model.md](../../.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_economic_model.md) for full math + variance analysis.
+**Target (revised for $1k vault):** 8-12% realistic completion rate = 35-45% protocol edge per entry. Hard ceiling 15%. See [memory/project_economic_model.md](../../.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_economic_model.md) for full math + variance analysis.
 
-**Done:**
-- Rewrote all 300 missions in `backend/src/data/missions.ts`. Every tier-1 mission now requires color/condition/context specificity (e.g. "find a USPS mailbox with the red flag in the up position", not "find a mailbox"). ~20% of each tier is intentionally near-impossible inside the timer (e.g. "house number ending in 7", "bird actively eating from a feeder", "dog mid-bark"). Indoor/outdoor split preserved: T1 70/30, T2 60/40, T3 50/50.
-- Bumped `TIER_CONFIDENCE_THRESHOLDS` 0.80/0.85/0.90 → **0.88/0.92/0.95** in `backend/src/types/index.ts`. Bias hard toward false negatives — false negatives cost a fraction of a bet, false positives cost 3-10% of vault.
+**Done in the first pass:**
+- Rewrote all 300 missions in `backend/src/data/missions.ts`. Indoor/outdoor split preserved: T1 70/30, T2 60/40, T3 50/50.
+- Bumped `TIER_CONFIDENCE_THRESHOLDS` 0.80/0.85/0.90 → **0.88/0.92/0.95** in `backend/src/types/index.ts`. Bias hard toward false negatives — false negatives cost a fraction of an entry, false positives cost 3-10% of vault.
 - Kept tier timers at 180s/120s/60s (already aggressive enough; further compression hurts UX without proportional house-edge gain).
 - Typecheck green. Mission helpers (`getRandomMission`, `getMissionsByTierAndLocation`) verified for all tier+location combos.
 
+**Reopened scope:** user reported several Tier 1 missions were easy inside an
+apartment while others were extremely difficult. For the next app update, the
+approved 2026-05-17 taxonomy expands the pool to 600 missions across 20 global
+location families. Tier 1 is broad/simple, Tier 2 adds visible constraints, and
+Tier 3 uses rare multi-cue combinations. Outdoor/indoor split is now T1 140/60,
+T2 120/80, T3 100/100.
+
 **Post-launch monitoring (CRITICAL with $1k vault):**
-- 20-bet rolling win rate > 25% → page operator immediately, consider pausing new bounties.
+- 20-entry rolling completion rate > 25% → page operator immediately, consider pausing new bounties.
 - Vault < 50,000 SKR (85% of starting) → first alert.
 - Vault < 30,000 SKR → tracked follow-up: auto-pause new bounty preparation (see § E8).
-- Track win-rate-by-mission to find any single mission with > 30% win rate; either retire or harden it.
+- Track completion-rate-by-mission to find any single mission with > 30% completion rate; either retire or harden it.
 
 ---
 
@@ -239,34 +284,67 @@ quality should not be assumed good enough for review or launch conversion.
 
 Per [backend/scripts/DEPLOY_MAINNET.md](../backend/scripts/DEPLOY_MAINNET.md):
 
-1. `anchor build` (mainnet default)
-2. `npm run deploy:mainnet` from `contracts/` (~3-4 SOL, no `--final`; keep upgradeable)
-3. `anchor idl init` — publish IDL on-chain
-4. `solana-verify build && solana-verify upload` — verified build attestation
-5. Generate hot keypair, fund with 0.3 SOL
-6. Run `initialize` → `initialize_house_vault` → `initialize_singularity_vault`
-7. `admin.ts set-hot <hot_pubkey>`
-8. Skip cold-authority transfer when initialized directly with Ledger; use two-step transfer only for an explicitly accepted interim keypair path
-9. Confirm Ledger remains program upgrade authority; do not make the program final until post-launch tweaks are done
-10. Transfer SKR to authority ATA, then `admin.ts fund 10000000`
-11. Deploy backend to Railway, set env vars, add Upstash Redis addon, point custom domain
-12. Flip `mobile/src/config/index.ts` `NETWORK` → `'mainnet-beta'`
-13. Build release APK with `SEEK_KEYSTORE_*` env vars
-14. Sideload APK on Seeker, run full smoke test with real SKR
+1. [x] `anchor build` (mainnet default)
+2. [x] Initial program deploy completed and bytecode hash verified. For all
+   future upgrades, create any deploy/buffer/fee-payer key only in durable
+   ignored storage, verify permissions/pubkey before funding, and never use
+   `--final`.
+3. [x] Transfer program upgrade authority to Ledger `GkpX...YNtY`.
+4. [x] Publish IDL on-chain; IDL authority set to Ledger `GkpX...YNtY`.
+5. [x] Generate hot keypair, fund with 0.3 SOL, and set on-chain hot authority.
+6. [x] Run `initialize` → `initialize_house_vault` → `initialize_singularity_vault`.
+7. [x] Confirm Ledger remains program upgrade authority; program stays upgradeable.
+8. [x] Fund house vault with `58,788 SKR`.
+9. [ ] `solana-verify build && solana-verify upload` — verified build attestation.
+10. [x] Deploy backend to Railway, set env vars, add Redis, point custom domain.
+    Backend is live at `https://seek-backend-production-0134.up.railway.app`
+    and `https://api.seek.mythx.art/api/health`; `/api/health/ready` passes
+    RPC/program/Redis.
+11. [x] Flip `mobile/src/config/index.ts` `NETWORK` → `'mainnet-beta'`.
+12. [x] Build release APK with `SEEK_KEYSTORE_*` env vars; `apksigner verify` PASS.
+13. [~] Sideload APK on Seeker, run full smoke test with real SKR. A normal
+    negative-flow hardware smoke passed before the v1.0.2 upload; run a
+    post-approval smoke from the store build when review completes.
 
 ---
 
-## Phase D — Solana dApp Store submission (≤1 hr active + 2-5 business days review)
+## Phase D — Solana dApp Store submission (✅ LIVE; v1.0.2 ACCEPTED)
 
 Per [dapp-store-publishing/README.md](../dapp-store-publishing/README.md):
 
-1. Create/verify Publisher Portal account, KYC/KYB, storage provider, App NFT.
-2. `npm i -g @solana-mobile/dapp-store-cli`
-3. `export DAPP_STORE_API_KEY=<Publisher Portal key>`
-4. `cd dapp-store-publishing && node check-assets.mjs`
-5. Publish release APK with `dapp-store --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk --keypair ./publisher.json --whats-new "..."`
-6. If using the NFT-backed config flow directly: `create publisher`, `create app`, `create release`, then `publish submit --requestor-is-authorized --complies-with-solana-dapp-store-policies`
-7. Wait 3-5 business days; iterate on review feedback
+1. [x] Create/verify Publisher Portal account, LLC/KYC/KYB/profile info,
+   storage provider, and App NFT.
+2. [x] Install/use `@solana-mobile/dapp-store-cli` through `npx`.
+3. [x] Pass Publisher Portal API key via `--api-key-stdin` without printing it.
+4. [x] `cd dapp-store-publishing && node check-assets.mjs`.
+5. [x] Publish release APK with
+   `dapp-store --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk --keypair ../.secrets/dapp-store/publisher.json --whats-new "Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow."`.
+6. [x] Release NFT minted and collection verified by portal-backed CLI.
+7. [x] Wait 3-5 business days; iterate on review feedback.
+8. [x] Submit next update for live-hardware fixes and upgrade-first economics.
+   Backend deployment `a75a586a-448f-456b-9ed5-b4dd6827dc4c` is live; signed
+   APK `mobile/android/app/build/outputs/apk/release/app-release.apk` is
+   version `1.0.2` / versionCode `3`, SHA-256
+   `eb3fc8b3559eea2ed0e1650b27ad9aaee82ac3cfb08cecf8de60bb131274cefd`.
+   Portal-backed CLI submission passed on 2026-05-17 with idempotency key
+   `seek-update-1.0.2-v3-20260517`.
+
+Active v1.0.1 / versionCode `2` listing was submitted 2026-05-15 and is now
+reported live by the user. Ticket ID `311418671831`; release mint
+`ATChUKmCC4zzqj9g54etDd7bW5uLFtLsxj5Dib2kqzRe`; collection mint
+`4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`.
+
+v1.0.2 / versionCode `3` was accepted by Solana Mobile on 2026-05-17 by user
+report. Ticket ID
+`311747315429`; release mint
+`2jKWGs79qJC2j8LTRfwER6fn4Taz35hymzTWMZvyTBXS`; collection mint
+`4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`.
+
+Sideloaded/debug package `app.seek.mobile` v1.0.3 / versionCode `4` was
+uninstalled from the Seeker before the official unplugged store test.
+
+Original v1.0.0 ticket `310370751180` was superseded after Solana Mobile
+reported a backend ingest failure and approved the versionCode bump.
 
 ---
 
@@ -343,7 +421,7 @@ that B8 missed. All fixed in this pass.
 Remaining post-launch: ~3 more T1 trivials worth tightening (mowed lawn, closed garage, closed door) + per-mission win-rate tracking for retire/rewrite triggers (see § E8).
 
 ### dApp Store + deploy docs
-- [x] `config.yaml:24` — added MAINNET LAUNCH BLOCKER comment block with the exact `solana-keygen new` + airdrop steps for filling `PLACEHOLDER_PUBLISHER_PUBKEY` before publisher NFT mint.
+- [x] `config.yaml:24` — added publisher wallet path and backup instructions using `.secrets/dapp-store/publisher.json` before publisher NFT mint.
 - [x] `config.yaml:86` — testing instructions rewritten for mainnet (mainnet SKR, no demo mode).
 - [x] **2026-05-01 dApp Store asset update** — config now points at required
   `banner.png` plus six screenshot slots; `assets/README.md` and
@@ -360,9 +438,14 @@ Remaining post-launch: ~3 more T1 trivials worth tightening (mowed lawn, closed 
 - Contract unit tests: 19/19 passing in <10ms.
 - ~840 LoC + / ~2820 LoC − across 23 files (mostly mobile lock regeneration).
 
-### Still gated on user (Phase B unchanged)
-- Replace `EXPECTED_INITIAL_AUTHORITY` placeholder in `lib.rs` with cold Ledger pubkey before `anchor build` for mainnet.
-- All other Phase B items (keystore, DNS, Ledger SOL, SKR for vault, publisher wallet, dApp Store assets, marketing site) remain user-gated.
+### Still gated on user
+- Real Seeker hardware validation after the upgrade-first contract/backend/mobile
+  changes: Wallet Adapter, passive Seeker Genesis Token, location-backed camera
+  capture, funded-wallet hunt flow, immediate settlement behavior, and no public
+  challenge/deposit action.
+- Next dApp Store update submission only after hardware smoke passes, the exact
+  store changelog is approved by the user, and the user explicitly approves
+  Publisher upload.
 
 ---
 
@@ -371,8 +454,8 @@ Remaining post-launch: ~3 more T1 trivials worth tightening (mowed lawn, closed 
 Not on the critical path. Each unblocks future scale or raises the security bar.
 
 ### E1. Switchboard On-Demand VRF
-**When:** Singularity jackpot pool > ~$50k USD (grinding ROI threshold).
-**Cost:** ~0.002 SOL per VRF request (≈ per win at launch volume).
+**When:** Singularity pool > ~$50k USD (grinding ROI threshold).
+**Cost:** ~0.002 SOL per VRF request (≈ per completion at launch volume).
 **Scope:** split `finalize_bounty` into 3-instruction flow (propose → commit VRF → consume). Touches contract + backend finalizer.
 **Effort:** ~3-4 hrs.
 
@@ -394,7 +477,8 @@ not the cross-instance source of truth.
 
 ### E5. Cold signer ergonomics after launch
 **Scope:** after launch, improve cold-admin ergonomics for repeat
-operations (`fund_house`, `set_hot_authority`, `set_treasury`,
+operations (`fund_house`, `set_protocol_paused`, `withdraw_unreserved_house`,
+`withdraw_singularity`, `set_hot_authority`, `set_treasury`,
 `resolve_dispute`) and document the exact hardware-wallet ceremony.
 **Effort:** TBD after first real-device Ledger launch run.
 
@@ -409,13 +493,21 @@ operations (`fund_house`, `set_hot_authority`, `set_treasury`,
 - [ ] GPS Super Hunts (partner-hosted, city-wide events)
 
 ### E8. Vault-protection mechanics (added 2026-04-23 post-B7)
-The $1k launch vault makes per-bet variance the dominant risk. These
+The $1k launch vault makes per-entry variance the dominant risk. These
 are not on the critical path but should land within the first month live.
-- [ ] **Tier gating by vault size** — contract change. Disable tier 2 acceptance until `house_fund_balance > 200_000 SKR` (~$3.4k); disable tier 3 until > 500_000 SKR (~$8.5k). Caps tail-risk exposure on the small vault. Adds one new error variant + branch in `accept_bounty`.
-- [ ] **Vault floor pause** — contract or backend gate. New `accept_bounty` calls reject when `house_fund_balance < 30_000 SKR` (~$510). Backend can enforce this in `/prepare` for v1; contract enforcement is cleaner.
-- [ ] **Per-wallet daily bet rate limit** — backend-side. Cap each wallet at e.g. 20 bounties/day to prevent a single attacker from draining via lucky streak before we notice. Track in Redis with `EXPIRE 86400`.
-- [ ] **Per-mission win-rate dashboard** — track `wins[missionId] / attempts[missionId]` in Redis or Postgres. Auto-flag any mission with > 30% win rate over 50+ attempts for retirement.
-- [ ] **Auto-throttle on win-rate drift** — if 20-bet rolling win rate > 25%, automatically tighten AI thresholds by +0.02 until it normalizes. Reset when stable.
+- [x] **Active payout-liability reserve** — contract-level. `accept_bounty`
+  reserves the full payout for every active bounty and rejects new entries
+  if projected vault balance cannot cover all active bounties as wins. This is
+  the primary no-uncovered-liability guard for viral launch traffic.
+- [x] **Manual pause + liability-safe withdrawals** — contract-level.
+  Cold authority can pause new entries, withdraw only unreserved house surplus,
+  and withdraw Singularity funds only while paused with zero active bounties.
+  Existing bounty resolution paths remain open while paused.
+- [ ] **Tier gating by vault size** — optional stricter contract change. Disable tier 2 acceptance until `house_fund_balance > 200_000 SKR` (~$3.4k); disable tier 3 until > 500_000 SKR (~$8.5k). This matters because hard-tier wins draw down 5,000 SKR net from a small launch vault even after the payout reduction.
+- [ ] **Automatic vault floor pause** — contract or backend gate. New `accept_bounty` calls reject when `house_fund_balance < 30_000 SKR` (~$510). Backend can enforce this in `/prepare` for v1; manual contract pause now exists, but auto-pause is still cleaner.
+- [ ] **Per-wallet daily entry rate limit** — backend-side. Cap each wallet at e.g. 20 bounties/day to prevent a single attacker from draining via a streak before we notice. Track in Redis with `EXPIRE 86400`.
+- [ ] **Per-mission completion-rate dashboard** — track `completions[missionId] / attempts[missionId]` in Redis or Postgres. Auto-flag any mission with > 30% completion rate over 50+ attempts for retirement.
+- [ ] **Auto-throttle on completion-rate drift** — if 20-entry rolling completion rate > 25%, automatically tighten AI thresholds by +0.02 until it normalizes. Reset when stable.
 
 ---
 
@@ -434,7 +526,7 @@ Once Railway + Sentry + Upstash are live:
 - AI validation latency (Claude Vision call)
 - Finalizer queue depth (alarm at > 50)
 - On-chain tx failure rate
-- House vault balance (alarm if < 1M SKR)
+- House vault balance (warn if < 50,000 SKR; critical if < 30,000 SKR)
 - Singularity vault balance (informational)
 - Mobile crash-free session rate
 - Sentry new-issue rate

@@ -4,6 +4,15 @@ import { childLogger } from './logger.service';
 
 const log = childLogger('skr');
 
+export function withSkrSuffix(domain: string): string {
+  const trimmed = domain.trim().toLowerCase();
+  return trimmed.endsWith('.skr') ? trimmed : `${trimmed}.skr`;
+}
+
+export function withoutSkrSuffix(domain: string): string {
+  return domain.trim().toLowerCase().replace(/\.skr$/i, '');
+}
+
 class SkrService {
   private parser: TldParser | null = null;
   private connection: Connection | null = null;
@@ -35,7 +44,7 @@ class SkrService {
       const domains = await parser.getParsedAllUserDomainsFromTld(pubkey, 'skr');
 
       if (domains && domains.length > 0) {
-        const skrName = `${domains[0].domain}.skr`;
+        const skrName = withSkrSuffix(domains[0].domain);
         log.info({ skrName }, 'found .skr name');
         return skrName;
       }
@@ -55,8 +64,9 @@ class SkrService {
    */
   async resolveSkrToAddress(skrDomain: string): Promise<string | null> {
     try {
-      // Normalize domain name (remove .skr suffix if present)
-      const domainName = skrDomain.replace(/\.skr$/i, '');
+      // Normalize domain name: .skr names are lowercase and callers may send
+      // either "name" or "name.skr".
+      const domainName = withoutSkrSuffix(skrDomain);
 
       log.info({ domainName }, 'resolving .skr to address');
       const parser = await this.getParser();

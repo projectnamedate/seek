@@ -1,6 +1,6 @@
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 use anchor_spl::associated_token::get_associated_token_address;
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 declare_id!("DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v");
 
@@ -26,33 +26,34 @@ pub const SKR_DECIMALS: u32 = 9;
 /// 10^SKR_DECIMALS - multiplier to convert whole SKR to base units.
 pub const DECIMALS_MULTIPLIER: u64 = 10u64.pow(SKR_DECIMALS);
 
-/// Challenge period (300s on mainnet, 10s on devnet for demo).
+/// Public disputes are disabled for the current release, so non-disputed
+/// resolutions can finalize immediately.
 #[cfg(feature = "mainnet")]
-pub const CHALLENGE_PERIOD: i64 = 300;
+pub const CHALLENGE_PERIOD: i64 = 0;
 #[cfg(feature = "devnet")]
-pub const CHALLENGE_PERIOD: i64 = 10;
+pub const CHALLENGE_PERIOD: i64 = 0;
 
-/// Entry amounts: 1000 / 2000 / 3000 SKR (in base units).
+/// Entry amounts: 1000 / 3000 / 5000 SKR (in base units).
 pub const TIER_1_ENTRY: u64 = 1000 * DECIMALS_MULTIPLIER;
-pub const TIER_2_ENTRY: u64 = 2000 * DECIMALS_MULTIPLIER;
-pub const TIER_3_ENTRY: u64 = 3000 * DECIMALS_MULTIPLIER;
+pub const TIER_2_ENTRY: u64 = 3000 * DECIMALS_MULTIPLIER;
+pub const TIER_3_ENTRY: u64 = 5000 * DECIMALS_MULTIPLIER;
 
 /// Distribution percentages on loss (basis points, 10000 = 100%).
-pub const HOUSE_SHARE_BPS: u64 = 7000;      // 70% stays in house
-pub const SINGULARITY_SHARE_BPS: u64 = 2000; // 20% to jackpot pool
-pub const PROTOCOL_SHARE_BPS: u64 = 1000;    // 10% to protocol treasury
+pub const HOUSE_SHARE_BPS: u64 = 7000; // 70% stays in house
+pub const SINGULARITY_SHARE_BPS: u64 = 2000; // 20% to Singularity pool
+pub const PROTOCOL_SHARE_BPS: u64 = 1000; // 10% to protocol treasury
 
-/// Jackpot odds: 1 in 500 chance on every win.
+/// Singularity bonus odds: 1 in 500 eligible completions.
 pub const SINGULARITY_ODDS: u64 = 500;
 
 /// Per-tier hunt timer durations (seconds).
-pub const TIER_1_DURATION: i64 = 180;  // 3 minutes
-pub const TIER_2_DURATION: i64 = 120;  // 2 minutes
-pub const TIER_3_DURATION: i64 = 60;   // 1 minute
+pub const TIER_1_DURATION: i64 = 180; // 3 minutes
+pub const TIER_2_DURATION: i64 = 120; // 2 minutes
+pub const TIER_3_DURATION: i64 = 60; // 1 minute
 
-/// Dispute parameters. (Window enforced via bounty.challenge_ends_at; no
-/// separate post-resolution dispute window.)
-pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original entry to dispute
+/// Legacy dispute parameters. Public dispute entry points are not surfaced in
+/// the app while the resolution window is zero-length.
+pub const DISPUTE_STAKE_BPS: u64 = 5000; // 50% of original entry to dispute
 
 /// Mainnet `initialize` is restricted to this pubkey to prevent front-running
 /// of the deploy → initialize gap by an MEV bot. Replace the placeholder with
@@ -62,7 +63,7 @@ pub const DISPUTE_STAKE_BPS: u64 = 5000;     // 50% of original entry to dispute
 /// To set: `solana-keygen pubkey usb://ledger`, paste base58 below, rebuild.
 #[cfg(feature = "mainnet")]
 pub const EXPECTED_INITIAL_AUTHORITY: Pubkey =
-    pubkey!("11111111111111111111111111111111");
+    pubkey!("GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY");
 // NOTE: 11111…111 (System Program) is the placeholder. The constraint also
 // rejects this default, so a forgotten edit will fail-fast at init time
 // rather than silently allowing any caller.
@@ -88,10 +89,48 @@ pub fn get_tier_duration(tier: u8) -> Result<i64> {
     }
 }
 
+/// Reserve worst-case payout exposure before accepting a bounty. This keeps the
+/// protocol solvent even if every active bounty finalizes as a win.
+pub fn reserve_bounty_liability(
+    global_state: &mut GlobalState,
+    current_house_vault_amount: u64,
+    entry_amount: u64,
+    payout_amount: u64,
+) -> Result<()> {
+    let projected_house_vault_amount = current_house_vault_amount
+        .checked_add(entry_amount)
+        .ok_or(SeekError::MathOverflow)?;
+    let projected_liability = global_state
+        .active_payout_liability
+        .checked_add(payout_amount)
+        .ok_or(SeekError::MathOverflow)?;
+
+    require!(
+        projected_house_vault_amount >= projected_liability,
+        SeekError::InsufficientHouseReserve
+    );
+
+    global_state.active_payout_liability = projected_liability;
+    global_state.active_bounty_count = global_state
+        .active_bounty_count
+        .checked_add(1)
+        .ok_or(SeekError::MathOverflow)?;
+
+    Ok(())
+}
+
+/// Release reserved payout exposure when a bounty reaches a terminal state.
+pub fn release_bounty_liability(global_state: &mut GlobalState, payout_amount: u64) {
+    global_state.active_payout_liability = global_state
+        .active_payout_liability
+        .saturating_sub(payout_amount);
+    global_state.active_bounty_count = global_state.active_bounty_count.saturating_sub(1);
+}
+
 /// Custom error codes for the Seek protocol
 #[error_code]
 pub enum SeekError {
-    #[msg("Invalid entry amount. Must be 1000, 2000, or 3000 SKR")]
+    #[msg("Invalid entry amount. Must be 1000, 3000, or 5000 SKR")]
     InvalidEntryAmount,
 
     #[msg("Bounty is not in pending state")]
@@ -108,6 +147,24 @@ pub enum SeekError {
 
     #[msg("Insufficient funds in house vault")]
     InsufficientHouseFunds,
+
+    #[msg("Insufficient unreserved house funds for worst-case active payouts")]
+    InsufficientHouseReserve,
+
+    #[msg("Protocol is paused")]
+    ProtocolPaused,
+
+    #[msg("Protocol must be paused for this operation")]
+    ProtocolNotPaused,
+
+    #[msg("Invalid withdrawal amount")]
+    InvalidWithdrawalAmount,
+
+    #[msg("Insufficient funds in Singularity vault")]
+    InsufficientSingularityFunds,
+
+    #[msg("Cannot withdraw Singularity funds while active bounties exist")]
+    ActiveBountiesExist,
 
     #[msg("Arithmetic overflow occurred")]
     MathOverflow,
@@ -156,7 +213,8 @@ pub enum SeekError {
 /// Global protocol state - tracks all protocol-wide metrics
 #[account]
 pub struct GlobalState {
-    /// Cold authority. Signs admin ops: fund_house, set_hot_authority,
+    /// Cold authority. Signs admin ops: fund_house, set_protocol_paused,
+    /// withdraw_unreserved_house, withdraw_singularity, set_hot_authority,
     /// set_treasury, propose/accept/cancel_authority_transfer, resolve_dispute.
     /// Should be a hardware wallet (Ledger) on mainnet.
     pub authority: Pubkey,
@@ -173,7 +231,7 @@ pub struct GlobalState {
     /// House vault token account (PDA-owned)
     pub house_vault: Pubkey,
 
-    /// Singularity (jackpot) vault token account (PDA-owned)
+    /// Singularity bonus vault token account (PDA-owned)
     pub singularity_vault: Pubkey,
 
     /// Protocol treasury token account
@@ -182,7 +240,15 @@ pub struct GlobalState {
     /// Total SKR currently in house vault
     pub house_fund_balance: u64,
 
-    /// Total SKR in singularity jackpot pool
+    /// Sum of full payout liabilities for active bounties not yet finalized,
+    /// dispute-resolved, or cancelled. New bounties are accepted only if the
+    /// vault can cover every active bounty as a win.
+    pub active_payout_liability: u64,
+
+    /// Number of active bounties contributing to active_payout_liability.
+    pub active_bounty_count: u64,
+
+    /// Total SKR in Singularity bonus pool
     pub singularity_balance: u64,
 
     /// Total SKR burned forever
@@ -197,8 +263,11 @@ pub struct GlobalState {
     /// Total bounties lost by players
     pub total_bounties_lost: u64,
 
-    /// Total singularity jackpots won
+    /// Total Singularity bonuses awarded
     pub total_singularity_wins: u64,
+
+    /// Emergency switch. When true, new accept_bounty calls are rejected.
+    pub paused: bool,
 
     /// Bump seed for PDA derivation
     pub bump: u8,
@@ -207,10 +276,11 @@ pub struct GlobalState {
 impl GlobalState {
     /// Account size: 8 (discriminator) + 32*6 (authority, hot_authority,
     /// pending_authority, house_vault, singularity_vault, protocol_treasury)
-    /// + 8*7 (house_fund_balance, singularity_balance, total_burned,
-    /// total_bounties_created, total_bounties_won, total_bounties_lost,
-    /// total_singularity_wins) + 1 (bump) = 257.
-    pub const SIZE: usize = 8 + 32 * 6 + 8 * 7 + 1;
+    /// + 8*9 (house_fund_balance, active_payout_liability,
+    ///   active_bounty_count, singularity_balance, total_burned,
+    ///   total_bounties_created, total_bounties_won, total_bounties_lost,
+    ///   total_singularity_wins) + 1 (paused) + 1 (bump) = 274.
+    pub const SIZE: usize = 8 + 32 * 6 + 8 * 9 + 1 + 1;
 }
 
 /// Bounty status enum
@@ -220,15 +290,15 @@ pub enum BountyStatus {
     Pending,
     /// Photo submitted, awaiting resolution
     Submitted,
-    /// Resolved as win, in challenge period (optimistic)
+    /// Resolved as win, pending finalization
     ChallengeWon,
-    /// Resolved as loss, in challenge period (optimistic)
+    /// Resolved as loss, pending finalization
     ChallengeLost,
     /// Player disputed the loss result
     Disputed,
-    /// Final: Player won (after challenge period)
+    /// Final: Player won
     Won,
-    /// Final: Player lost (after challenge period)
+    /// Final: Player lost
     Lost,
     /// Bounty was cancelled
     Cancelled,
@@ -243,10 +313,10 @@ pub struct Bounty {
     /// Global state this bounty belongs to
     pub global_state: Pubkey,
 
-    /// Entry amount in SKR lamports (1000B, 2000B, or 3000B)
+    /// Entry amount in SKR base units (1000, 3000, or 5000 whole SKR)
     pub entry_amount: u64,
 
-    /// Potential reward (3x entry: entry back + 2x profit)
+    /// Full return amount (2x entry: entry back + 1x profit)
     pub payout_amount: u64,
 
     /// Unix timestamp when bounty was accepted
@@ -261,7 +331,7 @@ pub struct Bounty {
     /// Bounty tier (1, 2, or 3)
     pub tier: u8,
 
-    /// Whether this bounty won the singularity jackpot
+    /// Whether this bounty received the Singularity bonus
     pub singularity_won: bool,
 
     /// Bump seed for PDA derivation
@@ -277,21 +347,21 @@ pub struct Bounty {
     /// Whether mission has been revealed
     pub mission_revealed: bool,
 
-    // === OPTIMISTIC RESOLUTION FIELDS ===
-    /// Timestamp when resolution was submitted (challenge period starts)
+    // === RESOLUTION FIELDS ===
+    /// Timestamp when resolution was submitted
     pub resolved_at: i64,
 
-    /// Timestamp when challenge period ends
+    /// Timestamp when the result becomes finalizable
     pub challenge_ends_at: i64,
 
-    /// Whether the proposed result was a win
+    /// Whether the proposed result was a successful completion
     pub proposed_win: bool,
 
     // === DISPUTE FIELDS ===
     /// Whether this bounty has been disputed
     pub is_disputed: bool,
 
-    /// Dispute stake amount (if disputed)
+    /// Dispute review deposit amount (if disputed)
     pub dispute_stake: u64,
 
     /// Timestamp when dispute was filed
@@ -350,6 +420,29 @@ pub struct HouseFunded {
     pub new_balance: u64,
 }
 
+/// Emitted when the cold authority pauses or resumes new bounty acceptance.
+#[event]
+pub struct ProtocolPauseSet {
+    pub authority: Pubkey,
+    pub paused: bool,
+}
+
+/// Emitted when the cold authority withdraws unreserved house funds.
+#[event]
+pub struct HouseWithdrawn {
+    pub authority: Pubkey,
+    pub amount: u64,
+    pub remaining_balance: u64,
+}
+
+/// Emitted when the cold authority withdraws Singularity funds while paused.
+#[event]
+pub struct SingularityWithdrawn {
+    pub authority: Pubkey,
+    pub amount: u64,
+    pub remaining_balance: u64,
+}
+
 /// Emitted when mission is revealed (commit-reveal)
 #[event]
 pub struct MissionRevealed {
@@ -358,7 +451,7 @@ pub struct MissionRevealed {
     pub commitment_verified: bool,
 }
 
-/// Emitted when bounty enters challenge period (optimistic resolution)
+/// Emitted when bounty resolution is proposed
 #[event]
 pub struct BountyResolutionProposed {
     pub bounty: Pubkey,
@@ -384,7 +477,7 @@ pub struct DisputeResolved {
     pub stake_returned: bool,
 }
 
-/// Emitted when bounty is finalized after challenge period
+/// Emitted when bounty is finalized
 #[event]
 pub struct BountyFinalized {
     pub bounty: Pubkey,
@@ -435,19 +528,25 @@ pub mod seek_protocol {
 
         // Initialize counters to zero
         global_state.house_fund_balance = 0;
+        global_state.active_payout_liability = 0;
+        global_state.active_bounty_count = 0;
         global_state.singularity_balance = 0;
         global_state.total_burned = 0;
         global_state.total_bounties_created = 0;
         global_state.total_bounties_won = 0;
         global_state.total_bounties_lost = 0;
         global_state.total_singularity_wins = 0;
+        global_state.paused = false;
 
         // Store bump for future PDA derivations
         global_state.bump = ctx.bumps.global_state;
 
         msg!("Seek Protocol global state initialized!");
         msg!("Authority: {}", global_state.authority);
-        msg!("Hot authority: {} (rotate via set_hot_authority)", global_state.hot_authority);
+        msg!(
+            "Hot authority: {} (rotate via set_hot_authority)",
+            global_state.hot_authority
+        );
 
         Ok(())
     }
@@ -469,14 +568,17 @@ pub mod seek_protocol {
         global_state.singularity_vault = ctx.accounts.singularity_vault.key();
         global_state.protocol_treasury = ctx.accounts.protocol_treasury.key();
 
-        msg!("Singularity vault initialized: {}", global_state.singularity_vault);
+        msg!(
+            "Singularity vault initialized: {}",
+            global_state.singularity_vault
+        );
         msg!("Protocol treasury set: {}", global_state.protocol_treasury);
         Ok(())
     }
 
     /// Accept a bounty - player submits their entry and starts the hunt.
     /// entry_amount must be exactly TIER_1_ENTRY / TIER_2_ENTRY / TIER_3_ENTRY
-    /// (1000 / 2000 / 3000 SKR in base units — multiplier depends on SKR_DECIMALS).
+    /// (1000 / 3000 / 5000 SKR in base units — multiplier depends on SKR_DECIMALS).
     /// mission_commitment is hash(mission_id || salt) for commit-reveal.
     /// timestamp must be within 60 seconds of current time (for PDA derivation).
     pub fn accept_bounty(
@@ -485,6 +587,8 @@ pub mod seek_protocol {
         timestamp: i64,
         mission_commitment: [u8; 32],
     ) -> Result<()> {
+        require!(!ctx.accounts.global_state.paused, SeekError::ProtocolPaused);
+
         // Validate entry amount and get tier
         let tier = validate_entry_amount(entry_amount)?;
 
@@ -494,7 +598,7 @@ pub mod seek_protocol {
 
         // Timestamp must be within 60 seconds of current time
         require!(
-            (current_time - timestamp).abs() <= 60,
+            current_time.abs_diff(timestamp) <= 60,
             SeekError::InvalidTimestamp
         );
 
@@ -504,10 +608,18 @@ pub mod seek_protocol {
             .checked_add(duration)
             .ok_or(SeekError::MathOverflow)?;
 
-        // Calculate 3x payout (entry back + 2x profit)
-        let payout_amount = entry_amount
-            .checked_mul(3)
-            .ok_or(SeekError::MathOverflow)?;
+        // Calculate full return: entry back + 1x net profit.
+        let payout_amount = entry_amount.checked_mul(2).ok_or(SeekError::MathOverflow)?;
+
+        // Reserve worst-case payout exposure before accepting the bounty. The
+        // projected vault balance includes this player's entry after the CPI
+        // below. If this fails, the player is not charged.
+        reserve_bounty_liability(
+            &mut ctx.accounts.global_state,
+            ctx.accounts.house_vault.amount,
+            entry_amount,
+            payout_amount,
+        )?;
 
         // Initialize bounty account
         let bounty = &mut ctx.accounts.bounty;
@@ -570,7 +682,11 @@ pub mod seek_protocol {
 
         msg!("Bounty accepted!");
         msg!("Player: {}", bounty.player);
-        msg!("Entry: {} SKR (Tier {})", entry_amount / DECIMALS_MULTIPLIER, tier);
+        msg!(
+            "Entry: {} SKR (Tier {})",
+            entry_amount / DECIMALS_MULTIPLIER,
+            tier
+        );
         msg!("Expires at: {}", expires_at);
 
         Ok(())
@@ -626,8 +742,8 @@ pub mod seek_protocol {
         Ok(())
     }
 
-    /// Propose bounty resolution (OPTIMISTIC) - starts challenge period
-    /// Result is NOT final until challenge period ends
+    /// Propose bounty resolution. Public disputes are disabled, so
+    /// non-disputed results can finalize immediately.
     /// success = true: proposes win
     /// success = false: proposes loss
     pub fn propose_resolution(ctx: Context<ProposeResolution>, success: bool) -> Result<()> {
@@ -646,7 +762,8 @@ pub mod seek_protocol {
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
-        // Calculate challenge period end
+        // Keep the field for IDL/account compatibility, but with disputes
+        // disabled the window is zero-length.
         let challenge_ends_at = current_time
             .checked_add(CHALLENGE_PERIOD)
             .ok_or(SeekError::MathOverflow)?;
@@ -656,7 +773,7 @@ pub mod seek_protocol {
         bounty.challenge_ends_at = challenge_ends_at;
         bounty.proposed_win = success;
 
-        // Update status to challenge period
+        // Update status to pending-finalization state.
         bounty.status = if success {
             BountyStatus::ChallengeWon
         } else {
@@ -670,7 +787,8 @@ pub mod seek_protocol {
             challenge_ends_at,
         });
 
-        msg!("Resolution proposed: {} | Challenge ends: {}",
+        msg!(
+            "Resolution proposed: {} | Finalizable at: {}",
             if success { "WIN" } else { "LOSS" },
             challenge_ends_at
         );
@@ -678,41 +796,37 @@ pub mod seek_protocol {
         Ok(())
     }
 
-    /// Finalize bounty - called after challenge period ends (if no dispute)
+    /// Finalize bounty immediately after resolution if no dispute exists.
     /// Actually executes the payout or distribution
     pub fn finalize_bounty(ctx: Context<FinalizeBounty>) -> Result<()> {
         let bounty = &mut ctx.accounts.bounty;
         let global_state = &mut ctx.accounts.global_state;
 
-        // Verify bounty is in challenge period
+        // Verify bounty is pending finalization.
         require!(
-            bounty.status == BountyStatus::ChallengeWon || bounty.status == BountyStatus::ChallengeLost,
+            bounty.status == BountyStatus::ChallengeWon
+                || bounty.status == BountyStatus::ChallengeLost,
             SeekError::BountyNotPending
         );
 
-        // Verify challenge period has ended
         let clock = Clock::get()?;
-        let current_time = clock.unix_timestamp;
-        require!(
-            current_time >= bounty.challenge_ends_at,
-            SeekError::ChallengePeriodActive
-        );
 
         // Verify not disputed
         require!(!bounty.is_disputed, SeekError::AlreadyDisputed);
 
         let success = bounty.proposed_win;
+        release_bounty_liability(global_state, bounty.payout_amount);
 
         if success {
             // === WIN PATH ===
-            // Check house vault has enough actual tokens for 3x payout
+            // Check house vault has enough actual tokens for the full return.
             // Use actual vault balance (not tracked) to avoid divergence issues
             require!(
                 ctx.accounts.house_vault.amount >= bounty.payout_amount,
                 SeekError::InsufficientHouseFunds
             );
 
-            // Transfer 3x entry to player (entry back + 2x profit)
+            // Transfer 2x entry to player (entry back + 1x profit).
             let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
             let signer_seeds = &[&seeds[..]];
 
@@ -727,13 +841,13 @@ pub mod seek_protocol {
             );
             token::transfer(transfer_ctx, bounty.payout_amount)?;
 
-            // Update house balance (subtract 3x, but we received 1x, so net -2x)
+            // Update house balance (subtract 2x, but we received 1x, so net -1x).
             // Use saturating_sub: tracked balance may be lower than actual vault balance
             global_state.house_fund_balance = global_state
                 .house_fund_balance
                 .saturating_sub(bounty.payout_amount);
 
-            // === SINGULARITY JACKPOT ROLL ===
+            // === SINGULARITY BONUS ROLL ===
             // Entropy sources (stacked by hardness for a grinding attacker):
             //   1. bounty.mission_commitment  - 32-byte hash(mission_id || salt) fixed at accept_bounty
             //   2. bounty.key()               - PDA derived from player + timestamp
@@ -743,10 +857,10 @@ pub mod seek_protocol {
             // A slot leader at finalize time can still grind by choosing which finalize_bounty
             // transactions to include in their slot, but they must match both a specific
             // mission_commitment AND a specific bounty PDA, which sharply limits the attack's
-            // expected value unless the jackpot pool dwarfs a slot's block production revenue.
+            // expected value unless the Singularity pool dwarfs a slot's block production revenue.
             //
             // TODO (post-launch): migrate to Switchboard On-Demand VRF once the Singularity
-            // jackpot pool exceeds ~$50k USD equivalent — grinding ROI threshold. See
+            // Singularity pool exceeds ~$50k USD equivalent — grinding ROI threshold. See
             // tasks/audit-2026-04-22.md section C-2 and task #3.
             let slot_bytes = clock.slot.to_le_bytes();
             let ts_bytes = (clock.unix_timestamp as u64).to_le_bytes();
@@ -765,14 +879,14 @@ pub mod seek_protocol {
                 .checked_rem(SINGULARITY_ODDS)
                 .ok_or(SeekError::MathOverflow)?;
 
-            // Track jackpot amount for event
-            let mut jackpot_won: u64 = 0;
+            // Track Singularity bonus amount for event
+            let mut singularity_bonus_amount: u64 = 0;
 
             if roll == 0 && global_state.singularity_balance > 0 {
-                // JACKPOT! Transfer entire singularity pool to player
-                jackpot_won = global_state.singularity_balance;
+                // Transfer entire Singularity bonus pool to player
+                singularity_bonus_amount = global_state.singularity_balance;
 
-                let jackpot_ctx = CpiContext::new_with_signer(
+                let singularity_bonus_ctx = CpiContext::new_with_signer(
                     ctx.accounts.token_program.to_account_info(),
                     Transfer {
                         from: ctx.accounts.singularity_vault.to_account_info(),
@@ -781,7 +895,7 @@ pub mod seek_protocol {
                     },
                     signer_seeds,
                 );
-                token::transfer(jackpot_ctx, jackpot_won)?;
+                token::transfer(singularity_bonus_ctx, singularity_bonus_amount)?;
 
                 bounty.singularity_won = true;
                 global_state.singularity_balance = 0;
@@ -790,7 +904,10 @@ pub mod seek_protocol {
                     .checked_add(1)
                     .ok_or(SeekError::MathOverflow)?;
 
-                msg!("SINGULARITY WON! Jackpot: {} SKR", jackpot_won / DECIMALS_MULTIPLIER);
+                msg!(
+                    "SINGULARITY BONUS: {} SKR",
+                    singularity_bonus_amount / DECIMALS_MULTIPLIER
+                );
             }
 
             bounty.status = BountyStatus::Won;
@@ -805,10 +922,13 @@ pub mod seek_protocol {
                 bounty: bounty.key(),
                 payout: bounty.payout_amount,
                 singularity_won: bounty.singularity_won,
-                singularity_amount: jackpot_won,
+                singularity_amount: singularity_bonus_amount,
             });
 
-            msg!("Bounty WON! Payout: {} SKR", bounty.payout_amount / DECIMALS_MULTIPLIER);
+            msg!(
+                "Bounty WON! Payout: {} SKR",
+                bounty.payout_amount / DECIMALS_MULTIPLIER
+            );
         } else {
             // === LOSS PATH ===
             // Distribute entry: 70% house, 20% singularity, 10% protocol
@@ -893,8 +1013,14 @@ pub mod seek_protocol {
 
             msg!("Bounty LOST. Distribution:");
             msg!("  House: {} SKR (70%)", house_share / DECIMALS_MULTIPLIER);
-            msg!("  Singularity: {} SKR (20%)", singularity_share / DECIMALS_MULTIPLIER);
-            msg!("  Protocol: {} SKR (10%)", protocol_share / DECIMALS_MULTIPLIER);
+            msg!(
+                "  Singularity: {} SKR (20%)",
+                singularity_share / DECIMALS_MULTIPLIER
+            );
+            msg!(
+                "  Protocol: {} SKR (10%)",
+                protocol_share / DECIMALS_MULTIPLIER
+            );
         }
 
         // Emit finalized event
@@ -909,6 +1035,8 @@ pub mod seek_protocol {
 
     /// Fund the house vault - authority deposits SKR for player payouts
     pub fn fund_house(ctx: Context<FundHouse>, amount: u64) -> Result<()> {
+        require!(amount > 0, SeekError::InvalidWithdrawalAmount);
+
         // Transfer from authority to house vault
         let transfer_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
@@ -935,25 +1063,144 @@ pub mod seek_protocol {
         });
 
         msg!("House funded with {} SKR", amount / DECIMALS_MULTIPLIER);
-        msg!("New balance: {} SKR", global_state.house_fund_balance / DECIMALS_MULTIPLIER);
+        msg!(
+            "New balance: {} SKR",
+            global_state.house_fund_balance / DECIMALS_MULTIPLIER
+        );
 
         Ok(())
     }
 
-    /// Dispute a bounty result - player stakes additional SKR to challenge
-    /// Can only dispute LOSS results during challenge period
+    /// Pause or resume new bounty acceptance. Cold authority only.
+    /// Does not block reveal/propose/finalize/cancel paths for already-active bounties.
+    pub fn set_protocol_paused(ctx: Context<SetProtocolPaused>, paused: bool) -> Result<()> {
+        let global_state = &mut ctx.accounts.global_state;
+        global_state.paused = paused;
+
+        emit!(ProtocolPauseSet {
+            authority: ctx.accounts.authority.key(),
+            paused,
+        });
+
+        msg!("Protocol {}", if paused { "paused" } else { "resumed" });
+        Ok(())
+    }
+
+    /// Withdraw only the unreserved portion of the house vault. Cold authority only.
+    /// Active payout liability stays locked so already-accepted bounties remain covered.
+    pub fn withdraw_unreserved_house(
+        ctx: Context<WithdrawUnreservedHouse>,
+        amount: u64,
+    ) -> Result<()> {
+        require!(amount > 0, SeekError::InvalidWithdrawalAmount);
+
+        let global_state = &mut ctx.accounts.global_state;
+        let available_tracked = ctx
+            .accounts
+            .house_vault
+            .amount
+            .min(global_state.house_fund_balance);
+        let unreserved = available_tracked.saturating_sub(global_state.active_payout_liability);
+
+        require!(unreserved >= amount, SeekError::InsufficientHouseReserve);
+
+        let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.house_vault.to_account_info(),
+                to: ctx.accounts.authority_token_account.to_account_info(),
+                authority: global_state.to_account_info(),
+            },
+            signer_seeds,
+        );
+        token::transfer(transfer_ctx, amount)?;
+
+        global_state.house_fund_balance = global_state.house_fund_balance.saturating_sub(amount);
+
+        emit!(HouseWithdrawn {
+            authority: ctx.accounts.authority.key(),
+            amount,
+            remaining_balance: global_state.house_fund_balance,
+        });
+
+        msg!(
+            "Unreserved house withdrawal: {} SKR",
+            amount / DECIMALS_MULTIPLIER
+        );
+        Ok(())
+    }
+
+    /// Withdraw Singularity bonus funds. Cold authority only, only while paused,
+    /// and only after all active bounties have resolved. This is an explicit
+    /// public emergency/admin operation, not a hidden path.
+    pub fn withdraw_singularity(ctx: Context<WithdrawSingularity>, amount: u64) -> Result<()> {
+        require!(amount > 0, SeekError::InvalidWithdrawalAmount);
+
+        let global_state = &mut ctx.accounts.global_state;
+        require!(global_state.paused, SeekError::ProtocolNotPaused);
+        require!(
+            global_state.active_bounty_count == 0,
+            SeekError::ActiveBountiesExist
+        );
+
+        let available_tracked = ctx
+            .accounts
+            .singularity_vault
+            .amount
+            .min(global_state.singularity_balance);
+
+        require!(
+            available_tracked >= amount,
+            SeekError::InsufficientSingularityFunds
+        );
+
+        let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
+        let signer_seeds = &[&seeds[..]];
+
+        let transfer_ctx = CpiContext::new_with_signer(
+            ctx.accounts.token_program.to_account_info(),
+            Transfer {
+                from: ctx.accounts.singularity_vault.to_account_info(),
+                to: ctx.accounts.authority_token_account.to_account_info(),
+                authority: global_state.to_account_info(),
+            },
+            signer_seeds,
+        );
+        token::transfer(transfer_ctx, amount)?;
+
+        global_state.singularity_balance = global_state.singularity_balance.saturating_sub(amount);
+
+        emit!(SingularityWithdrawn {
+            authority: ctx.accounts.authority.key(),
+            amount,
+            remaining_balance: global_state.singularity_balance,
+        });
+
+        msg!(
+            "Singularity withdrawal: {} SKR",
+            amount / DECIMALS_MULTIPLIER
+        );
+        Ok(())
+    }
+
+    /// Dispute a bounty result - player commits an additional review deposit
+    /// Legacy dispute path. With a zero-length window, public disputes are
+    /// effectively disabled until the economics are redesigned.
     pub fn dispute_bounty(ctx: Context<DisputeBounty>) -> Result<()> {
         let bounty = &mut ctx.accounts.bounty;
         let clock = Clock::get()?;
         let current_time = clock.unix_timestamp;
 
-        // Can only dispute losses (no point disputing wins)
+        // Can only dispute unsuccessful outcomes (no point disputing completions)
         require!(
             bounty.status == BountyStatus::ChallengeLost,
             SeekError::BountyNotPending
         );
 
-        // Must be within challenge period
+        // Must be within finalization window.
         require!(
             current_time < bounty.challenge_ends_at,
             SeekError::ChallengePeriodEnded
@@ -962,14 +1209,15 @@ pub mod seek_protocol {
         // Cannot dispute twice
         require!(!bounty.is_disputed, SeekError::AlreadyDisputed);
 
-        // Calculate dispute stake (50% of original entry)
-        let dispute_stake = bounty.entry_amount
+        // Calculate dispute review deposit (50% of original entry)
+        let dispute_stake = bounty
+            .entry_amount
             .checked_mul(DISPUTE_STAKE_BPS)
             .ok_or(SeekError::MathOverflow)?
             .checked_div(10000)
             .ok_or(SeekError::MathOverflow)?;
 
-        // Transfer dispute stake from player to house vault
+        // Transfer dispute review deposit from player to house vault
         let transfer_ctx = CpiContext::new(
             ctx.accounts.token_program.to_account_info(),
             Transfer {
@@ -980,7 +1228,7 @@ pub mod seek_protocol {
         );
         token::transfer(transfer_ctx, dispute_stake)?;
 
-        // Track dispute stake in house balance
+        // Track dispute review deposit in house balance
         let global_state = &mut ctx.accounts.global_state;
         global_state.house_fund_balance = global_state
             .house_fund_balance
@@ -999,14 +1247,17 @@ pub mod seek_protocol {
             dispute_stake,
         });
 
-        msg!("Bounty disputed! Stake: {} SKR", dispute_stake / DECIMALS_MULTIPLIER);
+        msg!(
+            "Bounty disputed. Review deposit: {} SKR",
+            dispute_stake / DECIMALS_MULTIPLIER
+        );
 
         Ok(())
     }
 
     /// Resolve a dispute - authority reviews and decides
-    /// player_wins = true: player gets original entry back + dispute stake
-    /// player_wins = false: dispute stake forfeited, loss stands
+    /// player_wins = true: player gets original entry back plus any dispute deposit
+    /// player_wins = false: unsuccessful result stands and any dispute deposit is forfeited
     pub fn resolve_dispute(ctx: Context<ResolveDispute>, player_wins: bool) -> Result<()> {
         let bounty = &mut ctx.accounts.bounty;
         let global_state = &mut ctx.accounts.global_state;
@@ -1019,10 +1270,12 @@ pub mod seek_protocol {
 
         let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
         let signer_seeds = &[&seeds[..]];
+        release_bounty_liability(global_state, bounty.payout_amount);
 
         if player_wins {
-            // Player wins dispute: refund entry + dispute stake back
-            let total_refund = bounty.entry_amount
+            // Player wins dispute: refund entry + review deposit back
+            let total_refund = bounty
+                .entry_amount
                 .checked_add(bounty.dispute_stake)
                 .ok_or(SeekError::MathOverflow)?;
 
@@ -1044,9 +1297,8 @@ pub mod seek_protocol {
             token::transfer(transfer_ctx, total_refund)?;
 
             // Use saturating_sub for tracked balance
-            global_state.house_fund_balance = global_state
-                .house_fund_balance
-                .saturating_sub(total_refund);
+            global_state.house_fund_balance =
+                global_state.house_fund_balance.saturating_sub(total_refund);
 
             bounty.status = BountyStatus::Won;
             global_state.total_bounties_won = global_state
@@ -1054,10 +1306,13 @@ pub mod seek_protocol {
                 .checked_add(1)
                 .ok_or(SeekError::MathOverflow)?;
 
-            msg!("Dispute resolved: PLAYER WINS | Refund: {} SKR", total_refund / DECIMALS_MULTIPLIER);
+            msg!(
+                "Dispute resolved: PLAYER COMPLETES | Refund: {} SKR",
+                total_refund / DECIMALS_MULTIPLIER
+            );
         } else {
-            // Player loses dispute: stake forfeited, distribute entry (70/20/10)
-            // Dispute stake already tracked in house_fund_balance (from dispute_bounty)
+            // Player does not complete dispute: review deposit forfeited, distribute entry (70/20/10)
+            // Dispute review deposit already tracked in house_fund_balance (from dispute_bounty)
             // Now distribute the original entry amount
             let entry = bounty.entry_amount;
 
@@ -1108,7 +1363,7 @@ pub mod seek_protocol {
             );
             token::transfer(protocol_ctx, protocol_share)?;
 
-            // Update house balance: subtract entry, add back house_share (net: keep 70% + dispute_stake)
+            // Update house balance: subtract entry, add back house_share (net: keep 70% + review deposit)
             global_state.house_fund_balance = global_state
                 .house_fund_balance
                 .saturating_sub(entry)
@@ -1121,7 +1376,7 @@ pub mod seek_protocol {
                 .checked_add(1)
                 .ok_or(SeekError::MathOverflow)?;
 
-            msg!("Dispute resolved: PLAYER LOSES | Entry distributed 70/20/10, stake forfeited");
+            msg!("Dispute resolved: PLAYER MISSED | Entry distributed 70/20/10, review deposit forfeited");
         }
 
         emit!(DisputeResolved {
@@ -1159,6 +1414,7 @@ pub mod seek_protocol {
             current_time > bounty.expires_at + grace_period,
             SeekError::BountyNotExpired
         );
+        release_bounty_liability(global_state, bounty.payout_amount);
 
         // Refund entry from house vault to player
         let seeds = &[b"global_state".as_ref(), &[global_state.bump]];
@@ -1189,7 +1445,10 @@ pub mod seek_protocol {
             refund_amount: bounty.entry_amount,
         });
 
-        msg!("Bounty cancelled! Refund: {} SKR", bounty.entry_amount / DECIMALS_MULTIPLIER);
+        msg!(
+            "Bounty cancelled! Refund: {} SKR",
+            bounty.entry_amount / DECIMALS_MULTIPLIER
+        );
 
         Ok(())
     }
@@ -1202,10 +1461,7 @@ pub mod seek_protocol {
         new_authority: Pubkey,
     ) -> Result<()> {
         // Guard against accidentally proposing the zero address (= cancel, not a transfer)
-        require!(
-            new_authority != Pubkey::default(),
-            SeekError::Unauthorized
-        );
+        require!(new_authority != Pubkey::default(), SeekError::Unauthorized);
 
         let global_state = &mut ctx.accounts.global_state;
         global_state.pending_authority = new_authority;
@@ -1247,7 +1503,11 @@ pub mod seek_protocol {
             new_authority,
         });
 
-        msg!("Authority transferred from {} to {}", old_authority, new_authority);
+        msg!(
+            "Authority transferred from {} to {}",
+            old_authority,
+            new_authority
+        );
 
         Ok(())
     }
@@ -1301,7 +1561,11 @@ pub mod seek_protocol {
             new_treasury,
         });
 
-        msg!("Protocol treasury rotated: {} -> {}", old_treasury, new_treasury);
+        msg!(
+            "Protocol treasury rotated: {} -> {}",
+            old_treasury,
+            new_treasury
+        );
         Ok(())
     }
 
@@ -1359,7 +1623,7 @@ fn is_expected_initial_authority(_caller: &Pubkey) -> bool {
         if EXPECTED_INITIAL_AUTHORITY == Pubkey::default() {
             return false;
         }
-        return *_caller == EXPECTED_INITIAL_AUTHORITY;
+        *_caller == EXPECTED_INITIAL_AUTHORITY
     }
     #[cfg(not(feature = "mainnet"))]
     {
@@ -1548,7 +1812,7 @@ pub struct ProposeResolution<'info> {
 
 #[derive(Accounts)]
 pub struct FinalizeBounty<'info> {
-    /// Anyone can finalize after challenge period (permissionless)
+    /// Anyone can finalize a non-disputed pending bounty (permissionless)
     pub caller: Signer<'info>,
 
     /// Global state PDA
@@ -1582,7 +1846,7 @@ pub struct FinalizeBounty<'info> {
     )]
     pub house_vault: Box<Account<'info, TokenAccount>>,
 
-    /// Singularity vault for jackpot
+    /// Singularity bonus vault
     #[account(
         mut,
         seeds = [b"singularity_vault"],
@@ -1642,6 +1906,99 @@ pub struct FundHouse<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SetProtocolPaused<'info> {
+    /// Cold authority setting the pause flag.
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA.
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawUnreservedHouse<'info> {
+    /// Cold authority withdrawing only unreserved house funds.
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA.
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+
+    /// Cold authority's canonical SKR ATA.
+    #[account(
+        mut,
+        constraint = authority_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = authority_token_account.owner == authority.key() @ SeekError::Unauthorized,
+        constraint = authority_token_account.key() == get_associated_token_address(&authority.key(), &SKR_MINT) @ SeekError::Unauthorized
+    )]
+    pub authority_token_account: Box<Account<'info, TokenAccount>>,
+
+    /// House vault to withdraw from.
+    #[account(
+        mut,
+        seeds = [b"house_vault"],
+        bump,
+        constraint = house_vault.key() == global_state.house_vault
+    )]
+    pub house_vault: Box<Account<'info, TokenAccount>>,
+
+    /// Token program.
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+pub struct WithdrawSingularity<'info> {
+    /// Cold authority withdrawing Singularity funds while paused.
+    #[account(
+        constraint = authority.key() == global_state.authority @ SeekError::Unauthorized
+    )]
+    pub authority: Signer<'info>,
+
+    /// Global state PDA.
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+
+    /// Cold authority's canonical SKR ATA.
+    #[account(
+        mut,
+        constraint = authority_token_account.mint == SKR_MINT @ SeekError::InvalidMint,
+        constraint = authority_token_account.owner == authority.key() @ SeekError::Unauthorized,
+        constraint = authority_token_account.key() == get_associated_token_address(&authority.key(), &SKR_MINT) @ SeekError::Unauthorized
+    )]
+    pub authority_token_account: Box<Account<'info, TokenAccount>>,
+
+    /// Singularity vault to withdraw from.
+    #[account(
+        mut,
+        seeds = [b"singularity_vault"],
+        bump,
+        constraint = singularity_vault.key() == global_state.singularity_vault
+    )]
+    pub singularity_vault: Box<Account<'info, TokenAccount>>,
+
+    /// Token program.
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct DisputeBounty<'info> {
     /// Player disputing the bounty
     #[account(
@@ -1650,7 +2007,7 @@ pub struct DisputeBounty<'info> {
     )]
     pub player: Signer<'info>,
 
-    /// Global state PDA (mut to track dispute stake)
+    /// Global state PDA (mut to track dispute review deposit)
     #[account(
         mut,
         seeds = [b"global_state"],
@@ -1665,14 +2022,14 @@ pub struct DisputeBounty<'info> {
     )]
     pub bounty: Box<Account<'info, Bounty>>,
 
-    /// Player's token account for stake — pinned to canonical ATA.
+    /// Player's token account for review deposit — pinned to canonical ATA.
     #[account(
         mut,
         constraint = player_token_account.key() == get_associated_token_address(&player.key(), &SKR_MINT) @ SeekError::Unauthorized
     )]
     pub player_token_account: Box<Account<'info, TokenAccount>>,
 
-    /// House vault to receive stake
+    /// House vault to receive review deposit
     #[account(
         mut,
         seeds = [b"house_vault"],

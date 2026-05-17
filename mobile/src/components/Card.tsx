@@ -13,7 +13,7 @@ interface CardProps {
 export default function Card({
   children,
   variant = 'default',
-  glowColor = colors.gold,
+  glowColor = colors.aqua,
   padding = 'medium',
   style,
 }: CardProps) {
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
   },
   glow: {
     borderWidth: 2,
-    borderColor: colors.gold,
+    borderColor: colors.aqua,
   },
   nonePadding: {
     padding: 0,

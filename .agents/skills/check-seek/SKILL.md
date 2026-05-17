@@ -60,7 +60,7 @@ Flag any drift above the normal briefing:
 | Check | Expected |
 |---|---|
 | Demo residue | `rg -n "addWinnings|DEMO_TARGETS|DEMO_WALLET|DEMO_MODE|useFallbackDemoBounty|isDemoMode|demo mode|demo-mode" mobile/src backend/src` returns no matches. |
-| Mission count | `rg -c "description:" backend/src/data/missions.ts` returns `300`. |
+| Mission count | `cd backend && node --test -r ts-node/register tests/missions.test.ts` passes, confirming 600 missions and the 140/60, 120/80, 100/100 outdoor/indoor splits. |
 | Mainnet init authority | `EXPECTED_INITIAL_AUTHORITY` is still placeholder until the user provides the cold Ledger pubkey; this is a launch blocker, not a code failure. |
 | dApp Store assets | `node check-assets.mjs` in `dapp-store-publishing/` should fail until real `icon.png`, `banner.png`, and screenshots exist. |
 | Publisher wallet | `dapp-store-publishing/config.yaml` still has `PLACEHOLDER_PUBLISHER_PUBKEY` until B5 is done. |
@@ -68,6 +68,7 @@ Flag any drift above the normal briefing:
 | Redis fail-closed | `backend/src/services/redis.service.ts` should fail closed when `REDIS_URL` is set but Redis is unavailable. |
 | Cancel exploit | `cancel_bounty` should accept `Pending` only, not `Submitted`. |
 | Reveal/propose timeout | `revealMissionOnChain` and `proposeResolutionOnChain` should use `withTimeout`. |
+| Keypair custody | No docs or commands should direct future work to create, store, or fund keypairs in `/tmp`, `/private/tmp`, shell heredocs, terminal scrollback, chat, or any ephemeral path. Generated keypairs must live in durable ignored storage with `0600`, verified pubkey, and backup/drain plan before funding or authority assignment. |
 
 ## Report Format
 
@@ -111,3 +112,5 @@ Use this shape:
   current checkout.
 - Do not deploy mainnet or run destructive launch commands from this skill.
 - Keep `tasks/where-we-are.md` current if the check changes the state.
+- For any keypair, fee payer, publisher wallet, hot wallet, or authority work,
+  apply the keypair custody rule before running commands.

@@ -25,6 +25,15 @@ days late after the user almost shipped to mainnet on top).
 - See `tasks/lessons.md` § "Verify CI was actually green" for prior
   failure mode that necessitated this rule.
 
+**Keypair custody hard stop** — never create, store, or fund crypto keypairs in
+`/tmp`, `/private/tmp`, shell heredocs, terminal scrollback, chat, or any
+ephemeral path. This includes fee payers, deploy authorities, hot wallets,
+publisher wallets, burner wallets, and "temporary" wallets. Before funds or
+authority touch a generated keypair, it must be in a durable ignored secrets
+directory, `0600`, pubkey-verified, and backed up or paired with an explicit
+drain plan. If a keypair is in temp, move and verify it before funding;
+otherwise stop.
+
 **Session-end protocol:** before pausing for the night or claiming
 "complete," update `tasks/where-we-are.md` so the next session can pick
 up cold without re-reading the whole codebase. Specifically: bump date,
@@ -89,7 +98,7 @@ action as a single executable step.
 # Seek — Project Reference
 
 ## What this is
-Pokemon-GO for crypto on Solana Seeker. Players stake $SKR (1000/2000/3000 per tier), get a random real-world target, photograph it, AI (Claude Vision) validates, 2x profit on win, 70/20/10 loss split, 1-in-500 jackpot on each win. Won Solana Mobile Monolith 2026 hackathon (Feb 2026). Preparing for mainnet + Solana dApp Store.
+Financialized real-world scavenger hunts on Solana Seeker. Players commit a tiered $SKR entry (1000/3000/5000), receive a random physical target, capture proof, AI (Claude Vision) validates, completed missions receive 2x total return (entry back + 1x net profit), missed missions distribute 70/20/10, and eligible completions can receive the Singularity bonus pool. Won Solana Mobile Monolith 2026 hackathon (Feb 2026). Live on mainnet + Solana dApp Store, preparing the next upgrade-first update.
 
 ## Stack map
 - `contracts/programs/seek-protocol/src/lib.rs` — Anchor Rust program (~1800 lines, 16 instructions)
@@ -118,7 +127,7 @@ npm run build:devnet                                              # devnet
 npm run deploy:mainnet                                            # DESTRUCTIVE; Ledger; no --final
 npm run deploy:devnet
 ```
-Feature flags gate SKR_MINT, SKR_DECIMALS, CHALLENGE_PERIOD (mainnet 300s / devnet 10s). Entry amounts derive from `DECIMALS_MULTIPLIER`.
+Feature flags gate SKR_MINT, SKR_DECIMALS, and CHALLENGE_PERIOD. Public disputes are disabled for the current release, so CHALLENGE_PERIOD should be zero on mainnet/devnet after the upgrade. Entry amounts derive from `DECIMALS_MULTIPLIER`.
 
 ### Backend
 ```bash
@@ -153,25 +162,34 @@ Switch `NETWORK` in `mobile/src/config/index.ts` to swap mainnet/devnet ($SKR mi
 - APK → Solana dApp Store via `npx @solana-mobile/dapp-store-cli` flow. See `tasks/dapp-store-checklist.md`.
 
 ## On-chain auth model (3 roles, 2 Ledgers + 1 hot keypair minimum)
-- **Cold authority** (`GlobalState.authority`) — Ledger hardware wallet (Ledger #1). Signs: `fund_house`, `set_hot_authority`, `set_treasury`, `propose_authority_transfer`, `accept_authority_transfer`, `cancel_authority_transfer`, `resolve_dispute`. Two-step transfer prevents typo loss.
-- **Fees wallet / protocol_treasury OWNER** (`GlobalState.protocol_treasury` = its SKR ATA) — separate Ledger #2 (`Fmv8H…Y9Hr`). Signs **nothing on-chain in the Seek protocol**, just receives 10% rake from each loss. **The rake is income**: user periodically swaps SKR → USDC on a DEX (Ledger-signed) and off-ramps to fiat. Operating expenses are NOT paid from this wallet. Rotatable via `admin.ts set-treasury` (cold-signed). The contract has no `withdraw_treasury` instruction — it was removed 2026-04-23 because under the FEES_WALLET-owned-ATA design the cold authority cannot authorize SPL transfers from FEES_WALLET's account; the Ledger spends directly via DEX.
+- **Cold authority** (`GlobalState.authority`) — Ledger hardware wallet (Ledger #1). Signs: `fund_house`, `set_protocol_paused`, `withdraw_unreserved_house`, `withdraw_singularity`, `set_hot_authority`, `set_treasury`, `propose_authority_transfer`, `accept_authority_transfer`, `cancel_authority_transfer`, `resolve_dispute`. Two-step transfer prevents typo loss.
+- **Fees wallet / protocol_treasury OWNER** (`GlobalState.protocol_treasury` = its SKR ATA) — separate Ledger #2 (`Fmv8H…Y9Hr`). Signs **nothing on-chain in the Seek protocol**, just receives 10% protocol revenue from missed missions. **The revenue is income**: user periodically swaps SKR → USDC on a DEX (Ledger-signed) and off-ramps to fiat. Operating expenses are NOT paid from this wallet. Rotatable via `admin.ts set-treasury` (cold-signed). The contract has no `withdraw_treasury` instruction — it was removed 2026-04-23 because under the FEES_WALLET-owned-ATA design the cold authority cannot authorize SPL transfers from FEES_WALLET's account; the Ledger spends directly via DEX.
 - **Hot authority** (`GlobalState.hot_authority`) — Backend keypair in Railway env (NOT a Ledger). Signs ONLY: `reveal_mission`, `propose_resolution`. Compromise is contained (cannot drain treasury, cannot rotate any authority). Rotate via `set_hot_authority` (cold-signed).
 - **Program upgrade authority** — Ledger (same as cold authority by default, or split into a third Ledger). Keep upgradeable during launch; do not use `--final` until post-launch tweaks are done. Set via `solana program set-upgrade-authority` only after an explicit decision.
-- **House vault** (`GlobalState.house_vault`) — PDA token account, NOT an EOA. Win payouts are PDA-signed CPIs from the program; **no human signs payouts**. Cold authority can `fund_house` to add SKR but cannot withdraw — only the protocol's win-payout logic moves funds out. This is the "hot, auto-paying" behavior without exposing a hot key.
+- **House vault** (`GlobalState.house_vault`) — PDA token account, NOT an EOA. Completion payouts are PDA-signed CPIs from the program; **no human signs payouts**. Cold authority can `fund_house` to add SKR and can withdraw only unreserved surplus via `withdraw_unreserved_house`; active payout liability remains locked for already-accepted bounties. This is explicit public admin control, not a hidden backdoor.
+- **Singularity vault** (`GlobalState.singularity_vault`) — PDA token account for bonus-pool SKR. Cold authority can withdraw via `withdraw_singularity` only while the protocol is paused and there are zero active bounties; the instruction emits an on-chain event.
 - User is solo operator — uses Ledger, not Squads multisig. Don't suggest multisig unless explicitly asked.
 - **External audit skipped** — internal audit only. Don't re-propose unless contract surface changes materially.
 
 ## Economic model — NORTH STAR
 
-**Player win rate target: 8-12% at launch. House edge: 35-45% per bet. Hard ceiling: 15%.** Launch vault is ~$1,000 — every economic decision serves ruin avoidance, not just positive EV. Once vault > $20k, target can relax to 15-18%.
+**Player completion-rate target: 8-12% at launch. Hard ceiling: 15%.** Launch vault is ~$1,000 — every economic decision serves ruin avoidance, not just positive EV. The next upgrade uses 2x total return / 1x net profit, which halves per-win vault drawdown versus the earlier 3x total return model. Once vault > $20k, target can relax to 15-18%.
 
 Per-bounty P&L (1000 SKR tier 1 entry):
-- Win: house pool pays 2000 SKR profit (player gets entry + 2x)
-- Loss: 700 → house, 200 → jackpot, 100 → treasury (all kept by protocol)
+- Complete: reward pool pays 2000 SKR total return (player gets entry back + 1000 SKR net profit)
+- Missed mission: 700 → reward pool, 200 → Singularity pool, 100 → treasury (all kept by protocol)
 
-At $1k vault (~58,824 SKR), a single tier-1 win = 3.4% of vault, tier-2 win = 6.8%, tier-3 win = 10.2%. Break-even is ~26% win rate; we run at <12% with margin.
+At $1k vault (~58,824 SKR), a single tier-1 completion is a 1,000 SKR net drawdown (1.7% of vault), tier-2 is 3,000 SKR (5.1%), and tier-3 is 5,000 SKR (8.5%). The 8-12% launch completion target remains intentionally conservative while the mission pool is tuned.
 
-| Win rate | House edge | Status at launch vault |
+On-chain exposure guard: `GlobalState.active_payout_liability` reserves the
+full payout for every active bounty. `accept_bounty` rejects new entries if
+the projected vault balance cannot cover every active bounty as a win. Viral
+traffic may queue/throttle, but the program does not accept uncovered payout
+liability. Cold-authority emergency controls can pause new entries, withdraw
+only unreserved house surplus, and sweep Singularity only while paused with no
+active bounties.
+
+| Completion rate | Protocol edge | Status at launch vault |
 |---------:|-----------:|:-----------------------|
 | 8% | +48% | safe target |
 | 10% | +43% | safe target |
@@ -181,21 +199,21 @@ At $1k vault (~58,824 SKR), a single tier-1 win = 3.4% of vault, tier-2 win = 6.
 | 25% | +3% | break-even |
 
 **Levers (tune any or all to hit target):**
-1. Mission difficulty — ~20% of the 300-mission pool should be intentionally near-impossible within the tier timer. **Rewritten 2026-04-23 for $1k vault — every tier-1 mission now requires color/condition/context specificity.**
+1. Mission difficulty — 600 global, location-native missions. Tier 1 should stay broad/simple, Tier 2 adds visible constraints, and Tier 3 should be rare multi-cue combinations that are almost impossible inside the timer.
 2. AI confidence thresholds (`backend/src/types/index.ts` `TIER_CONFIDENCE_THRESHOLDS`, **bumped 2026-04-23 from 0.80/0.85/0.90 → 0.88/0.92/0.95**).
 3. Tier timers (180s/120s/60s — keep, already aggressive).
 4. Screenshot + metadata strictness (already blocking outside dev).
-5. Tier gating by vault size (POST-LAUNCH) — see roadmap § E8.
+5. Tier gating by vault size (optional additional guard) — see roadmap § E8.
 
-**Do NOT cite the pitch deck's "40% success rate" line** — that was marketing, not operational. Operationally we target 8-12% at launch.
+**Do NOT cite the pitch deck's "40% success rate" line** — that was marketing, not operational. Operationally we target 8-12% completion rate at launch.
 
 See [memory/project_economic_model.md](~/.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_economic_model.md) for full math + monitoring plan, and [tasks/roadmap.md § B7](tasks/roadmap.md) for the launch-blocker audit task.
 
 ## Key architectural invariants
 - **Commit-reveal missions**: Mission ID + 32-byte salt committed at `accept_bounty`, revealed at `reveal_mission` (after photo submit). Prevents mission front-running.
-- **Optimistic resolve + dispute window**: `propose_resolution` → 300s challenge period → `finalize_bounty`. Player can `dispute_bounty` during challenge (stake 50% of entry) → `resolve_dispute` (cold-signed).
-- **Jackpot RNG** (v1): strengthened entropy = `hash(mission_commitment || bounty_pda || slot || timestamp) % 500`. Still grindable by a slot leader with low ROI at launch jackpot sizes. **Task #3 upgrade to Switchboard On-Demand VRF when jackpot pool > $50k.**
-- **finalize_bounty is permissionless** — anyone can crank once challenge period ends. Backend finalizer worker (`backend/src/services/finalizer.service.ts`) does this on a poll loop (`POLL_INTERVAL` = challenge_period/5, min 2s).
+- **Optimistic resolve + disabled public dispute window**: `propose_resolution` → `finalize_bounty` immediately while public disputes are disabled. Legacy dispute/admin instructions remain for compatibility but are not exposed publicly.
+- **Singularity bonus RNG** (v1): strengthened entropy = `hash(mission_commitment || bounty_pda || slot || timestamp) % 500`. Still grindable by a slot leader with low ROI at launch pool sizes. **Task #3 upgrade to Switchboard On-Demand VRF when Singularity pool > $50k.**
+- **finalize_bounty is permissionless** — anyone can crank once a result is proposed while public disputes are disabled. Backend finalizer worker (`backend/src/services/finalizer.service.ts`) does this on a short poll loop.
 - **Redis is the source of truth** for mission secrets, prepared bounties, active bounties, player bounty index, finalizer queue, auth nonces, SGT verification, and rate-limit counters. In-memory Maps are a cache + fallback for dev. On restart, workers hydrate from Redis. `REDIS_URL` unset = in-memory only (dev only).
 
 ## Known gotchas
@@ -210,13 +228,15 @@ See [memory/project_economic_model.md](~/.claude/projects/-Users-hammer-Desktop-
 **Authoritative roadmap:** [tasks/roadmap.md](tasks/roadmap.md).
 
 **Done in Phase A (2026-04-22 hardening pass):**
-- Contract: SKR mint + decimals feature-gated, 300s challenge, two-step + hot/cold auth, strengthened jackpot RNG, `get_tier_duration` returns Result, 19 client-side unit tests
+- Contract: SKR mint + decimals feature-gated, zero challenge while public disputes are disabled, two-step + hot/cold auth, strengthened Singularity bonus RNG, `get_tier_duration` returns Result, client-side unit tests
 - Backend: Claude 4.6 upgrade, Sentry + pino + request correlation, Redis-backed critical state + finalizer hydration, hot/cold keypair split with mainnet guard, /prepare rate limiter, magic-byte image validation, Claude prompt injection hardening, `/api/health/ready` probe, decimals-aware admin CLI with auth commands
 - Mobile: release signing env vars, R8 + shrinkResources enabled, AndroidManifest hardened, network_security_config + data_extraction_rules, `seek://` deep-link scheme, @sentry/react-native JS init, NETWORK toggle drives cluster constants, `getFullAddress` bug fixed, dead demo wallet code removed
 - Infra: Dockerfile + railway.json, GitHub Actions CI (typecheck backend + mobile, cargo check both features, cargo clippy, contract unit tests)
 - Docs: audit, mainnet plan, dApp Store checklist + listing copy, deploy runbook, SIGNING guide, SENTRY guide, dapp-store-publishing scaffold, lessons updated, historical docs archived
 
-**Done in Phase B7 (2026-04-23 mission/economic remediation):** 300 missions rewritten for $1k vault (every tier-1 requires color/condition/context specificity). AI thresholds bumped 0.80/0.85/0.90 → 0.88/0.92/0.95. Win-rate target lowered 15-18% → 8-12%.
+**Done in Phase B7 (2026-04-23 mission/economic remediation):** first 300-mission rewrite for $1k vault. AI thresholds bumped 0.80/0.85/0.90 → 0.88/0.92/0.95. Win-rate target lowered 15-18% → 8-12%.
+
+**Updated in next-app prep (2026-05-17):** approved mission taxonomy expanded the pool to 600 missions across 20 global location families. Outdoor/indoor split is T1 140/60, T2 120/80, T3 100/100. Tier 1 is broad and simple; Tier 2 is more specific; Tier 3 is intentionally rare and multi-cue.
 
 **Done in Phase B8 (2026-04-23 comprehensive audit + remediation):** All 5 CRIT + 9 HIGH + 6 MED items closed. See [memory/project_b8_audit.md](~/.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_b8_audit.md) and [tasks/roadmap.md § B8](tasks/roadmap.md). Highlights:
 - **Auth:** `requireWalletAuth(operation)` wired to /prepare + /submit. `verifyTransaction` rewritten to parse on-chain tx + assert player/PDA/programId. Operation-bound message `seek:{op}:{wallet}:{ts}` + Redis SETNX nonce.
@@ -246,7 +266,7 @@ See [memory/project_economic_model.md](~/.claude/projects/-Users-hammer-Desktop-
 - dApp Store icon, required 1200x600 banner, screenshots/videos, optional 1200x1200 feature graphic
 
 **Deferred post-launch** (see [tasks/roadmap.md](tasks/roadmap.md) § Phase E):
-- Switchboard On-Demand VRF (when jackpot pool > ~$50k USD)
+- Switchboard On-Demand VRF (when Singularity pool > ~$50k USD)
 - Full Anchor integration tests (needs SKR_MINT runtime override or local-validator mint clone)
 - Seeker Camera SDK / TEE attestation (awaiting Solana Mobile)
 - Leaderboard, mission pool expansion, community missions, GPS super hunts

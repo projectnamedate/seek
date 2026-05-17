@@ -1,15 +1,15 @@
 /**
  * Finalization Worker
  *
- * Polls for bounties stuck in challenge period (ChallengeWon/ChallengeLost)
- * and finalizes them once the challenge period has expired.
+ * Polls for bounties in pending-finalization states (ChallengeWon/ChallengeLost)
+ * and finalizes them once their configured delay has elapsed.
  *
  * This is necessary because the on-chain flow is:
  *   1. reveal_mission   (immediate after photo submit)
  *   2. propose_resolution (immediate after AI validation)
- *   3. finalize_bounty  (DELAYED - must wait for challenge period to end)
+ *   3. finalize_bounty  (immediate while public disputes are disabled)
  *
- * The challenge period is 5 minutes (300 seconds on-chain).
+ * Keep this delay aligned with the currently deployed program.
  */
 import { LAMPORTS_PER_SOL, PublicKey } from '@solana/web3.js';
 import {
@@ -23,7 +23,7 @@ import {
 } from './solana.service';
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../config';
-import { getRedis, RK } from './redis.service';
+import { getRedis, RK, redisAcquireLock, redisReleaseLock } from './redis.service';
 import { childLogger } from './logger.service';
 import { captureException } from './sentry.service';
 import { withTimeout } from '../utils/timeout';
@@ -31,8 +31,26 @@ import { withTimeout } from '../utils/timeout';
 const RPC_TIMEOUT_MS = 30_000;
 const HOT_WALLET_LOW_THRESHOLD_SOL = 0.1;
 const HOT_WALLET_CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const FINALIZER_POLL_INTERVAL_MS = config.solana.network === 'mainnet-beta' ? 10_000 : 2_000;
+const FINALIZER_CONCURRENCY = 3;
+const FINALIZER_LOCK_TTL_SECONDS = 120;
+const FINALIZER_QUEUE_WARN_DEPTH = 50;
+const FINALIZER_LAG_WARN_SECONDS = 120;
+const FINALIZER_LAG_PAUSE_SECONDS = 300;
+const FINALIZER_SAFETY_PAUSE_SECONDS = 10 * 60;
+const FINALIZER_ALERT_COOLDOWN_MS = 5 * 60 * 1000;
+const CHALLENGE_PERIOD_RETRY_SECONDS = 30;
 
 const log = childLogger('finalizer');
+
+// Temporary production containment for a 2026-05-17 timestamp-precheck false
+// win. This prevents the queued optimistic WIN from auto-finalizing while the
+// bounty is handled manually. Remove after the on-chain position is remediated.
+const FINALIZER_BLOCKLIST = new Set([
+  '4M7vPT92eJ968Tij59i7f5VKiTaE1uwqm8wV9QRihWHR',
+  // 2026-05-17 hardware smoke false loss caused by retired Anthropic model id.
+  'CqmxbMsLYbW7eUoxzNTqskeEUv41GNM6qKu9WyoF8dwk',
+]);
 
 // Track bounties pending finalization: bountyPda → { playerWallet, challengeEndsAt, attempts }
 interface PendingFinalization {
@@ -51,15 +69,14 @@ const pendingFinalizations = new Map<string, PendingFinalization>();
 // Max retry attempts before giving up
 const MAX_ATTEMPTS = 10;
 
-// How often to poll (ms). ~1/5 of the challenge period keeps latency low without
-// hammering the RPC (mainnet 300s → 60s poll; devnet 10s → 2s poll).
-const POLL_INTERVAL = Math.max(2_000, Math.floor(config.protocol.challengePeriodSeconds * 1000 / 5));
-
 let intervalHandle: NodeJS.Timeout | null = null;
 let hotWalletCheckHandle: NodeJS.Timeout | null = null;
+let processing = false;
+let lastBacklogAlertAt = 0;
+let safetyPauseUntil = 0;
 
 /**
- * Queue a bounty for finalization after its challenge period ends.
+ * Queue a bounty for finalization after its configured finalization delay ends.
  * Awaits the Redis persist before returning — closes the crash window
  * between propose_resolution succeeding on-chain and the queue entry
  * being durable. Without this, a process crash here strands the bounty
@@ -70,6 +87,12 @@ export async function queueFinalization(
   playerWallet: string,
   challengeEndsAt: number
 ): Promise<void> {
+  if (FINALIZER_BLOCKLIST.has(bountyPda)) {
+    await removeQueueEntry(bountyPda);
+    log.warn({ bountyPda: bountyPda.slice(0, 8) }, 'blocked bounty not queued for finalization');
+    return;
+  }
+
   if (pendingFinalizations.has(bountyPda)) {
     log.info({ bountyPda: bountyPda.slice(0, 8) }, 'bounty already queued');
     return;
@@ -122,6 +145,74 @@ async function removeQueueEntry(bountyPda: string): Promise<void> {
   await r.del(RK.finalizerMeta(bountyPda));
 }
 
+export async function cancelFinalization(bountyPda: string): Promise<void> {
+  pendingFinalizations.delete(bountyPda);
+  await removeQueueEntry(bountyPda);
+  log.info({ bountyPda: bountyPda.slice(0, 8) }, 'cancelled pending finalization');
+}
+
+export async function getFinalizerSafetyPause(): Promise<{
+  paused: boolean;
+  until: number | null;
+  reason?: string;
+}> {
+  const now = Math.floor(Date.now() / 1000);
+  if (safetyPauseUntil > now) {
+    return { paused: true, until: safetyPauseUntil, reason: 'finalizer-lag' };
+  }
+
+  const r = await getRedis();
+  if (!r) return { paused: false, until: null };
+
+  const raw = await r.get(RK.finalizerSafetyPause());
+  if (!raw) return { paused: false, until: null };
+
+  try {
+    const parsed = JSON.parse(raw) as { until?: number; reason?: string };
+    if (typeof parsed.until === 'number' && parsed.until > now) {
+      safetyPauseUntil = parsed.until;
+      return {
+        paused: true,
+        until: parsed.until,
+        reason: parsed.reason || 'finalizer-lag',
+      };
+    }
+  } catch {
+    // Bad payload: ignore; TTL will clear it.
+  }
+
+  return { paused: false, until: null };
+}
+
+async function activateFinalizerSafetyPause(lagSeconds: number, queueSize: number): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+  const until = now + FINALIZER_SAFETY_PAUSE_SECONDS;
+  if (safetyPauseUntil >= until - 30) return;
+
+  safetyPauseUntil = until;
+  const payload = JSON.stringify({
+    until,
+    reason: 'finalizer-lag',
+    lagSeconds,
+    queueSize,
+  });
+
+  const r = await getRedis();
+  if (r) {
+    await r.set(RK.finalizerSafetyPause(), payload, { EX: FINALIZER_SAFETY_PAUSE_SECONDS });
+  }
+
+  const msg = `Finalizer lag ${lagSeconds}s exceeds ${FINALIZER_LAG_PAUSE_SECONDS}s; pausing backend bounty preparation until ${new Date(until * 1000).toISOString()}.`;
+  log.error({ lagSeconds, queueSize, pauseUntil: until }, msg);
+  captureException(new Error(msg), {
+    severity: 'critical',
+    context: 'finalizer-safety-pause',
+    lagSeconds,
+    queueSize,
+    pauseUntil: until,
+  });
+}
+
 /**
  * On startup, hydrate the in-memory queue from Redis. Ensures bounties queued
  * by a previous backend instance get finalized after a restart.
@@ -135,6 +226,11 @@ async function hydrateFromRedis(): Promise<void> {
 
     let restored = 0;
     for (const bountyPda of bountyPdas) {
+      if (FINALIZER_BLOCKLIST.has(bountyPda)) {
+        await removeQueueEntry(bountyPda);
+        log.warn({ bountyPda: bountyPda.slice(0, 8) }, 'removed blocked bounty from finalization queue');
+        continue;
+      }
       if (pendingFinalizations.has(bountyPda)) continue;
       const raw = await r.get(RK.finalizerMeta(bountyPda));
       if (!raw) continue;
@@ -155,66 +251,198 @@ async function hydrateFromRedis(): Promise<void> {
   }
 }
 
+function getReadyFinalizations(now: number): PendingFinalization[] {
+  return Array.from(pendingFinalizations.values()).filter(
+    (pending) => now >= pending.challengeEndsAt,
+  );
+}
+
+function getOldestReadyLagSeconds(now: number): number {
+  let oldestLag = 0;
+  for (const pending of pendingFinalizations.values()) {
+    if (now >= pending.challengeEndsAt) {
+      oldestLag = Math.max(oldestLag, now - pending.challengeEndsAt);
+    }
+  }
+  return oldestLag;
+}
+
+async function monitorBacklog(readyCount: number, now: number): Promise<void> {
+  const queueSize = pendingFinalizations.size;
+  const oldestReadyLagSeconds = getOldestReadyLagSeconds(now);
+  if (oldestReadyLagSeconds >= FINALIZER_LAG_PAUSE_SECONDS) {
+    await activateFinalizerSafetyPause(oldestReadyLagSeconds, queueSize);
+  }
+
+  const shouldWarn =
+    queueSize >= FINALIZER_QUEUE_WARN_DEPTH ||
+    oldestReadyLagSeconds >= FINALIZER_LAG_WARN_SECONDS;
+  if (!shouldWarn) return;
+
+  const nowMs = Date.now();
+  if (nowMs - lastBacklogAlertAt < FINALIZER_ALERT_COOLDOWN_MS) return;
+  lastBacklogAlertAt = nowMs;
+
+  const msg = `Finalizer backlog warning: queue=${queueSize}, ready=${readyCount}, oldestReadyLag=${oldestReadyLagSeconds}s.`;
+  log.warn({ queueSize, readyCount, oldestReadyLagSeconds }, msg);
+  captureException(new Error(msg), {
+    severity: 'warning',
+    context: 'finalizer-backlog',
+    queueSize,
+    readyCount,
+    oldestReadyLagSeconds,
+  });
+}
+
+async function processWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      while (next < items.length) {
+        const item = items[next++];
+        await worker(item);
+      }
+    },
+  );
+  await Promise.all(workers);
+}
+
 /**
  * Process all pending finalizations
  */
 async function processPendingFinalizations(): Promise<void> {
-  if (pendingFinalizations.size === 0) return;
-
-  const now = Math.floor(Date.now() / 1000);
-  const ready: PendingFinalization[] = [];
-
-  for (const pending of pendingFinalizations.values()) {
-    if (now >= pending.challengeEndsAt) {
-      ready.push(pending);
-    }
+  if (processing) {
+    log.warn('previous finalizer tick still running; skipping overlapping tick');
+    return;
   }
 
-  if (ready.length === 0) return;
+  if (pendingFinalizations.size === 0) return;
+  processing = true;
 
-  log.info({ count: ready.length }, 'processing ready bounties');
+  try {
+    const now = Math.floor(Date.now() / 1000);
+    const ready = getReadyFinalizations(now);
 
-  for (const pending of ready) {
-    try {
-      await finalizeSingleBounty(pending);
-      pendingFinalizations.delete(pending.bountyPda);
-      await removeQueueEntry(pending.bountyPda);
-      log.info({ bountyPda: pending.bountyPda.slice(0, 8) }, 'finalized bounty');
-    } catch (error: any) {
-      pending.attempts++;
-      // Persist attempt count so retries survive restart
-      void persistQueueEntry(pending).catch(() => { /* non-critical */ });
+    await monitorBacklog(ready.length, now);
 
+    if (ready.length === 0) return;
+
+    log.info(
+      {
+        count: ready.length,
+        concurrency: FINALIZER_CONCURRENCY,
+        oldestReadyLagSeconds: getOldestReadyLagSeconds(now),
+      },
+      'processing ready bounties',
+    );
+
+    await processWithConcurrency(ready, FINALIZER_CONCURRENCY, finalizeReadyBounty);
+  } finally {
+    processing = false;
+  }
+}
+
+async function finalizeReadyBounty(pending: PendingFinalization): Promise<void> {
+  if (FINALIZER_BLOCKLIST.has(pending.bountyPda)) {
+    pendingFinalizations.delete(pending.bountyPda);
+    await removeQueueEntry(pending.bountyPda);
+    log.warn({ bountyPda: pending.bountyPda.slice(0, 8) }, 'skipped blocked bounty finalization');
+    return;
+  }
+
+  const lockKey = RK.finalizerLock(pending.bountyPda);
+  const lockAcquired = await redisAcquireLock(lockKey, FINALIZER_LOCK_TTL_SECONDS);
+  if (!lockAcquired) {
+    log.warn({ bountyPda: pending.bountyPda.slice(0, 8) }, 'finalizer lock not acquired; another worker may be processing bounty');
+    return;
+  }
+
+  try {
+    const signature = await finalizeSingleBounty(pending);
+    pendingFinalizations.delete(pending.bountyPda);
+    await removeQueueEntry(pending.bountyPda);
+    log.info({ bountyPda: pending.bountyPda.slice(0, 8), signature }, 'finalized bounty');
+  } catch (error: any) {
+    if (isChallengePeriodActiveError(error)) {
+      const now = Math.floor(Date.now() / 1000);
+      pending.challengeEndsAt = now + CHALLENGE_PERIOD_RETRY_SECONDS;
+      await persistQueueEntry(pending);
       log.warn(
         {
           bountyPda: pending.bountyPda.slice(0, 8),
-          attempt: pending.attempts,
-          max: MAX_ATTEMPTS,
+          retryAt: new Date(pending.challengeEndsAt * 1000).toISOString(),
+          attempts: pending.attempts,
           err: error.message,
         },
-        'finalize failed'
+        'finalize deferred; on-chain challenge period still active',
       );
-
-      if (pending.attempts >= MAX_ATTEMPTS) {
-        pendingFinalizations.delete(pending.bountyPda);
-        await removeQueueEntry(pending.bountyPda);
-        log.error(
-          { bountyPda: pending.bountyPda.slice(0, 8), max: MAX_ATTEMPTS },
-          'giving up on bounty after max attempts'
-        );
-        // Page operator — bounty is permanently stuck on-chain. Manual
-        // intervention required (call finalize_bounty via admin.ts or
-        // investigate the on-chain state).
-        captureException(error, {
-          bountyPda: pending.bountyPda,
-          playerWallet: pending.playerWallet,
-          attempts: pending.attempts,
-          severity: 'critical',
-          context: 'finalizer-max-attempts',
-        });
-      }
+      return;
     }
+
+    pending.attempts++;
+    // Persist attempt count so retries survive restart
+    void persistQueueEntry(pending).catch(() => { /* non-critical */ });
+
+    log.warn(
+      {
+        bountyPda: pending.bountyPda.slice(0, 8),
+        attempt: pending.attempts,
+        max: MAX_ATTEMPTS,
+        err: error.message,
+      },
+      'finalize failed',
+    );
+
+    if (pending.attempts >= MAX_ATTEMPTS) {
+      pendingFinalizations.delete(pending.bountyPda);
+      await removeQueueEntry(pending.bountyPda);
+      log.error(
+        { bountyPda: pending.bountyPda.slice(0, 8), max: MAX_ATTEMPTS },
+        'giving up on bounty after max attempts',
+      );
+      // Page operator — bounty is permanently stuck on-chain. Manual
+      // intervention required (call finalize_bounty via admin.ts or
+      // investigate the on-chain state).
+      captureException(error, {
+        bountyPda: pending.bountyPda,
+        playerWallet: pending.playerWallet,
+        attempts: pending.attempts,
+        severity: 'critical',
+        context: 'finalizer-max-attempts',
+      });
+    }
+  } finally {
+    await redisReleaseLock(lockKey);
   }
+}
+
+function isChallengePeriodActiveError(error: any): boolean {
+  const message = String(error?.message ?? error ?? '');
+  return message.includes('ChallengePeriodActive') || message.includes('Error Number: 6018');
+}
+
+/**
+ * Ops helper for recovering a bounty that was proposed on-chain but is missing
+ * from the worker queue. finalize_bounty is permissionless, so this uses the
+ * same hot signer as the background worker.
+ */
+export async function finalizeBountyNow(bountyPda: string): Promise<string> {
+  const program = getProgram();
+  const bounty = await (program.account as any).bounty.fetch(new PublicKey(bountyPda));
+  const playerWallet = (bounty.player as PublicKey).toBase58();
+
+  return finalizeSingleBounty({
+    bountyPda,
+    playerWallet,
+    challengeEndsAt: 0,
+    attempts: 0,
+    addedAt: Date.now(),
+  });
 }
 
 /**
@@ -294,7 +522,13 @@ export function startFinalizationWorker(): void {
     return;
   }
 
-  log.info({ pollIntervalMs: POLL_INTERVAL }, 'starting worker');
+  log.info(
+    {
+      pollIntervalMs: FINALIZER_POLL_INTERVAL_MS,
+      concurrency: FINALIZER_CONCURRENCY,
+    },
+    'starting worker',
+  );
 
   // Restore queue from Redis first (no-op if Redis disabled)
   void hydrateFromRedis().catch((err) => log.error({ err }, 'hydrate error'));
@@ -303,7 +537,7 @@ export function startFinalizationWorker(): void {
     processPendingFinalizations().catch((err) => {
       log.error({ err: err.message }, 'worker error');
     });
-  }, POLL_INTERVAL);
+  }, FINALIZER_POLL_INTERVAL_MS);
 
   // Periodic hot-wallet balance check + immediate first run.
   void checkHotWalletBalance();
@@ -332,13 +566,29 @@ export function stopFinalizationWorker(): void {
  */
 export function getFinalizerStatus(): {
   queueSize: number;
+  readyCount: number;
+  oldestReadyLagSeconds: number;
+  nextFinalizeAt: number | null;
+  processing: boolean;
+  safetyPauseUntil: number | null;
   pending: Array<{ bountyPda: string; challengeEndsAt: number; attempts: number }>;
 } {
+  const now = Math.floor(Date.now() / 1000);
   const pending = Array.from(pendingFinalizations.values()).map((p) => ({
     bountyPda: p.bountyPda,
     challengeEndsAt: p.challengeEndsAt,
     attempts: p.attempts,
-  }));
+  })).sort((a, b) => a.challengeEndsAt - b.challengeEndsAt);
+  const readyCount = pending.filter((p) => now >= p.challengeEndsAt).length;
+  const nextFinalizeAt = pending[0]?.challengeEndsAt ?? null;
 
-  return { queueSize: pending.length, pending };
+  return {
+    queueSize: pending.length,
+    readyCount,
+    oldestReadyLagSeconds: getOldestReadyLagSeconds(now),
+    nextFinalizeAt,
+    processing,
+    safetyPauseUntil: safetyPauseUntil > now ? safetyPauseUntil : null,
+    pending,
+  };
 }
