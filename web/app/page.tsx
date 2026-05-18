@@ -62,7 +62,7 @@ export default function Home() {
               Seeker phone and settle SKR rewards on Solana.
             </p>
             <div className="hero-actions">
-              <TrackedLink className="primary-action" href="#launch" eventName="get_on_seeker_click">
+              <TrackedLink className="primary-action" href="/store" eventName="get_on_seeker_click">
                 Get on Seeker
               </TrackedLink>
               <TrackedLink className="secondary-action" href="#flow" eventName="how_it_works_click">
@@ -121,8 +121,8 @@ export default function Home() {
               Wallet Adapter, SGT verification, release signing, and mainnet
               Solana deployment gates.
             </p>
-            <TrackedLink className="primary-action compact" href="/privacy" eventName="dapp_store_cta_click">
-              Review policies
+            <TrackedLink className="primary-action compact" href="/store" eventName="dapp_store_cta_click">
+              Open dApp Store
             </TrackedLink>
           </div>
         </section>

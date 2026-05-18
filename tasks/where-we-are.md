@@ -101,8 +101,10 @@
 - `seek.mythx.art` legal/marketing site is built from `web/` as a static export
   and deployed on the Helsinki Mythx VPS at `/var/www/seek-web` behind Caddy.
   Namecheap DNS resolves `seek.mythx.art` to `204.168.242.220`; Caddy issued
-  a Let's Encrypt certificate for `seek.mythx.art`; `/privacy`, `/terms`, and
-  `/license` return HTTPS 200.
+  a Let's Encrypt certificate for `seek.mythx.art`; `/privacy`, `/terms`,
+  `/license`, and `/store` return HTTPS 200. `/store` is the post-friendly
+  Solana Mobile dApp Store wrapper for
+  `solanadappstore://details?id=app.seek.mobile`.
 - Working tree cleanup is being committed as the accepted v1.0.2 release state.
   Keep local screenshots, logs, build output, and secret material out of git.
 

@@ -232,6 +232,9 @@ files live at `/var/www/seek-web`. DNS and TLS are live for
 - `/privacy` — privacy policy (lift in-app copy, render in clean typographic layout)
 - `/terms` — terms of service (same treatment)
 - `/license` — license page (referenced by dApp Store config `license_url` + `copyright_url`)
+- `/store` — post-friendly Solana Mobile dApp Store wrapper that opens
+  `solanadappstore://details?id=app.seek.mobile` on Seeker/Android and keeps a
+  visible manual fallback button.
 
 **Brand source — STRICT:**
 - **Reference:** https://solanamobile.com/seeker — clone the Seeker visual language end-to-end (palette, gradients, type, motion, imagery).
