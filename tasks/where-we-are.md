@@ -94,7 +94,7 @@
 - Railway project `seek` is live with `seek-backend` + Redis. Health:
   `https://seek-backend-production-0134.up.railway.app/api/health` and
   `https://api.seek.mythx.art/api/health`. Current Railway deployment:
-  `a75a586a-448f-456b-9ed5-b4dd6827dc4c`.
+  `d458d67b-3599-4ad1-9f7c-7adf4492b002`.
 - Solana Mobile support reported an unknown/unrecoverable backend ingest error
   on their side for the original v1.0.0 ticket and asked for another
   submission. A same-APK resubmit was tried on 2026-05-15 with idempotency key
@@ -140,6 +140,13 @@
   `24252CaZRC7y2ESMLRS9iAaup5k3BqXmcgiH7iMbSUq8vcd8X7Sczr2Q2eTaWc3hYys9qXz3wBUzwiGS1GYhJu7D`;
   attestation request ID: `56610741437357918902244398451996`; ticket ID:
   `311926974167`.
+- 2026-05-18 Railway hotfix deploy PASS. Deployment
+  `d458d67b-3599-4ad1-9f7c-7adf4492b002` promoted successfully. Public
+  readiness returned `ready: true`; `/api/bounty/prepare` without
+  `permissionsConfirmed` returns validation error before transaction data; the
+  new-client path with `permissionsConfirmed: true` still returns prepare data.
+  `/api/health/stats` shows pending `0`, validating `0`, finalizer queue `0`,
+  and no safety pause.
 - Backend/mobile typecheck PASS; backend launch-tool tests 19/19 PASS;
   contract tests 21/21 PASS.
 - `npm run build` in `backend/` PASS; Railway deployment
@@ -276,13 +283,11 @@ ticket `311926974167`. Do not paste API keys or private keys in chat.
 
 Permission-preflight hotfix path:
 
-1. Verify Railway has deployed commit `c172b0c` and old clients cannot receive
-   `/prepare` transaction data without `permissionsConfirmed: true`.
-2. Watch Solana Mobile review ticket `311926974167`.
-3. Run a short Seeker smoke after install: app launch permission prompts,
+1. Watch Solana Mobile review ticket `311926974167`.
+2. Run a short Seeker smoke after install: app launch permission prompts,
    wallet connect, passive SGT status, tier 1 start, camera/location capture,
    and loss or win finalization.
-4. Top up publisher wallet before upload if fees require it; current
-   post-submit balance is `0.11787386 SOL`.
+3. Top up publisher wallet before another upload if fees require it; current
+   post-submit balance is `0.0972123 SOL`.
 
 Launch risks: Singularity grinding remains until VRF; Solana JS advisories remain.
