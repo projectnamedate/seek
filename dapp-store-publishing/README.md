@@ -99,16 +99,28 @@ return, or economics in future store changelogs.
 Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow.
 ```
 
-## Next emergency update changelog
+## Current submitted update
 
-Draft for v1.0.3 / versionCode `4`:
+v1.0.3 / versionCode `4` was submitted to Solana Mobile dApp Store review on
+2026-05-18 with the portal-backed CLI and `--api-key-stdin`.
 
 ```text
 Adds camera and location permission preflight before paid hunts.
 ```
 
-Current local candidate APK SHA-256:
-`83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`
+- Release mint: `UPyAUVgG29eKicQNTXEDfw5cYw83GnxZbTttATrjv4g`
+- Collection mint: `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`
+- Ticket ID: `311926974167`
+- APK SHA-256:
+  `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`
+- Ingestion session: `bf81b531-e1fb-4fa2-b69e-727cfbb50bf4`
+- Release ID: `96332cdd-cf73-4074-b0b1-1cdcd915e7c1`
+- Publication session: `6a60d162-3db2-4d3a-90b4-c4fdacfe6c46`
+- Idempotency key: `seek-update-1.0.3-v4-20260518`
+- Release transaction: `5yK6poi6Y1X5NFrdVvSEFwcLVQEqxiMzfbSj5hat9dbebEuJsZQh5Zs7n19dBgXACqcZCLxmXVXG6BcDanaZvrVY`
+- Collection verification transaction: `24252CaZRC7y2ESMLRS9iAaup5k3BqXmcgiH7iMbSUq8vcd8X7Sczr2Q2eTaWc3hYys9qXz3wBUzwiGS1GYhJu7D`
+- Attestation request ID: `56610741437357918902244398451996`
+- Publisher wallet balance after submission: `0.0972123 SOL`
 
 Previous v1.0.1 / versionCode `2` submission: submitted 2026-05-15 under
 ticket `311418671831`, release mint

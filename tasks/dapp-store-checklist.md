@@ -77,6 +77,21 @@ Source: docs.solanamobile.com/dapp-store (verified 2026-05-05).
   `13125fd4-2da1-4618-933e-588ea6daf137`
 - 2026-05-17: user reported Solana Mobile accepted v1.0.2 and updated the app
   listing.
+- [x] v1.0.3 / versionCode `4` submitted to review on 2026-05-18 with
+  idempotency key `seek-update-1.0.3-v4-20260518`.
+- v1.0.3 release mint:
+  `UPyAUVgG29eKicQNTXEDfw5cYw83GnxZbTttATrjv4g`
+- v1.0.3 collection mint:
+  `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`
+- v1.0.3 ticket ID: `311926974167`
+- v1.0.3 APK SHA-256:
+  `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`
+- v1.0.3 portal ingestion session:
+  `bf81b531-e1fb-4fa2-b69e-727cfbb50bf4`
+- v1.0.3 release ID:
+  `96332cdd-cf73-4074-b0b1-1cdcd915e7c1`
+- v1.0.3 publication session:
+  `6a60d162-3db2-4d3a-90b4-c4fdacfe6c46`
 - 2026-05-17: sideloaded/debug package `app.seek.mobile` v1.0.3 / versionCode
   `4` was uninstalled from the Seeker so the next test uses the official store
   build.
@@ -87,9 +102,9 @@ Source: docs.solanamobile.com/dapp-store (verified 2026-05-05).
 - **Long description:** draft from deck + README — highlight commit-reveal, AI validation, MWA integration.
 - **What's new (v1.0.2 submitted):**
   "Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow."
-- **What's new (v1.0.3 draft):**
+- **What's new (v1.0.3 submitted):**
   "Adds camera and location permission preflight before paid hunts."
-- **v1.0.3 candidate APK SHA-256:**
+- **v1.0.3 APK SHA-256:**
   `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`
   Do not mention payout math or `2x` total return in the store changelog.
 

@@ -41,9 +41,9 @@
   afterward. Current Solana CLI config should show public mainnet RPC.
 - Publisher wallet exists at `.secrets/dapp-store/publisher.json`, pubkey
   `Dzbqbjh8qowVK7x89vj1vo1ApUz7LNRqmR39yYXehenR`, balance
-  `0.11787386 SOL` after the v1.0.2 update submission. Solana Mobile docs currently
-  recommend about `0.2 SOL` for fees and ArDrive upload costs, so top it up
-  before any further release/update attempt.
+  `0.0972123 SOL` after the v1.0.3 update submission. Solana Mobile docs
+  currently recommend about `0.2 SOL` for fees and ArDrive upload costs, so top
+  it up before any further release/update attempt.
 - Publisher Portal API key is stored outside the repo at
   `/Users/hammer/Desktop/Claude/Solanamobile api.rtf`; do not paste it in chat. The
   RTF's first non-empty line is a label and the second non-empty line is the
@@ -66,6 +66,11 @@
   requires an explicit permission preflight before returning transaction data.
 - v1.0.3 / versionCode `4` is the next emergency update path. Changelog draft:
   "Adds camera and location permission preflight before paid hunts."
+- v1.0.3 / versionCode `4` was submitted to Solana Mobile dApp Store review on
+  2026-05-18 with idempotency key `seek-update-1.0.3-v4-20260518`. Release
+  mint: `UPyAUVgG29eKicQNTXEDfw5cYw83GnxZbTttATrjv4g`; collection mint:
+  `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`; ticket ID:
+  `311926974167`.
 - The sideloaded/debug hardware-test package was removed from the Seeker on
   2026-05-17 before unplugged store testing. Removed package:
   `app.seek.mobile`, version `1.0.3` / versionCode `4`,
@@ -75,8 +80,8 @@
 - Release APK exists at `mobile/android/app/build/outputs/apk/release/app-release.apk`,
   package `app.seek.mobile`, version `1.0.3` / versionCode `4`, SHA-256
   `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`.
-  This is the v1.0.3 permission-preflight candidate built on 2026-05-18; it is
-  not yet submitted to Solana Mobile review.
+  This is the v1.0.3 permission-preflight candidate submitted to Solana Mobile
+  review on 2026-05-18.
 - Local dependency audit on 2026-05-17 applied normal `npm audit fix` updates
   in backend, mobile, and contracts. Remaining production high-severity audit
   finding is the Solana `@solana/spl-token` transitive `bigint-buffer`
@@ -125,6 +130,16 @@
   `npx tsc --noEmit --pretty false`; contracts `npm test` 23/23; dApp Store
   asset validator PASS; release APK build PASS; `apksigner verify` PASS; `aapt`
   confirms `app.seek.mobile`, version `1.0.3` / versionCode `4`.
+- 2026-05-18 v1.0.3 store submission PASS using `--api-key-stdin` and
+  idempotency key `seek-update-1.0.3-v4-20260518`. Ingestion session:
+  `bf81b531-e1fb-4fa2-b69e-727cfbb50bf4`; release ID:
+  `96332cdd-cf73-4074-b0b1-1cdcd915e7c1`; publication session:
+  `6a60d162-3db2-4d3a-90b4-c4fdacfe6c46`; release tx:
+  `5yK6poi6Y1X5NFrdVvSEFwcLVQEqxiMzfbSj5hat9dbebEuJsZQh5Zs7n19dBgXACqcZCLxmXVXG6BcDanaZvrVY`;
+  collection tx:
+  `24252CaZRC7y2ESMLRS9iAaup5k3BqXmcgiH7iMbSUq8vcd8X7Sczr2Q2eTaWc3hYys9qXz3wBUzwiGS1GYhJu7D`;
+  attestation request ID: `56610741437357918902244398451996`; ticket ID:
+  `311926974167`.
 - Backend/mobile typecheck PASS; backend launch-tool tests 19/19 PASS;
   contract tests 21/21 PASS.
 - `npm run build` in `backend/` PASS; Railway deployment
@@ -254,17 +269,16 @@ On-chain mainnet upgrade, Railway backend update, public legal URLs, store
 assets, Seeker negative-flow smoke, and the Solana Mobile Publisher Portal
 v1.0.2 update submission are complete. User reports Solana Mobile accepted the
 v1.0.2 / versionCode `3` update under ticket `311747315429`. v1.0.3 /
-versionCode `4` is the current permission-preflight hotfix candidate. Do not
-paste API keys or private keys in chat.
+versionCode `4` was submitted to Solana Mobile review on 2026-05-18 under
+ticket `311926974167`. Do not paste API keys or private keys in chat.
 
 ## Next Concrete Action
 
 Permission-preflight hotfix path:
 
-1. Push/deploy the backend guard so old clients cannot receive `/prepare`
-   transaction data without `permissionsConfirmed: true`.
-2. Submit the v1.0.3 / versionCode `4` APK to Solana Mobile review with
-   changelog: "Adds camera and location permission preflight before paid hunts."
+1. Verify Railway has deployed commit `c172b0c` and old clients cannot receive
+   `/prepare` transaction data without `permissionsConfirmed: true`.
+2. Watch Solana Mobile review ticket `311926974167`.
 3. Run a short Seeker smoke after install: app launch permission prompts,
    wallet connect, passive SGT status, tier 1 start, camera/location capture,
    and loss or win finalization.

@@ -311,7 +311,7 @@ Per [backend/scripts/DEPLOY_MAINNET.md](../backend/scripts/DEPLOY_MAINNET.md):
 
 ---
 
-## Phase D — Solana dApp Store submission (✅ LIVE; v1.0.2 ACCEPTED)
+## Phase D — Solana dApp Store submission (✅ LIVE; v1.0.3 IN REVIEW)
 
 Per [dapp-store-publishing/README.md](../dapp-store-publishing/README.md):
 
@@ -331,6 +331,11 @@ Per [dapp-store-publishing/README.md](../dapp-store-publishing/README.md):
    `eb3fc8b3559eea2ed0e1650b27ad9aaee82ac3cfb08cecf8de60bb131274cefd`.
    Portal-backed CLI submission passed on 2026-05-17 with idempotency key
    `seek-update-1.0.2-v3-20260517`.
+9. [x] Submit v1.0.3 / versionCode `4` permission-preflight hotfix to review.
+   APK SHA-256:
+   `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`.
+   Portal-backed CLI submission passed on 2026-05-18 with idempotency key
+   `seek-update-1.0.3-v4-20260518` and ticket `311926974167`.
 
 Active v1.0.1 / versionCode `2` listing was submitted 2026-05-15 and is now
 reported live by the user. Ticket ID `311418671831`; release mint
@@ -345,6 +350,11 @@ report. Ticket ID
 
 Sideloaded/debug package `app.seek.mobile` v1.0.3 / versionCode `4` was
 uninstalled from the Seeker before the official unplugged store test.
+
+v1.0.3 / versionCode `4` was submitted to Solana Mobile review on 2026-05-18.
+Ticket ID `311926974167`; release mint
+`UPyAUVgG29eKicQNTXEDfw5cYw83GnxZbTttATrjv4g`; collection mint
+`4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`.
 
 Original v1.0.0 ticket `310370751180` was superseded after Solana Mobile
 reported a backend ingest failure and approved the versionCode bump.
