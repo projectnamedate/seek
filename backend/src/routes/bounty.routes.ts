@@ -55,6 +55,7 @@ import { verifyWalletAuthRequest } from '../middleware/auth.middleware';
 import { bountyPrepareLimiter, bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
 import { childLogger } from '../services/logger.service';
 import { config } from '../config';
+import { permissionPreflightSchema } from '../services/permission-preflight.service';
 
 const log = childLogger('bounty-routes');
 
@@ -90,6 +91,7 @@ const submitPhotoSchema = z.object({
 const prepareBountySchema = z.object({
   tier: z.number().int().min(1).max(3) as z.ZodType<Tier>,
   playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address'),
+  permissionsConfirmed: permissionPreflightSchema,
 });
 
 /**

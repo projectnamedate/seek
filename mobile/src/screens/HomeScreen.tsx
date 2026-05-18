@@ -8,6 +8,9 @@ import {
   Animated,
   Easing,
   Modal,
+  Alert,
+  Linking,
+  AppState,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
@@ -16,8 +19,15 @@ import walletService from '../services/wallet.service';
 import apiService from '../services/api.service';
 import { useApp } from '../context/AppContext';
 import { formatTimeHuman as formatTime } from '../utils/format';
+import {
+  formatMissingPermissions,
+  getSeekPermissions,
+  hasSeekPermissions,
+  requestSeekPermissions,
+  SeekPermissionState,
+} from '../services/permissions.service';
 
-const APP_VERSION = '1.0.2';
+const APP_VERSION = '1.0.3';
 
 // Tier colors - Solana Mobile inspired
 const TIER_COLORS = {
@@ -40,6 +50,8 @@ export default function HomeScreen({ navigation }: Props) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [singularityPool, setSingularityPool] = useState<string | null>(null);
   const [settingsVisible, setSettingsVisible] = useState(false);
+  const [permissionState, setPermissionState] = useState<SeekPermissionState | null>(null);
+  const [isCheckingPermissions, setIsCheckingPermissions] = useState(false);
   const singularityAnim = useRef(new Animated.Value(1)).current;
 
   // Individual pulse animations for each tier button
@@ -109,6 +121,27 @@ export default function HomeScreen({ navigation }: Props) {
     };
   }, []);
 
+  useEffect(() => {
+    const requestOnLaunch = async () => {
+      setIsCheckingPermissions(true);
+      try {
+        setPermissionState(await requestSeekPermissions());
+      } finally {
+        setIsCheckingPermissions(false);
+      }
+    };
+
+    requestOnLaunch();
+
+    const subscription = AppState.addEventListener('change', async (state) => {
+      if (state === 'active') {
+        setPermissionState(await getSeekPermissions());
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
+
   const handleConnect = async () => {
     setIsConnecting(true);
     await connectWallet();
@@ -117,6 +150,25 @@ export default function HomeScreen({ navigation }: Props) {
 
   const handleStartHunt = async () => {
     const tier = TIERS[selectedTier];
+    const latestPermissionState: SeekPermissionState = hasSeekPermissions(permissionState)
+      ? permissionState!
+      : await requestSeekPermissions();
+    setPermissionState(latestPermissionState);
+
+    if (!hasSeekPermissions(latestPermissionState)) {
+      const missing = formatMissingPermissions(latestPermissionState);
+      Alert.alert(
+        'Permissions Required',
+        `${missing} access must be enabled before starting a paid hunt. No SKR will move until permissions are granted.`,
+        latestPermissionState.canAskAgain
+          ? [{ text: 'OK' }]
+          : [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            ],
+      );
+      return;
+    }
 
     // Check balance using AppContext wallet state.
     if (wallet.balance < tier.entry) {
@@ -252,7 +304,13 @@ export default function HomeScreen({ navigation }: Props) {
           activeOpacity={0.8}
         >
           <Text style={[styles.startButtonText, !wallet.connected && styles.startButtonTextDisabled]}>
-            {wallet.connected ? 'START HUNT' : 'Connect Wallet to Play'}
+            {!wallet.connected
+              ? 'Connect Wallet to Play'
+              : isCheckingPermissions
+                ? 'Checking Permissions...'
+                : hasSeekPermissions(permissionState)
+                  ? 'START HUNT'
+                  : 'Enable Camera + Location'}
           </Text>
           {wallet.connected && (
             <Text style={styles.startButtonSubtext}>

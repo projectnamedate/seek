@@ -17,6 +17,7 @@ import apiService from '../services/api.service';
 import { buildAcceptBountyTransaction } from '../services/solana.mobile';
 import { useApp } from '../context/AppContext';
 import { formatTime } from '../utils/format';
+import { hasSeekPermissions, requestSeekPermissions } from '../services/permissions.service';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'BountyReveal'>;
@@ -83,9 +84,22 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
     }
 
     try {
+      setStatusText('Checking camera and location...');
+      const permissionState = await requestSeekPermissions();
+      if (!hasSeekPermissions(permissionState)) {
+        Alert.alert(
+          'Permissions Required',
+          'Camera and location access are required before starting a paid hunt. No SKR has been moved.',
+          [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
+        return;
+      }
+
       // Step 1: Prepare bounty (get commitment from backend)
       setStatusText('Preparing bounty...');
-      const prepResult = await apiService.prepareBounty(playerWallet, tier);
+      const prepResult = await apiService.prepareBounty(playerWallet, tier, {
+        permissionsConfirmed: true,
+      });
       if (!prepResult.success || !prepResult.data) {
         throw new Error(prepResult.error || 'Failed to prepare bounty');
       }

@@ -90,7 +90,7 @@ release:
         contests with cash prizes are restricted.
       # Must be shown to the user and approved before upload. Do not mention
       # payout math or 2x total return in this store changelog.
-      new_in_version: Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow.
+      new_in_version: Adds camera and location permission preflight before paid hunts.
       saga_features_localized: Native Mobile Wallet Adapter, .SKR name resolution, Seeker Genesis Token bonus, camera attestation.
 
 solana_mobile_dapp_publisher_portal:

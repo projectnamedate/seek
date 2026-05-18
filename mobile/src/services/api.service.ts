@@ -77,7 +77,10 @@ export async function getWalletAuthHeaders(
 export async function prepareBounty(
   playerWallet: string,
   tier: TierNumber,
-  authHeaders?: Record<string, string>,
+  options?: {
+    permissionsConfirmed?: boolean;
+    authHeaders?: Record<string, string>;
+  },
 ): Promise<{
   success: boolean;
   data?: {
@@ -93,7 +96,8 @@ export async function prepareBounty(
     const response = await api.post('/bounty/prepare', {
       tier,
       playerWallet,
-    }, { headers: authHeaders || { 'ngrok-skip-browser-warning': '1' } });
+      permissionsConfirmed: options?.permissionsConfirmed === true,
+    }, { headers: options?.authHeaders || { 'ngrok-skip-browser-warning': '1' } });
 
     if (response.data.success && response.data.data) {
       return {

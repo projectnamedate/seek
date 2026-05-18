@@ -1,4 +1,4 @@
-# Where we are - Seek - 2026-05-17 - v1.0.2 store update live
+# Where we are - Seek - 2026-05-18 - v1.0.3 permission-preflight update
 
 ## Current State
 
@@ -58,6 +58,14 @@
   `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`; ticket ID:
   `311747315429`. User reported Solana Mobile accepted the update and the app
   store listing now serves this build.
+- 2026-05-18 incident response: reports said the app could crash around
+  permission grant after a paid hunt started. Root cause class is mobile/backend
+  ordering, not contract logic: older clients could sign `accept_bounty` before
+  camera/location permission was proven usable. The v1.0.3 update gates paid
+  flow on camera + foreground-location permission and backend `/prepare`
+  requires an explicit permission preflight before returning transaction data.
+- v1.0.3 / versionCode `4` is the next emergency update path. Changelog draft:
+  "Adds camera and location permission preflight before paid hunts."
 - The sideloaded/debug hardware-test package was removed from the Seeker on
   2026-05-17 before unplugged store testing. Removed package:
   `app.seek.mobile`, version `1.0.3` / versionCode `4`,
@@ -65,9 +73,10 @@
 - Release Android keystore/env exist under `.secrets/android/`. Back them up
   before store submission; losing the keystore means losing update ability.
 - Release APK exists at `mobile/android/app/build/outputs/apk/release/app-release.apk`,
-  package `app.seek.mobile`, version `1.0.2` / versionCode `3`, SHA-256
-  `eb3fc8b3559eea2ed0e1650b27ad9aaee82ac3cfb08cecf8de60bb131274cefd`.
-  This is the APK submitted for v1.0.2 review on 2026-05-17.
+  package `app.seek.mobile`, version `1.0.3` / versionCode `4`, SHA-256
+  `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`.
+  This is the v1.0.3 permission-preflight candidate built on 2026-05-18; it is
+  not yet submitted to Solana Mobile review.
 - Local dependency audit on 2026-05-17 applied normal `npm audit fix` updates
   in backend, mobile, and contracts. Remaining production high-severity audit
   finding is the Solana `@solana/spl-token` transitive `bigint-buffer`
@@ -111,6 +120,11 @@
 ## Fresh Checks
 
 - GitHub CI on master: PASS, latest run `25222718910`.
+- 2026-05-18 v1.0.3 permission-preflight verification PASS: backend
+  `npm run build`; backend `npm run test:launch-tools` 34/34; mobile
+  `npx tsc --noEmit --pretty false`; contracts `npm test` 23/23; dApp Store
+  asset validator PASS; release APK build PASS; `apksigner verify` PASS; `aapt`
+  confirms `app.seek.mobile`, version `1.0.3` / versionCode `4`.
 - Backend/mobile typecheck PASS; backend launch-tool tests 19/19 PASS;
   contract tests 21/21 PASS.
 - `npm run build` in `backend/` PASS; Railway deployment
@@ -168,12 +182,12 @@
   `VIBRATE`, Android media/photo picker reads, and `ACCESS_NETWORK_STATE`.
 - 2026-05-16 v1.0.2 SHA-256:
   `8f2e712f7ab66ea48ee484236c01cb3d7ef3b8ef953990459d4057ac944fff7e`.
-- 2026-05-17 release-signing drift check found the existing v1.0.3 artifact
-  was debug-signed because `assembleRelease` fell back to the debug keystore
-  when signing env was absent. `mobile/android/app/build.gradle` now fails
-  release artifact tasks unless `SEEK_KEYSTORE_*` env is present. Rebuilt with
-  `.secrets/android/seek-release.env`; `apksigner verify --print-certs` now
-  reports `CN=Seek, OU=Mobile, O=Projectnamedate LLC, L=Miami, ST=Florida,
+- 2026-05-17 release-signing drift check found the older hardware-test v1.0.3
+  artifact was debug-signed because `assembleRelease` fell back to the debug
+  keystore when signing env was absent. `mobile/android/app/build.gradle` now
+  fails release artifact tasks unless `SEEK_KEYSTORE_*` env is present. Rebuilt
+  with `.secrets/android/seek-release.env`; `apksigner verify --print-certs`
+  reported `CN=Seek, OU=Mobile, O=Projectnamedate LLC, L=Miami, ST=Florida,
   C=US`, version `1.0.3` / versionCode `4`, SHA-256
   `3016039351a47be9975bcce2486310e68e35f7df6a5dde8481c263ec6c0abc21`.
 - 2026-05-16 Railway hotfix deploy PASS. Deployment
@@ -239,21 +253,22 @@
 On-chain mainnet upgrade, Railway backend update, public legal URLs, store
 assets, Seeker negative-flow smoke, and the Solana Mobile Publisher Portal
 v1.0.2 update submission are complete. User reports Solana Mobile accepted the
-v1.0.2 / versionCode `3` update under ticket `311747315429`. The sideloaded
-`1.0.3` debug/test package was uninstalled from the Seeker so the next test can
-use the official store build unplugged. Do not paste API keys or private keys
-in chat.
+v1.0.2 / versionCode `3` update under ticket `311747315429`. v1.0.3 /
+versionCode `4` is the current permission-preflight hotfix candidate. Do not
+paste API keys or private keys in chat.
 
 ## Next Concrete Action
 
-Official store smoke path:
+Permission-preflight hotfix path:
 
-1. Install/open Seek from the Solana Mobile dApp Store on Seeker without the
-   USB connection.
-2. Run a short official-store smoke:
-   wallet connect, passive SGT status, tier 1 start, camera/location, and loss
-   or win finalization.
-3. Top up publisher wallet before any future update; current post-submit
-   balance is `0.11787386 SOL`.
+1. Push/deploy the backend guard so old clients cannot receive `/prepare`
+   transaction data without `permissionsConfirmed: true`.
+2. Submit the v1.0.3 / versionCode `4` APK to Solana Mobile review with
+   changelog: "Adds camera and location permission preflight before paid hunts."
+3. Run a short Seeker smoke after install: app launch permission prompts,
+   wallet connect, passive SGT status, tier 1 start, camera/location capture,
+   and loss or win finalization.
+4. Top up publisher wallet before upload if fees require it; current
+   post-submit balance is `0.11787386 SOL`.
 
 Launch risks: Singularity grinding remains until VRF; Solana JS advisories remain.

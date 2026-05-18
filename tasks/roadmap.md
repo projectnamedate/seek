@@ -1,7 +1,7 @@
 # Seek Roadmap
 
-**Current phase:** live dApp Store -> v1.0.2 official-store smoke.
-**Snapshot date:** 2026-05-17.
+**Current phase:** live dApp Store -> v1.0.3 permission-preflight hotfix.
+**Snapshot date:** 2026-05-18.
 **Timeline target:** 2-week solid launch.
 **Founder/operator:** Jeff (solo). Ledger hot/cold split. External audit skipped.
 

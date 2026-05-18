@@ -87,6 +87,10 @@ Source: docs.solanamobile.com/dapp-store (verified 2026-05-05).
 - **Long description:** draft from deck + README — highlight commit-reveal, AI validation, MWA integration.
 - **What's new (v1.0.2 submitted):**
   "Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow."
+- **What's new (v1.0.3 draft):**
+  "Adds camera and location permission preflight before paid hunts."
+- **v1.0.3 candidate APK SHA-256:**
+  `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`
   Do not mention payout math or `2x` total return in the store changelog.
 
 ## Legacy/config.yaml CLI flow

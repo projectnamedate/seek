@@ -99,6 +99,17 @@ return, or economics in future store changelogs.
 Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow.
 ```
 
+## Next emergency update changelog
+
+Draft for v1.0.3 / versionCode `4`:
+
+```text
+Adds camera and location permission preflight before paid hunts.
+```
+
+Current local candidate APK SHA-256:
+`83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`
+
 Previous v1.0.1 / versionCode `2` submission: submitted 2026-05-15 under
 ticket `311418671831`, release mint
 `ATChUKmCC4zzqj9g54etDd7bW5uLFtLsxj5Dib2kqzRe`, APK SHA-256
