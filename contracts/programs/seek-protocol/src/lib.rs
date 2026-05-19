@@ -33,10 +33,16 @@ pub const CHALLENGE_PERIOD: i64 = 0;
 #[cfg(feature = "devnet")]
 pub const CHALLENGE_PERIOD: i64 = 0;
 
-/// Entry amounts: 1000 / 3000 / 5000 SKR (in base units).
-pub const TIER_1_ENTRY: u64 = 1000 * DECIMALS_MULTIPLIER;
-pub const TIER_2_ENTRY: u64 = 3000 * DECIMALS_MULTIPLIER;
-pub const TIER_3_ENTRY: u64 = 5000 * DECIMALS_MULTIPLIER;
+/// Current entry amounts: 500 / 1000 / 2000 SKR (in base units).
+pub const TIER_1_ENTRY: u64 = 500 * DECIMALS_MULTIPLIER;
+pub const TIER_2_ENTRY: u64 = 1000 * DECIMALS_MULTIPLIER;
+pub const TIER_3_ENTRY: u64 = 2000 * DECIMALS_MULTIPLIER;
+
+/// Legacy v1 entry amounts kept so already-installed clients can continue to
+/// call `accept_bounty(entry_amount, ...)` during the store update window.
+pub const LEGACY_TIER_1_ENTRY: u64 = 1000 * DECIMALS_MULTIPLIER;
+pub const LEGACY_TIER_2_ENTRY: u64 = 3000 * DECIMALS_MULTIPLIER;
+pub const LEGACY_TIER_3_ENTRY: u64 = 5000 * DECIMALS_MULTIPLIER;
 
 /// Distribution percentages on loss (basis points, 10000 = 100%).
 pub const HOUSE_SHARE_BPS: u64 = 7000; // 70% stays in house
@@ -68,12 +74,22 @@ pub const EXPECTED_INITIAL_AUTHORITY: Pubkey =
 // rejects this default, so a forgotten edit will fail-fast at init time
 // rather than silently allowing any caller.
 
-/// Validate entry amount and return tier
-pub fn validate_entry_amount(entry_amount: u64) -> Result<u8> {
+/// Validate a legacy v1 amount and return tier. This remains amount-inferred for
+/// old clients only; v2 validates the explicit tier and amount together.
+pub fn validate_legacy_entry_amount(entry_amount: u64) -> Result<u8> {
     match entry_amount {
-        TIER_1_ENTRY => Ok(1),
-        TIER_2_ENTRY => Ok(2),
-        TIER_3_ENTRY => Ok(3),
+        LEGACY_TIER_1_ENTRY => Ok(1),
+        LEGACY_TIER_2_ENTRY => Ok(2),
+        LEGACY_TIER_3_ENTRY => Ok(3),
+        _ => Err(SeekError::InvalidEntryAmount.into()),
+    }
+}
+
+/// Validate a v2 explicit tier + amount pair. This avoids the 1000 SKR
+/// ambiguity between legacy Easy and current Medium.
+pub fn validate_entry_amount_for_tier(tier: u8, entry_amount: u64) -> Result<()> {
+    match (tier, entry_amount) {
+        (1, TIER_1_ENTRY) | (2, TIER_2_ENTRY) | (3, TIER_3_ENTRY) => Ok(()),
         _ => Err(SeekError::InvalidEntryAmount.into()),
     }
 }
@@ -130,7 +146,7 @@ pub fn release_bounty_liability(global_state: &mut GlobalState, payout_amount: u
 /// Custom error codes for the Seek protocol
 #[error_code]
 pub enum SeekError {
-    #[msg("Invalid entry amount. Must be 1000, 3000, or 5000 SKR")]
+    #[msg("Invalid entry amount for tier")]
     InvalidEntryAmount,
 
     #[msg("Bounty is not in pending state")]
@@ -313,7 +329,8 @@ pub struct Bounty {
     /// Global state this bounty belongs to
     pub global_state: Pubkey,
 
-    /// Entry amount in SKR base units (1000, 3000, or 5000 whole SKR)
+    /// Entry amount in SKR base units. Current v2 tiers are 500, 1000, or 2000
+    /// whole SKR; legacy v1 bounties may be 1000, 3000, or 5000 whole SKR.
     pub entry_amount: u64,
 
     /// Full return amount (2x entry: entry back + 1x profit)
@@ -576,120 +593,49 @@ pub mod seek_protocol {
         Ok(())
     }
 
-    /// Accept a bounty - player submits their entry and starts the hunt.
-    /// entry_amount must be exactly TIER_1_ENTRY / TIER_2_ENTRY / TIER_3_ENTRY
-    /// (1000 / 3000 / 5000 SKR in base units — multiplier depends on SKR_DECIMALS).
+    /// Accept a legacy v1 bounty - player submits their entry and starts the
+    /// hunt. entry_amount must be exactly LEGACY_TIER_1_ENTRY /
+    /// LEGACY_TIER_2_ENTRY / LEGACY_TIER_3_ENTRY (1000 / 3000 / 5000 SKR in
+    /// base units). New clients should call accept_bounty_v2 with an explicit
+    /// tier.
     /// mission_commitment is hash(mission_id || salt) for commit-reveal.
     /// timestamp must be within 60 seconds of current time (for PDA derivation).
     pub fn accept_bounty(
-        ctx: Context<AcceptBounty>,
+        mut ctx: Context<AcceptBounty>,
         entry_amount: u64,
         timestamp: i64,
         mission_commitment: [u8; 32],
     ) -> Result<()> {
-        require!(!ctx.accounts.global_state.paused, SeekError::ProtocolPaused);
-
-        // Validate entry amount and get tier
-        let tier = validate_entry_amount(entry_amount)?;
-
-        // Get current timestamp and validate provided timestamp is recent
-        let clock = Clock::get()?;
-        let current_time = clock.unix_timestamp;
-
-        // Timestamp must be within 60 seconds of current time
-        require!(
-            current_time.abs_diff(timestamp) <= 60,
-            SeekError::InvalidTimestamp
-        );
-
-        // Calculate expiration based on tier
-        let duration = get_tier_duration(tier)?;
-        let expires_at = current_time
-            .checked_add(duration)
-            .ok_or(SeekError::MathOverflow)?;
-
-        // Calculate full return: entry back + 1x net profit.
-        let payout_amount = entry_amount.checked_mul(2).ok_or(SeekError::MathOverflow)?;
-
-        // Reserve worst-case payout exposure before accepting the bounty. The
-        // projected vault balance includes this player's entry after the CPI
-        // below. If this fails, the player is not charged.
-        reserve_bounty_liability(
-            &mut ctx.accounts.global_state,
-            ctx.accounts.house_vault.amount,
-            entry_amount,
-            payout_amount,
-        )?;
-
-        // Initialize bounty account
-        let bounty = &mut ctx.accounts.bounty;
-        bounty.player = ctx.accounts.player.key();
-        bounty.global_state = ctx.accounts.global_state.key();
-        bounty.entry_amount = entry_amount;
-        bounty.payout_amount = payout_amount;
-        bounty.created_at = current_time;
-        bounty.expires_at = expires_at;
-        bounty.status = BountyStatus::Pending;
-        bounty.tier = tier;
-        bounty.singularity_won = false;
-        bounty.bump = ctx.bumps.bounty;
-
-        // Commit-reveal: store mission commitment hash
-        bounty.mission_commitment = mission_commitment;
-        bounty.mission_id = [0u8; 32];
-        bounty.mission_revealed = false;
-
-        // Optimistic resolution: initialize to zero
-        bounty.resolved_at = 0;
-        bounty.challenge_ends_at = 0;
-        bounty.proposed_win = false;
-
-        // Dispute: initialize to false
-        bounty.is_disputed = false;
-        bounty.dispute_stake = 0;
-        bounty.disputed_at = 0;
-
-        // Transfer entry from player to house vault
-        let transfer_ctx = CpiContext::new(
-            ctx.accounts.token_program.to_account_info(),
-            Transfer {
-                from: ctx.accounts.player_token_account.to_account_info(),
-                to: ctx.accounts.house_vault.to_account_info(),
-                authority: ctx.accounts.player.to_account_info(),
-            },
-        );
-        token::transfer(transfer_ctx, entry_amount)?;
-
-        // Update global state
-        let global_state = &mut ctx.accounts.global_state;
-        global_state.house_fund_balance = global_state
-            .house_fund_balance
-            .checked_add(entry_amount)
-            .ok_or(SeekError::MathOverflow)?;
-        global_state.total_bounties_created = global_state
-            .total_bounties_created
-            .checked_add(1)
-            .ok_or(SeekError::MathOverflow)?;
-
-        // Emit event
-        emit!(BountyAccepted {
-            player: bounty.player,
-            bounty: bounty.key(),
-            entry_amount,
+        let tier = validate_legacy_entry_amount(entry_amount)?;
+        accept_bounty_with_tier(
+            &mut ctx.accounts,
+            ctx.bumps.bounty,
             tier,
-            expires_at,
-        });
+            entry_amount,
+            timestamp,
+            mission_commitment,
+        )
+    }
 
-        msg!("Bounty accepted!");
-        msg!("Player: {}", bounty.player);
-        msg!(
-            "Entry: {} SKR (Tier {})",
-            entry_amount / DECIMALS_MULTIPLIER,
-            tier
-        );
-        msg!("Expires at: {}", expires_at);
-
-        Ok(())
+    /// Accept a current v2 bounty - player submits their entry and starts the
+    /// hunt. tier must be explicit and entry_amount must match that tier:
+    /// 1=500 SKR, 2=1000 SKR, 3=2000 SKR in base units.
+    pub fn accept_bounty_v2(
+        mut ctx: Context<AcceptBountyV2>,
+        tier: u8,
+        entry_amount: u64,
+        timestamp: i64,
+        mission_commitment: [u8; 32],
+    ) -> Result<()> {
+        validate_entry_amount_for_tier(tier, entry_amount)?;
+        accept_bounty_v2_with_tier(
+            &mut ctx.accounts,
+            ctx.bumps.bounty,
+            tier,
+            entry_amount,
+            timestamp,
+            mission_commitment,
+        )
     }
 
     /// Reveal the mission - backend reveals mission_id and salt after player submits photo
@@ -1586,6 +1532,125 @@ pub mod seek_protocol {
     }
 }
 
+macro_rules! define_accept_bounty_with_tier {
+    ($name:ident, $accounts_ty:ident) => {
+        fn $name<'info>(
+            accounts: &mut $accounts_ty<'info>,
+            bounty_bump: u8,
+            tier: u8,
+            entry_amount: u64,
+            timestamp: i64,
+            mission_commitment: [u8; 32],
+        ) -> Result<()> {
+            require!(!accounts.global_state.paused, SeekError::ProtocolPaused);
+
+            // Get current timestamp and validate provided timestamp is recent
+            let clock = Clock::get()?;
+            let current_time = clock.unix_timestamp;
+
+            // Timestamp must be within 60 seconds of current time
+            require!(
+                current_time.abs_diff(timestamp) <= 60,
+                SeekError::InvalidTimestamp
+            );
+
+            // Calculate expiration based on tier
+            let duration = get_tier_duration(tier)?;
+            let expires_at = current_time
+                .checked_add(duration)
+                .ok_or(SeekError::MathOverflow)?;
+
+            // Calculate full return: entry back + 1x net profit.
+            let payout_amount = entry_amount.checked_mul(2).ok_or(SeekError::MathOverflow)?;
+
+            // Reserve worst-case payout exposure before accepting the bounty. The
+            // projected vault balance includes this player's entry after the CPI below.
+            // If this fails, the player is not charged.
+            reserve_bounty_liability(
+                &mut accounts.global_state,
+                accounts.house_vault.amount,
+                entry_amount,
+                payout_amount,
+            )?;
+
+            // Initialize bounty account
+            {
+                let bounty = &mut accounts.bounty;
+                bounty.player = accounts.player.key();
+                bounty.global_state = accounts.global_state.key();
+                bounty.entry_amount = entry_amount;
+                bounty.payout_amount = payout_amount;
+                bounty.created_at = current_time;
+                bounty.expires_at = expires_at;
+                bounty.status = BountyStatus::Pending;
+                bounty.tier = tier;
+                bounty.singularity_won = false;
+                bounty.bump = bounty_bump;
+
+                // Commit-reveal: store mission commitment hash
+                bounty.mission_commitment = mission_commitment;
+                bounty.mission_id = [0u8; 32];
+                bounty.mission_revealed = false;
+
+                // Optimistic resolution: initialize to zero
+                bounty.resolved_at = 0;
+                bounty.challenge_ends_at = 0;
+                bounty.proposed_win = false;
+
+                // Dispute: initialize to false
+                bounty.is_disputed = false;
+                bounty.dispute_stake = 0;
+                bounty.disputed_at = 0;
+            }
+
+            // Transfer entry from player to house vault
+            let transfer_ctx = CpiContext::new(
+                accounts.token_program.to_account_info(),
+                Transfer {
+                    from: accounts.player_token_account.to_account_info(),
+                    to: accounts.house_vault.to_account_info(),
+                    authority: accounts.player.to_account_info(),
+                },
+            );
+            token::transfer(transfer_ctx, entry_amount)?;
+
+            // Update global state
+            let global_state = &mut accounts.global_state;
+            global_state.house_fund_balance = global_state
+                .house_fund_balance
+                .checked_add(entry_amount)
+                .ok_or(SeekError::MathOverflow)?;
+            global_state.total_bounties_created = global_state
+                .total_bounties_created
+                .checked_add(1)
+                .ok_or(SeekError::MathOverflow)?;
+
+            // Emit event
+            emit!(BountyAccepted {
+                player: accounts.player.key(),
+                bounty: accounts.bounty.key(),
+                entry_amount,
+                tier,
+                expires_at,
+            });
+
+            msg!("Bounty accepted!");
+            msg!("Player: {}", accounts.player.key());
+            msg!(
+                "Entry: {} SKR (Tier {})",
+                entry_amount / DECIMALS_MULTIPLIER,
+                tier
+            );
+            msg!("Expires at: {}", expires_at);
+
+            Ok(())
+        }
+    };
+}
+
+define_accept_bounty_with_tier!(accept_bounty_with_tier, AcceptBounty);
+define_accept_bounty_with_tier!(accept_bounty_v2_with_tier, AcceptBountyV2);
+
 /// Step 1: Initialize global state only (small stack footprint)
 #[derive(Accounts)]
 pub struct Initialize<'info> {
@@ -1710,6 +1775,61 @@ pub struct InitializeSingularityVault<'info> {
 #[derive(Accounts)]
 #[instruction(entry_amount: u64, timestamp: i64)]
 pub struct AcceptBounty<'info> {
+    /// Player accepting the bounty
+    #[account(mut)]
+    pub player: Signer<'info>,
+
+    /// Global state PDA
+    #[account(
+        mut,
+        seeds = [b"global_state"],
+        bump = global_state.bump
+    )]
+    pub global_state: Box<Account<'info, GlobalState>>,
+
+    /// Bounty PDA - unique per player + timestamp
+    #[account(
+        init,
+        payer = player,
+        space = Bounty::SIZE,
+        seeds = [b"bounty", player.key().as_ref(), &timestamp.to_le_bytes()],
+        bump
+    )]
+    pub bounty: Box<Account<'info, Bounty>>,
+
+    /// Player's SKR token account — pinned to the canonical ATA.
+    /// Prevents passing a delegated/frozen/alt-ATA that could reroute winnings.
+    #[account(
+        mut,
+        constraint = player_token_account.key() == get_associated_token_address(&player.key(), &SKR_MINT) @ SeekError::Unauthorized
+    )]
+    pub player_token_account: Box<Account<'info, TokenAccount>>,
+
+    /// House vault to receive entry
+    #[account(
+        mut,
+        seeds = [b"house_vault"],
+        bump,
+        constraint = house_vault.key() == global_state.house_vault
+    )]
+    pub house_vault: Box<Account<'info, TokenAccount>>,
+
+    /// The SKR token mint
+    #[account(
+        address = SKR_MINT @ SeekError::InvalidMint
+    )]
+    pub skr_mint: Box<Account<'info, Mint>>,
+
+    /// System program
+    pub system_program: Program<'info, System>,
+
+    /// Token program
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
+#[instruction(tier: u8, entry_amount: u64, timestamp: i64)]
+pub struct AcceptBountyV2<'info> {
     /// Player accepting the bounty
     #[account(mut)]
     pub player: Signer<'info>,

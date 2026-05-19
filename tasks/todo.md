@@ -1,4 +1,173 @@
-# Seek Upgrade + dApp Store Update Plan - 2026-05-17
+# Seek Tier Reprice + Global Mission Update Plan - 2026-05-19
+
+## Goal
+
+Plan and ship the next Seek update around two community signals:
+
+1. Reprice visible tiers to `500 / 1000 / 2000 SKR` so more Seeker users can
+   try a paid hunt and upper-tier vault exposure is smaller.
+2. Reduce missions that feel USA-specific or locally unavailable, such as
+   postal/mailbox-style targets, while keeping the pool difficult enough for
+   the small launch vault.
+
+## Current Read-Only Snapshot
+
+- Git was clean on `master`, tracking `origin/master`, before this planning doc
+  update.
+- Fresh GitHub CI on `master`: PASS, latest run `26055065510`.
+- Live backend readiness: `ready: true`; RPC/program/Redis all OK.
+- Live stats: house `65,488 SKR`, Singularity `4,200 SKR`, pending `0`,
+  validating `0`, finalizer queue `0`, total bounties `8`, win rate `12.5%`.
+- Program `DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v` is upgradeable under
+  Ledger `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`.
+- Local `solana address -k 'usb://ledger?key=1'` recovered on 2026-05-19 and
+  returned the expected Ledger authority pubkey
+  `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY` three times in a row.
+
+## Baseline Verification - 2026-05-19
+
+- [x] `gh run list --limit 3` and `gh run list --branch master --limit 1`.
+- [x] Backend typecheck: `cd backend && npx tsc --noEmit --pretty false`.
+- [x] Mobile typecheck: `cd mobile && npx tsc --noEmit --pretty false`.
+- [x] Contract mainnet check:
+  `cd contracts && cargo check --features mainnet --no-default-features`
+  passes with known Anchor cfg warnings.
+- [x] Contract tests: `cd contracts && npm test` passes 25/25.
+- [x] Backend launch-tool tests:
+  `cd backend && npm run test:launch-tools` passes 42/42.
+- [x] Mission pool tests:
+  `cd backend && node --test -r ts-node/register tests/missions.test.ts`
+  passes 4/4.
+- [x] Anchor build passed and regenerated IDL was copied to
+  `backend/src/idl/seek_protocol.json`.
+- [x] Solana `rust_autofixer` reported no issues after the final v2 account
+  parser change.
+- [x] Demo-residue grep returns no matches.
+- [x] dApp Store asset validator passes.
+- [x] `git diff --check` passes.
+
+## Recommended Product Decision
+
+Use three visible tiers with new prices:
+
+- Tier 1 / Easy: `500 SKR`, 3 minutes, 1000 SKR total return.
+- Tier 2 / Medium: `1000 SKR`, 2 minutes, 2000 SKR total return.
+- Tier 3 / Hard: `2000 SKR`, 1 minute, 4000 SKR total return.
+
+Reason: this keeps the app cognitively simple, lowers the first paid decision,
+and reduces launch-vault drawdown per win. Under the current 2x total-return
+model, net house drawdown on a win becomes `500 / 1000 / 2000 SKR` instead of
+`1000 / 3000 / 5000 SKR`.
+
+Compatibility caveat: the existing `accept_bounty(entry_amount, timestamp,
+commitment)` instruction infers tier solely from `entry_amount`. If we simply
+change the constants, `1000 SKR` becomes ambiguous: old clients mean Easy, new
+clients mean Medium. To avoid charging one tier and storing another, add a new
+`accept_bounty_v2(tier, entry_amount, timestamp, commitment)` instruction that
+validates `(tier, entry_amount)` pairs explicitly. Keep the old instruction
+temporarily for installed old clients, then remove or stop serving old clients
+after the store update window.
+
+## Contract + IDL Plan
+
+- [x] Add new entry constants:
+  `500 / 1000 / 2000 * DECIMALS_MULTIPLIER`.
+- [x] Add explicit tier+amount validation for v2, so `1000 SKR` maps to Tier 2
+  only in the new path.
+- [x] Add `accept_bounty_v2` with an explicit `tier` argument and the same
+  account layout as `accept_bounty`; v2 uses its own Anchor account parser so
+  the tier-first args still derive the bounty PDA from the timestamp.
+- [x] Keep legacy `accept_bounty` accepting `1000 / 3000 / 5000` during the
+  rollout, or gate old clients off before backend serves the new release.
+- [x] Keep timers `180 / 120 / 60`.
+- [x] Keep payout math `2x total return`.
+- [x] Update contract comments, error strings, tests, and regenerated IDL.
+- [x] Run `rust_autofixer` before returning Solana Rust changes.
+
+## Backend Plan
+
+- [x] Introduce a single source for visible tier economics:
+  Easy `500`, Medium `1000`, Hard `2000`.
+- [x] Keep a legacy compatibility map for old installed clients if the old
+  `accept_bounty` instruction remains live.
+- [x] Make `/prepare` return the explicit tier, whole-SKR entry amount, base-unit
+  entry amount, whole-SKR return amount, and an instruction version.
+- [x] Build/verify transactions against `accept_bounty_v2` for new clients.
+- [x] Keep `/start` bound to prepared tier and transaction truth.
+- [x] Update balance checks, payout formatting, stats/reporting, tests, and
+  dApp Store reviewer notes.
+- [x] Add tests for the new `500 / 1000 / 2000` prepare amounts and legacy
+  compatibility if kept.
+
+## Mobile Plan
+
+- [x] Redesign the Home screen tier buttons for the new price ladder:
+  `500 / 1000 / 2000`, with `Return 1000 / 2000 / 4000`.
+- [x] Make the selected tier button show the exact price and return plainly;
+  avoid stale copy like `Easy 1000`.
+- [x] Prefer backend-returned `entryAmount` and return data after `/prepare` for
+  the active bounty object so mobile display cannot diverge from the charged
+  amount.
+- [x] Update `buildAcceptBountyTransaction` to support `accept_bounty_v2` with
+  explicit tier serialization; keep old serialization only if needed for
+  backward-compatible testing.
+- [x] Review Home tier card layout on Seeker-sized viewport for 500/1000/2000
+  text fit and button spacing.
+- [x] Bump app version/versionCode for the next Solana Mobile update.
+- [x] Rebuild signed APK only after contract/backend verification passes.
+
+## Mission Globalization Plan
+
+- [x] Keep the approved 600-mission taxonomy and counts unless we explicitly
+  replace the taxonomy: T1 `140/60`, T2 `120/80`, T3 `100/100`.
+- [x] Audit the production pool for country-specific or region-narrow targets:
+  postal/mailbox/mail slot, curb/sidewalk-heavy wording, parking pay-machine
+  assumptions, transit stop sign assumptions, and any US-style civic objects.
+- [x] Replace narrow targets with globally common equivalents from the same
+  location family, preserving tier and indoor/outdoor count.
+- [x] Regenerate `tasks/mission-list-by-tier.md` from source.
+- [x] Add a regression check that flags banned terms like `USPS`, national postal
+  brands, and other country-specific objects before future mission exports.
+- [x] Document the full pass in
+  `tasks/mission-globalization-audit-2026-05-19.md`.
+
+## Upgrade/Release Gate
+
+- [x] Run a pre-release audit before any final contract upgrade or mobile app
+  update: inspect the diff, regenerated IDL, backend/mobile compatibility,
+  country-neutral mission pool, dApp Store copy/assets, durable fee-payer
+  custody, release ordering, and test results. Do not proceed to Ledger signing
+  or store submission until this audit passes and the user approves. Completed
+  locally in `tasks/pre-release-audit-2026-05-19-tier-reprice.md`; still
+  requires explicit user approval before Ledger signing.
+- [x] User approval to proceed from the passed pre-release audit into the
+  Ledger/program-upgrade stage.
+- [x] Do not deploy backend or mobile changes that charge/display
+  `500 / 1000 / 2000` until the upgraded program is live or the backend is
+  explicitly gated.
+- [x] Before any program upgrade, rerun the Ledger probe and verify it returns
+  `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`.
+- [x] Use only durable ignored key storage for any fee-payer/buffer key:
+  `0600`, pubkey verified, backup/drain plan documented before funding.
+- [x] Never use `--final`; program must remain upgradeable under the cold
+  Ledger.
+- [x] Verify ProgramData authority after upgrade.
+- [x] Deploy backend after program compatibility is confirmed.
+- [x] Smoke test the upgraded flow on the user's Solana Mobile test app after
+  the program upgrade/backend deploy and before any Solana Mobile dApp Store
+  update submission.
+- [x] Submit a signed app update only after typechecks, contract checks, tests,
+  APK signing verification, the post-upgrade Solana Mobile test-app smoke, and
+  explicit user approval of the exact store changelog.
+
+## Product Decision
+
+`500 / 1000 / 2000 SKR` is the live visible production ladder for v1.0.4.
+Do not change it again without re-running the backend/mobile/store copy audit.
+
+---
+
+# Previous Seek Upgrade + dApp Store Update Plan - 2026-05-17
 
 ## Goal
 
@@ -65,7 +234,13 @@ Prepare and ship the next Seek update in this order:
 - [x] Mainnet preflight before deploy; program account, ProgramData size, and Ledger upgrade authority verified.
 - [x] Signed release APK build using `.secrets/android/seek-release.env`, then `apksigner` and `aapt` verification.
 - [x] dApp asset validator: `cd dapp-store-publishing && node check-assets.mjs`.
-- [ ] Seeker hardware smoke: wallet connect, passive SGT, camera/location capture, win display, loss display, immediate settlement behavior, no public dispute/deposit action. Negative/loss path passed before store submission; run a short post-approval store-build smoke.
+- [x] Solana Mobile test-app smoke before v1.0.4 store submission: wallet
+  connect, funded 500 SKR accept flow, camera/location capture, loss display,
+  finalizer settlement, no public dispute/deposit action, balance refresh, and
+  Try Again return to Home.
+- [ ] Post-approval store-build smoke: install/open the store-delivered v1.0.4
+  build on Seeker and rerun wallet, passive SGT, camera/location, and funded
+  hunt flow.
 - [x] Uninstall sideloaded/debug `app.seek.mobile` v1.0.3 / versionCode `4` from Seeker before official unplugged store test.
 - [x] User approval of exact Solana Mobile Store "What's new" changelog text.
 

@@ -1,4 +1,4 @@
-# Where we are - Seek - 2026-05-18 - v1.0.3 permission-preflight update
+# Where we are - Seek - 2026-05-19 - v1.0.4 in Solana Mobile review
 
 ## Current State
 
@@ -6,17 +6,31 @@
   deployed, initialized, IDL-published, and still upgradeable under Ledger
   `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`. Never use `--final`.
 - Global State PDA: `8KUctm4YQRns3788cQWyjc7SFtKSnws4m4FTZ72YDfYm`;
-  latest live health on 2026-05-17 shows house vault `59,488 SKR`,
-  Singularity `2,200 SKR`, no pending/validating bounties, finalizer queue `0`,
-  and no finalizer safety pause.
-- Tier entries are `1000 / 3000 / 5000 SKR` with the same `180s / 120s / 60s`
-  timers. The deployed mainnet program now has the approved `2x` total-return
-  payout math, zero-delay finalization config, 600 approved missions, and the
-  success-screen settlement note removed from the submitted app.
+  latest live health on 2026-05-19 shows house vault `66,888 SKR`,
+  Singularity `4,600 SKR`, no pending/validating bounties, finalizer queue `0`,
+  total bounties `10`, win rate `10.0%`, and no finalizer safety pause.
+- The live production ladder is now `500 / 1000 / 2000 SKR` with the same
+  `180s / 120s / 60s` timers, `2x` total-return payout math, zero-delay
+  finalization config, and the globally refreshed 600-mission pool.
+- 2026-05-19 v1.0.4 shipped through the full required sequence: pre-release
+  audit, user approval, Ledger program upgrade with durable payer/buffer,
+  ProgramData authority/hash verification, backend deploy, signed APK rebuild,
+  Solana Mobile test-app smoke, and Publisher Portal upload.
+- The upgraded program uses
+  `accept_bounty_v2(tier, entry_amount, timestamp, commitment)` with explicit
+  tier+amount validation so `1000 SKR` is Tier 2 for new clients. Legacy
+  `accept_bounty` remains available temporarily for installed old clients.
 - Cold Ledger is `usb://ledger?key=1` / `44'/501'/1'`,
   `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`. After the successful
-  2026-05-17 upgrade and durable-payer drain, its verified balance is
-  `3.999597033 SOL`.
+  2026-05-19 upgrade, payer/buffer drain, and follow-up smoke tests, its
+  verified balance is `3.936988993 SOL`.
+- 2026-05-19 local Ledger probe recovered after the user connected and unlocked
+  the Ledger Flex with the Solana app open. `solana address -k
+  'usb://ledger?key=1'` returned
+  `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY` three times in a row. A
+  read-only `solana program show` also confirmed the program upgrade authority
+  is `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`. Rerun the Ledger probe
+  immediately before any actual upgrade.
 - Hot authority pubkey is `Gm6x8CZU7SQFVVHx2VnCQGteqT8gYnHFgEmdr3eqGdLk`. The
   prior local temp files `/tmp/seek-mainnet-hot-authority.json` and
   `/tmp/seek-mainnet-hot-authority.env` are not present in the current session.
@@ -31,6 +45,16 @@
   session. Future generated keypairs must be created directly in durable
   git-ignored secrets storage, `0600`, pubkey-verified, and backed up or paired
   with a drain plan before funding.
+- Current durable upgrade payer candidates are under `.secrets/solana/`:
+  `seek-upgrade-payer-20260517.json` ->
+  `3EKi2PzKrDi22Ld6NgixdBX7djSKMrZA2TG1utg1tJAS` and
+  `seek-upgrade-buffer-20260517.json` ->
+  `C3y6AWfaM4vR5vocLa8Bozv768PkeyDwmaQWhM3buH2i`. On 2026-05-19 the directory
+  was verified `0700`, both files `0600`, all paths git-ignored by
+  `.gitignore:23`, public keys derived with `solana address -k`, and both
+  balances were `0 SOL`. `solana-keygen verify` was blocked by the local
+  approval guard, so re-run a full pubkey verify before funding if the guard
+  allows it.
 - Current upgrade checks are using `https://api.mainnet-beta.solana.com`.
   On 2026-05-15 Railway `SOLANA_RPC_URL` was moved there because the Helius
   endpoint returned `429 max usage reached`; keep Helius as a future paid-RPC
@@ -41,9 +65,10 @@
   afterward. Current Solana CLI config should show public mainnet RPC.
 - Publisher wallet exists at `.secrets/dapp-store/publisher.json`, pubkey
   `Dzbqbjh8qowVK7x89vj1vo1ApUz7LNRqmR39yYXehenR`, balance
-  `0.0972123 SOL` after the v1.0.3 update submission. Solana Mobile docs
-  currently recommend about `0.2 SOL` for fees and ArDrive upload costs, so top
-  it up before any further release/update attempt.
+  `0.07655074 SOL` after the v1.0.4 update submission. It is durable,
+  git-ignored, `0600`, and derives to the expected pubkey through the local
+  Solana JS check; `solana-keygen verify` is blocked by the local approval
+  guard in this environment. Top it up before the next release/update attempt.
 - Publisher Portal API key is stored outside the repo at
   `/Users/hammer/Desktop/Claude/Solanamobile api.rtf`; do not paste it in chat. The
   RTF's first non-empty line is a label and the second non-empty line is the
@@ -64,13 +89,18 @@
   camera/location permission was proven usable. The v1.0.3 update gates paid
   flow on camera + foreground-location permission and backend `/prepare`
   requires an explicit permission preflight before returning transaction data.
-- v1.0.3 / versionCode `4` is the next emergency update path. Changelog draft:
+- v1.0.3 / versionCode `4` was the permission-preflight hotfix. Changelog:
   "Adds camera and location permission preflight before paid hunts."
 - v1.0.3 / versionCode `4` was submitted to Solana Mobile dApp Store review on
   2026-05-18 with idempotency key `seek-update-1.0.3-v4-20260518`. Release
   mint: `UPyAUVgG29eKicQNTXEDfw5cYw83GnxZbTttATrjv4g`; collection mint:
   `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`; ticket ID:
   `311926974167`.
+- v1.0.4 / versionCode `5` was submitted to Solana Mobile dApp Store review on
+  2026-05-19 with idempotency key `seek-update-1.0.4-v5-20260519`. Release
+  mint: `DvXz61SCghoPMwD3jED8qDj3CBXtXRXoLXiRVku7zMWg`; collection mint:
+  `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`; ticket ID:
+  `312122131169`.
 - The sideloaded/debug hardware-test package was removed from the Seeker on
   2026-05-17 before unplugged store testing. Removed package:
   `app.seek.mobile`, version `1.0.3` / versionCode `4`,
@@ -78,23 +108,22 @@
 - Release Android keystore/env exist under `.secrets/android/`. Back them up
   before store submission; losing the keystore means losing update ability.
 - Release APK exists at `mobile/android/app/build/outputs/apk/release/app-release.apk`,
-  package `app.seek.mobile`, version `1.0.3` / versionCode `4`, SHA-256
-  `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`.
-  This is the v1.0.3 permission-preflight candidate submitted to Solana Mobile
-  review on 2026-05-18.
+  package `app.seek.mobile`, version `1.0.4` / versionCode `5`, SHA-256
+  `5ed166ca0d7da0f3cec2e30de6d94ccab1fcbeb7457e210cb66384cd473b842b`.
+  This is the v1.0.4 tier/mission update candidate submitted to Solana Mobile
+  review on 2026-05-19.
 - Local dependency audit on 2026-05-17 applied normal `npm audit fix` updates
   in backend, mobile, and contracts. Remaining production high-severity audit
   finding is the Solana `@solana/spl-token` transitive `bigint-buffer`
   advisory; npm's offered `--force` fix is a breaking downgrade and should not
   be applied without a deliberate Solana SDK migration plan.
-- User now has Solana Mobile hardware available. The remaining validation is an
-  official-store, unplugged Seeker smoke after v1.0.2 acceptance: Wallet
-  Adapter, Seeker Genesis Token verification, camera/location capture, and
-  finalization behavior.
+- User has Solana Mobile hardware available. The v1.0.4 test-app smoke passed
+  before submission; the remaining validation is a short official-store,
+  unplugged Seeker smoke after v1.0.4 acceptance.
 - Railway project `seek` is live with `seek-backend` + Redis. Health:
   `https://seek-backend-production-0134.up.railway.app/api/health` and
-  `https://api.seek.mythx.art/api/health`. Current Railway deployment:
-  `d458d67b-3599-4ad1-9f7c-7adf4492b002`.
+  `https://api.seek.mythx.art/api/health`. Current v1.0.4 Railway deployment:
+  `8e0a85cd-f957-461a-8150-5d0f6118dfee`.
 - Solana Mobile support reported an unknown/unrecoverable backend ingest error
   on their side for the original v1.0.0 ticket and asked for another
   submission. A same-APK resubmit was tried on 2026-05-15 with idempotency key
@@ -108,9 +137,12 @@
   `withdraw-singularity` only while paused with zero active bounties.
 - Brand/app design is protected; only fix clear store rejection risks,
   unreadable states, capture quality, or approved banner polish.
-- Six staged screenshots are in `dapp-store-publishing/assets/screenshots/en-US/`;
+- Six store screenshots are in `dapp-store-publishing/assets/screenshots/en-US/`;
   submission config uses photos 1, 4, 5, and 6. Keep all six files in place;
   do not move, delete, or rename screenshot slots.
+- The screenshot set has been refreshed locally for v1.0.4 tier economics and
+  all six PNGs are 1440x2880. They were used for the 2026-05-19 v1.0.4
+  Publisher Portal submission.
 - `api.seek.mythx.art` is wired through Railway and returns HTTPS 200.
 - `seek.mythx.art` legal/marketing site is built from `web/` as a static export
   and deployed on the Helsinki Mythx VPS at `/var/www/seek-web` behind Caddy.
@@ -119,12 +151,55 @@
   `/license`, and `/store` return HTTPS 200. `/store` is the post-friendly
   Solana Mobile dApp Store wrapper for
   `solanadappstore://details?id=app.seek.mobile`.
-- Working tree cleanup is being committed as the accepted v1.0.2 release state.
-  Keep local screenshots, logs, build output, and secret material out of git.
+- Working tree currently contains the completed v1.0.4 tier/mission patch and
+  release-doc updates. Keep local screenshots, logs, build output, and secret
+  material out of git.
 
 ## Fresh Checks
 
-- GitHub CI on master: PASS, latest run `25222718910`.
+- GitHub CI on master: PASS, latest run `26055065510`.
+- 2026-05-19 local v1.0.4 patch verification PASS: `anchor build` PASS and
+  `backend/src/idl/seek_protocol.json` regenerated; Solana `rust_autofixer`
+  reported no issues; backend `npx tsc --noEmit --pretty false` PASS; mobile
+  `npx tsc --noEmit --pretty false` PASS; backend
+  `npm run test:launch-tools` 42/42 PASS; contracts `npm test` 25/25 PASS;
+  contracts `cargo check --features mainnet --no-default-features` PASS with
+  known Anchor cfg warnings; dApp Store `node check-assets.mjs` PASS;
+  `git diff --check` PASS; country-specific mission grep returned no matches
+  in production mission/list/generator surfaces. Backend launch-tools now also
+  assert the hardcoded `accept_bounty` discriminators and
+  `accept_bounty_v2` arg/account order against the regenerated IDL.
+- 2026-05-19 18:29Z read-only live gate check PASS: `solana program show`
+  reports ProgramData authority
+  `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`; `api.seek.mythx.art`
+  readiness returns `ready: true`; health stats show pending `0`, validating
+  `0`, finalizer queue `0`, and no safety pause.
+- 2026-05-19 release-runbook custody check PASS: the upgrade runbook
+  keeps the cold Ledger as `--upgrade-authority`, uses the durable payer only
+  as `--fee-payer`, uses the durable buffer key via `--buffer`, runs
+  `anchor idl upgrade` from `contracts/`, and requires exact Ledger, payer, and
+  buffer pubkey matches before funding or deploying.
+- 2026-05-19 v1.0.4 live deployment and store submission PASS: program upgrade
+  transaction
+  `tJuxgbdoizbyiN4hWg4VNfwmw5VUoVQ9Fd5rSfshBFaEmcEZfe5QdoaE752X7r6zwUWv9GLWVSMTx5QVZjGEMTW`;
+  on-chain program hash matched local
+  `47f11b75827318512b285d4eb5f3bcc6a6af587536ad3b32216630a1de760456`;
+  durable payer/buffer are drained to `0 SOL`; backend deployment
+  `8e0a85cd-f957-461a-8150-5d0f6118dfee` is live; `/api/health/ready` returns
+  `ready: true`; `/api/health/stats` shows pending `0`, validating `0`,
+  finalizer queue `0`, house `66,888 SKR`, Singularity `4,600 SKR`, total
+  bounties `10`, win rate `10.0%`.
+- 2026-05-19 v1.0.4 store submission PASS using `--api-key-stdin` and
+  idempotency key `seek-update-1.0.4-v5-20260519`. APK SHA-256
+  `5ed166ca0d7da0f3cec2e30de6d94ccab1fcbeb7457e210cb66384cd473b842b`;
+  ingestion session `4322b65e-8b0c-4441-bc12-ef08d84f8ed1`; release ID
+  `5b2e62d8-38d4-4365-b97e-b1b7c3ba0847`; publication session
+  `e5ea4d2e-fe43-491e-8a8a-0be876c7ac15`; release tx
+  `5MCL4spjg1u43cjLKNAubeWAxj6KovHXijFUvLh1ssr584zaY5DGxdSGfe2akmr2ZaVZSt6JvBU9J9gSECvsACMF`;
+  collection tx
+  `3fLoBEGmg2rsJD6R99kVZZuH9nuW94ZeF71qTGUr1pDFEakpzacCL6doTDPt81LAS5TcTmtsk8r7qstWJPuUhmiX`;
+  attestation request ID `17985067346990183540214621176997`; ticket ID
+  `312122131169`; publisher balance after submission `0.07655074 SOL`.
 - 2026-05-18 v1.0.3 permission-preflight verification PASS: backend
   `npm run build`; backend `npm run test:launch-tools` 34/34; mobile
   `npx tsc --noEmit --pretty false`; contracts `npm test` 23/23; dApp Store
@@ -273,21 +348,17 @@
 ## Where The User Paused
 
 On-chain mainnet upgrade, Railway backend update, public legal URLs, store
-assets, Seeker negative-flow smoke, and the Solana Mobile Publisher Portal
-v1.0.2 update submission are complete. User reports Solana Mobile accepted the
-v1.0.2 / versionCode `3` update under ticket `311747315429`. v1.0.3 /
-versionCode `4` was submitted to Solana Mobile review on 2026-05-18 under
-ticket `311926974167`. Do not paste API keys or private keys in chat.
+assets, Solana Mobile test-app smoke, and the Solana Mobile Publisher Portal
+v1.0.4 update submission are complete. v1.0.4 / versionCode `5` is in review
+under ticket `312122131169`. Do not paste API keys or private keys in chat.
 
 ## Next Concrete Action
 
-Permission-preflight hotfix path:
-
-1. Watch Solana Mobile review ticket `311926974167`.
-2. Run a short Seeker smoke after install: app launch permission prompts,
-   wallet connect, passive SGT status, tier 1 start, camera/location capture,
-   and loss or win finalization.
-3. Top up publisher wallet before another upload if fees require it; current
-   post-submit balance is `0.0972123 SOL`.
+1. Wait for Solana Mobile review on v1.0.4 / ticket `312122131169`.
+2. After acceptance, run a short official-store smoke on Seeker: wallet
+   connect, passive SGT status, camera/location capture, funded 500 SKR hunt,
+   finalizer settlement, balance refresh, and Try Again Home navigation.
+3. Before any future upload, top up the publisher wallet; current post-submit
+   balance is `0.07655074 SOL`.
 
 Launch risks: Singularity grinding remains until VRF; Solana JS advisories remain.

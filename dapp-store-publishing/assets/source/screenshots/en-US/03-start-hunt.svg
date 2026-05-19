@@ -41,9 +41,9 @@
     <text x="92" y="520" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="34" font-weight="400" letter-spacing="1.1">Selected tier</text>
 
     <rect x="92" y="586" width="380" height="280" rx="34" fill="rgba(207,230,228,0.1)" stroke="#95d2e6" stroke-width="4" opacity="1"/>
-    <text x="126" y="648" text-anchor="start" fill="#f6f6f5" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="34" font-weight="400" letter-spacing="0">Hunter</text>
-    <text x="126" y="722" text-anchor="start" fill="#95d2e6" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="54" font-weight="400" letter-spacing="-1">100 SKR</text>
-    <text x="126" y="780" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="25" font-weight="400" letter-spacing="0">Payout: 250 SKR</text>
+    <text x="126" y="648" text-anchor="start" fill="#f6f6f5" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="34" font-weight="400" letter-spacing="0">Medium</text>
+    <text x="126" y="722" text-anchor="start" fill="#95d2e6" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="54" font-weight="400" letter-spacing="-1">1000 SKR</text>
+    <text x="126" y="780" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="25" font-weight="400" letter-spacing="0">Return 2000</text>
     <rect x="126" y="808" width="230" height="12" rx="6" fill="#61afbd" stroke="none" stroke-width="0" opacity="1"/>
 
     <rect x="530" y="586" width="818" height="280" rx="34" fill="#101618" stroke="#10282c" stroke-width="2" opacity="1"/>

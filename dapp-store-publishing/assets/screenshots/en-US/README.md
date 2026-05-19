@@ -36,6 +36,11 @@ Keep all six PNGs in place for review history.
 visible tiers read Easy 1000 SKR, Medium 3000 SKR, and Hard 5000 SKR. The
 layout and staged `hammer.skr` wallet state were otherwise preserved.
 
+2026-05-19: staged source screenshots were updated for the v1.0.4 tier ladder.
+Visible tiers now read Easy 500 SKR, Medium 1000 SKR, and Hard 2000 SKR, with
+matching return copy. Recapture on-device before final store upload if the
+contract/backend upgrade audit passes.
+
 ## Dry Run Status
 
 2026-05-04 dry-run captures from the current release build are in:

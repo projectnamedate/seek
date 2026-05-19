@@ -67,3 +67,42 @@ test('missions keep validation keywords for Claude Vision prompt context', () =>
     assert.ok(mission.keywords.length <= 8, mission.id);
   }
 });
+
+test('missions avoid USA-centric or country-specific targets', () => {
+  const bannedTerms = [
+    /\busps\b/i,
+    /\bunited states\b/i,
+    /\bu\.s\./i,
+    /\busa\b/i,
+    /\bamerica(?:n)?\b/i,
+    /\bmail(?:box|boxes| slot|room)?\b/i,
+    /\bpostal\b/i,
+    /\bzip code\b/i,
+    /\bporch\b/i,
+    /\bcurb\b/i,
+    /\bsidewalk\b/i,
+    /\bdriveway\b/i,
+    /\bcul-de-sac\b/i,
+    /\bparking lot\b/i,
+    /\bdmv\b/i,
+    /\blicen[cs]e plate\b/i,
+    /\bpay phone\b/i,
+    /\bfire hydrant\b/i,
+    /\bschool bus\b/i,
+    /\bbodega\b/i,
+    /\bmetrocard\b/i,
+    /\bdollar(?:s)?\b/i,
+    /\bquarter(?:s)?\b/i,
+    /\bpenn(?:y|ies)\b/i,
+  ];
+
+  for (const mission of MISSIONS) {
+    for (const bannedTerm of bannedTerms) {
+      assert.equal(
+        bannedTerm.test(mission.description),
+        false,
+        `${mission.id}: ${mission.description}`
+      );
+    }
+  }
+});

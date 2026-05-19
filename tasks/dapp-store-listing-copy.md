@@ -3,6 +3,11 @@
 Review + edit before submission. All fields referenced in the dApp Store
 `config.yaml` that `@solana-mobile/dapp-store-cli` uses.
 
+Status: staged v1.0.4 draft. Do not paste this copy into a Solana Mobile dApp
+Store update until the Ledger-signed program upgrade, backend deploy,
+post-upgrade Solana Mobile test-app smoke, signed APK verification, and explicit
+user changelog approval are complete.
+
 ## App identity
 
 - **Name:** Seek
@@ -30,10 +35,10 @@ Seek turns your Seeker phone into a real-world scavenger-hunt device.
 
 HOW IT WORKS
 1. Connect your Solana wallet with MWA (no browser, no extension).
-2. Pick a tier: Easy (1000 $SKR / 3 min), Medium (3000 $SKR / 2 min),
-   or Hard (5000 $SKR / 1 min).
-3. Pay your entry and receive a randomly assigned target: a fire
-   hydrant, a golden retriever, a Starbucks cup, etc.
+2. Pick a tier: Easy (500 $SKR / 3 min), Medium (1000 $SKR / 2 min),
+   or Hard (2000 $SKR / 1 min).
+3. Pay your entry and receive a randomly assigned target: a public
+   bench, a route marker, a market stall, etc.
 4. Race the clock. Find it in the real world. Photograph it.
 5. AI (Claude Vision) verifies: is it the correct object, not a
    screenshot, taken during the hunt window?
@@ -77,7 +82,15 @@ hackathon. Now live on mainnet.
 
 Character count: ~1950 (well under 4000 limit).
 
-## What's new (for initial release)
+## What's new (proposed v1.0.4 update)
+
+Must be shown to the user and approved before upload.
+
+```
+Updates SKR hunt tiers and refreshes the mission pool for more globally available targets.
+```
+
+## Historical What's new (initial release)
 
 ```
 Initial mainnet launch. Play Seek on your Seeker phone and complete
@@ -98,7 +111,7 @@ Recommended 5–6 screenshots, in this order:
 3. Bounty reveal ("Find a ceiling fan", timer counting down)
 4. Camera viewfinder with target hint overlay
 5. Validating screen ("AI analyzing your capture…")
-6. Result screen — completed Easy mission — showing 2000 $SKR total return + AI confidence
+6. Result screen — completed Easy mission — showing 1000 $SKR total return + AI confidence
 
 Source screens already exist in the app — pull from a release build
 running on a Seeker. Existing hackathon assets are in
@@ -133,12 +146,12 @@ TO TEST:
 1. Connect a Seeker-compatible wallet via Mobile Wallet Adapter. We provided
    a funded mainnet test wallet in the submission form.
 2. Tap "Connect Wallet" → MWA approves.
-3. Select any tier (recommend Easy — 1000 SKR, 3 min).
+3. Select any tier (recommend Easy — 500 SKR, 3 min).
 4. Tap "Start Hunt" and approve the transaction.
-5. You'll receive a mission like "Find a red fire hydrant". Capture a real
+5. You'll receive a mission like "Find a public bench". Capture a real
    matching target; the app does not support a demo mode.
 6. Tap the camera button, capture any photo.
-7. AI validates in ~3 seconds. Complete an Easy hunt → 2,000 SKR total return.
+7. AI validates in ~3 seconds. Complete an Easy hunt → 1,000 SKR total return.
    Missed mission → entry distributed to reward / Singularity / treasury pools.
 
 18+ age gate on first launch. Skill-based — outcome depends on

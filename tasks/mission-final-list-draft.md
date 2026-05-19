@@ -2,7 +2,7 @@
 
 Generated on 2026-05-17 from the approved global location taxonomy.
 
-Status: Approved by the user on 2026-05-17 and wired into the production mission pool.
+Status: Approved by the user on 2026-05-17 and wired into the production mission pool. Updated on 2026-05-19 to remove region-specific object assumptions.
 
 Difficulty rules:
 
@@ -18,26 +18,26 @@ Split:
 | Tier 2 | 200 | 120 | 80 |
 | Tier 3 | 200 | 100 | 100 |
 
-## Tier 1 - Easy - 1000 SKR - 3 minutes
+## Tier 1 - Easy - 500 SKR - 3 minutes
 
 ### Outdoor (140)
 
 #### Residential Street Or Lane
 
 - `t1-001` Find a doorway with a visible number
-- `t1-002` Find a residential mailbox or postal slot
+- `t1-002` Find a doorway with a visible doorbell or knocker
 - `t1-003` Find a parked bicycle near a home entrance
-- `t1-004` Find a scooter parked beside a curb
+- `t1-004` Find a scooter parked beside a building entrance
 - `t1-005` Find a building entrance mat
-- `t1-006` Find a planted strip beside a sidewalk
+- `t1-006` Find a planted strip beside a pedestrian path
 - `t1-007` Find a balcony or window ledge with plants
 - `t1-008` Find a street name sign
 - `t1-009` Find a public trash or recycling bin
 - `t1-010` Find a small front gate
-- `t1-011` Find a porch light or entry light
+- `t1-011` Find an entry light above or beside a doorway
 - `t1-012` Find a residential intercom panel
 - `t1-013` Find a shared stairway outside a building
-- `t1-014` Find a curb ramp at a street corner
+- `t1-014` Find a ramped pedestrian crossing edge at a street corner
 
 #### Apartment Or Housing Complex Exterior
 
@@ -63,11 +63,11 @@ Split:
 - `t1-031` Find a paved walking path
 - `t1-032` Find a public trash bin
 - `t1-033` Find a shade tree
-- `t1-034` Find a drinking fountain
+- `t1-034` Find a public water point
 - `t1-035` Find a park map board
 - `t1-036` Find a public sculpture
-- `t1-037` Find a picnic table
-- `t1-038` Find a grass lawn
+- `t1-037` Find a public seating table
+- `t1-038` Find an open grass or planted area
 - `t1-039` Find a public notice board
 - `t1-040` Find a plaza fountain
 - `t1-041` Find a bicycle rack near a park path
@@ -88,11 +88,11 @@ Split:
 - `t1-053` Find a court entrance gate
 - `t1-054` Find a playground safety surface
 - `t1-055` Find a sports field boundary
-- `t1-056` Find a drinking fountain near a court
+- `t1-056` Find a public water point near a court
 
 #### Transit Stop Or Station Exterior
 
-- `t1-057` Find a transit stop sign
+- `t1-057` Find a transit route marker
 - `t1-058` Find a shelter roof
 - `t1-059` Find a timetable board
 - `t1-060` Find a platform edge
@@ -104,7 +104,7 @@ Split:
 - `t1-066` Find a wayfinding sign
 - `t1-067` Find a fare gate outside a station
 - `t1-068` Find a pedestrian crossing near transit
-- `t1-069` Find a taxi or rideshare waiting area
+- `t1-069` Find a taxi or hired-car waiting area
 - `t1-070` Find a bus or tram lane marker
 
 #### Market Street Or Shopfront Row
@@ -127,7 +127,7 @@ Split:
 #### Parking Area Or Garage
 
 - `t1-085` Find a marked parking bay
-- `t1-086` Find a parking pay machine
+- `t1-086` Find a parking payment terminal
 - `t1-087` Find a garage entrance
 - `t1-088` Find a height clearance sign
 - `t1-089` Find a painted directional arrow
@@ -284,17 +284,17 @@ Split:
 - `t1-199` Find a pegboard
 - `t1-200` Find a repair counter
 
-## Tier 2 - Medium - 3000 SKR - 2 minutes
+## Tier 2 - Medium - 1000 SKR - 2 minutes
 
 ### Outdoor (120)
 
 #### Residential Street Or Lane
 
-- `t2-001` Find a doorway with a number and a mail slot in the same frame
+- `t2-001` Find a doorway with a number and a doorbell or buzzer in the same frame
 - `t2-002` Find a residential intercom with several buttons visible
 - `t2-003` Find a bicycle locked to a rack or fence near a residence
 - `t2-004` Find a scooter parked beside a doorway with a building number visible
-- `t2-005` Find a planted strip with a tree guard beside the sidewalk
+- `t2-005` Find a planted strip with a tree guard beside a pedestrian path
 - `t2-006` Find a balcony with plants and a railing visible
 - `t2-007` Find a street name sign above a pedestrian crossing
 - `t2-008` Find a residential recycling bin with a sorting label visible
@@ -321,16 +321,16 @@ Split:
 #### Public Park Or Plaza
 
 - `t2-025` Find a park map board with paths or zones visible
-- `t2-026` Find a drinking fountain beside a path or bench
+- `t2-026` Find a public water point beside a path or bench
 - `t2-027` Find a public sculpture with a plaque or base visible
-- `t2-028` Find a picnic table near a trash or recycling bin
+- `t2-028` Find a public seating table near a trash or recycling bin
 - `t2-029` Find a planted garden bed with a plant label or border
 - `t2-030` Find a plaza fountain with water visibly active
 - `t2-031` Find a park entrance sign beside a paved path
 - `t2-032` Find a public notice board with posted papers visible
 - `t2-033` Find a bench facing a fountain or sculpture
 - `t2-034` Find a bicycle rack beside a park map or entrance sign
-- `t2-035` Find a grass lawn with a marked path or boundary nearby
+- `t2-035` Find an open grass or planted area with a marked path or boundary nearby
 - `t2-036` Find a shade tree beside a public seating area
 
 #### Playground Or Sports Court
@@ -344,13 +344,13 @@ Split:
 - `t2-043` Find a court entrance gate beside a fence and court line
 - `t2-044` Find a ball stop net behind a goal or court line
 - `t2-045` Find a bench facing a sports court or playground
-- `t2-046` Find a drinking fountain beside a court or playground sign
+- `t2-046` Find a public water point beside a court or playground sign
 - `t2-047` Find a marked sports field boundary with a goal or hoop visible
 - `t2-048` Find a playground surface with a posted rule sign nearby
 
 #### Transit Stop Or Station Exterior
 
-- `t2-049` Find a transit stop sign with a timetable board below it
+- `t2-049` Find a transit route marker with a timetable board below it
 - `t2-050` Find a shelter roof with a bench and route sign visible
 - `t2-051` Find a ticket machine beside a route map or fare sign
 - `t2-052` Find a platform edge with a warning strip visible
@@ -358,10 +358,10 @@ Split:
 - `t2-054` Find a bike rack beside a station entrance sign
 - `t2-055` Find a wayfinding sign pointing to a platform or exit
 - `t2-056` Find a fare gate with a ticket machine nearby
-- `t2-057` Find a taxi or rideshare waiting area with a posted sign
+- `t2-057` Find a taxi or hired-car waiting area with a posted sign
 - `t2-058` Find a bus or tram lane marker beside a transit stop
 - `t2-059` Find a station entrance with a route symbol or line marker
-- `t2-060` Find a pedestrian crossing directly beside a transit stop sign
+- `t2-060` Find a pedestrian crossing directly beside a transit route marker
 
 #### Market Street Or Shopfront Row
 
@@ -380,7 +380,7 @@ Split:
 
 #### Parking Area Or Garage
 
-- `t2-073` Find a parking pay machine beside a tariff board
+- `t2-073` Find a parking payment terminal beside a tariff board
 - `t2-074` Find a garage entrance with a height clearance sign
 - `t2-075` Find a marked parking bay with a painted number or symbol
 - `t2-076` Find an electric charging station with its cable dock visible
@@ -390,7 +390,7 @@ Split:
 - `t2-080` Find a speed bump with a warning sign nearby
 - `t2-081` Find a pedestrian walkway crossing a parking area
 - `t2-082` Find a barrier gate with a ticket or access reader
-- `t2-083` Find a bicycle parking rack beside a garage or lot entrance
+- `t2-083` Find a bicycle parking rack beside a garage or parking area entrance
 - `t2-084` Find a painted directional arrow pointing toward an exit sign
 
 #### Waterfront, Bridge, Canal, Or Promenade
@@ -433,7 +433,7 @@ Split:
 - `t2-114` Find a portable generator beside cables or a work barrier
 - `t2-115` Find a roadwork sign beside cones or temporary fencing
 - `t2-116` Find a cable reel with loose cable visible nearby
-- `t2-117` Find a temporary ramp leading over a curb or threshold
+- `t2-117` Find a temporary ramp leading over a raised edge or threshold
 - `t2-118` Find a utility cabinet with a warning label or number visible
 - `t2-119` Find a permit board mounted beside a construction barrier
 - `t2-120` Find a stack of construction materials behind a safety fence
@@ -448,7 +448,7 @@ Split:
 - `t2-124` Find a room number sign beside a corridor doorway
 - `t2-125` Find a lobby doormat below a building or property sign
 - `t2-126` Find a reception counter with a bell or check-in sign
-- `t2-127` Find a mailroom or locker area with labels visible
+- `t2-127` Find a parcel locker area with labels visible
 - `t2-128` Find an intercom panel beside a lobby entrance
 
 #### Shared Hallway Or Corridor
@@ -550,22 +550,22 @@ Split:
 - `t2-199` Find a soldering station with a stand or mat visible
 - `t2-200` Find a labeled tool cabinet beside a work area
 
-## Tier 3 - Hard - 5000 SKR - 1 minute
+## Tier 3 - Hard - 2000 SKR - 1 minute
 
 ### Outdoor (100)
 
 #### Residential Street Or Lane
 
 - `t3-001` Find a residential entrance showing a number, intercom, parcel shelf, and entry mat in one frame
-- `t3-002` Find a street corner showing a street name sign, curb ramp, drainage grate, and residential doorway
+- `t3-002` Find a street corner showing a street name sign, ramped crossing edge, drainage grate, and residential doorway
 - `t3-003` Find a bicycle rack outside housing with two locked bikes and a building number visible
-- `t3-004` Find a residential gate showing a keypad, posted notice, and row of mail slots
+- `t3-004` Find a residential gate showing a keypad, posted notice, and parcel shelf
 - `t3-005` Find a balcony row with laundry, plants, and matching railings visible together
-- `t3-006` Find a residential lane showing a delivery drop point, postal box, and numbered doorway together
+- `t3-006` Find a residential lane showing a delivery drop point, parcel shelf, and numbered doorway together
 - `t3-007` Find an exterior stairway with a floor marker, handrail, light fixture, and landing sign visible
 - `t3-008` Find a shared entry showing an intercom, camera dome, access reader, and posted notice together
-- `t3-009` Find a planted curb strip with a tree guard, utility cover, and street name sign in one frame
-- `t3-010` Find a residential corner with a curb ramp, road mirror, building number, and posted parking sign visible
+- `t3-009` Find a planted street-edge strip with a tree guard, utility cover, and street name sign in one frame
+- `t3-010` Find a residential corner with a ramped crossing edge, road mirror, building number, and posted parking sign visible
 
 #### Apartment Or Housing Complex Exterior
 
@@ -585,12 +585,12 @@ Split:
 - `t3-021` Find a park map board, route marker, bench, and public trash bin in one frame
 - `t3-022` Find a plaza fountain with active water, plaque, surrounding seating, and planted bed visible
 - `t3-023` Find a public sculpture showing its plaque, base, nearby path, and plaza seating together
-- `t3-024` Find a picnic area with a table, recycling bin, posted rule sign, and path marker visible
+- `t3-024` Find a public seating area with a table, recycling bin, posted rule sign, and path marker visible
 - `t3-025` Find a park entrance showing the sign, path map, bicycle rack, and notice board together
 - `t3-026` Find a garden bed showing plant labels, border stones, watering fixture, and public path
 - `t3-027` Find a public notice board with a date, park name, path map, and bench nearby
-- `t3-028` Find a park lawn showing a boundary marker, shade tree, bench, and path intersection
-- `t3-029` Find a drinking fountain beside a route marker, bench, and posted park rule sign
+- `t3-028` Find a park open area showing a boundary marker, shade tree, bench, and path intersection
+- `t3-029` Find a public water point beside a route marker, bench, and posted park rule sign
 - `t3-030` Find a plaza scene with fountain, sculpture, seating, and wayfinding sign all visible
 
 #### Playground Or Sports Court
@@ -603,7 +603,7 @@ Split:
 - `t3-036` Find a ball stop net, goal post, court line, and rule sign visible in one frame
 - `t3-037` Find a playground climbing frame with a safety label, surface edge, slide, and bench nearby
 - `t3-038` Find a court showing two different sport markings plus a hoop and a goal in one frame
-- `t3-039` Find a drinking fountain beside a court map, rule sign, and marked playing surface
+- `t3-039` Find a public water point beside a court map, rule sign, and marked playing surface
 - `t3-040` Find a sports area showing a scoreboard or score panel, boundary line, seating, and court sign
 
 #### Transit Stop Or Station Exterior
@@ -614,10 +614,10 @@ Split:
 - `t3-044` Find a transit entrance with a bike rack, wayfinding sign, ticket machine, and route map
 - `t3-045` Find a stop area showing a vehicle route number, timetable board, shelter, and platform marker
 - `t3-046` Find a fare zone showing a ticket machine, fare rules, route map, and gate in one frame
-- `t3-047` Find a taxi or rideshare waiting area with lane marker, queue sign, curb marking, and shelter
+- `t3-047` Find a taxi or hired-car waiting area with lane marker, queue sign, street-edge marking, and shelter
 - `t3-048` Find a transit stop beside a pedestrian crossing, bike rack, route board, and bench
 - `t3-049` Find a station entrance showing exit numbering, platform direction, ticket machine, and route symbol
-- `t3-050` Find a covered stop showing a live arrival display, route map, stop sign, and bench together
+- `t3-050` Find a covered stop showing a live arrival display, route map, route marker, and bench together
 
 #### Market Street Or Shopfront Row
 
@@ -634,7 +634,7 @@ Split:
 
 #### Parking Area Or Garage
 
-- `t3-061` Find a parking pay area showing a pay machine, tariff board, barrier gate, and exit arrow together
+- `t3-061` Find a parking payment area showing a terminal, tariff board, barrier gate, and exit arrow together
 - `t3-062` Find a garage entrance with height clearance, level marker, security mirror, and barrier gate visible
 - `t3-063` Find an electric charging bay showing cable dock, bay marking, charger screen, and parking sign
 - `t3-064` Find a parking corner with a security mirror, speed bump, pedestrian walkway, and direction arrow
@@ -691,7 +691,7 @@ Split:
 - `t3-101` Find a lobby entrance showing an intercom panel, parcel shelf, doormat, and property sign together
 - `t3-102` Find an elevator area showing call button, floor sign, inspection notice, and lobby seating
 - `t3-103` Find a reception counter with check-in sign, bell, parcel shelf, and directory visible
-- `t3-104` Find a mailroom area showing lockers, posted rules, parcel shelf, and room number sign
+- `t3-104` Find a parcel locker area showing lockers, posted rules, parcel shelf, and room number sign
 - `t3-105` Find a lobby seating area with plant, directory, elevator sign, and reception counter visible
 - `t3-106` Find a residential lobby showing doormat, intercom, elevator button, and posted notice together
 - `t3-107` Find a corridor entrance from a lobby showing room number sign, floor marker, and elevator panel

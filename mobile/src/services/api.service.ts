@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Bounty, TierNumber, ValidationResult, AttestationPayload } from '../types';
-import { API_BASE_URL } from '../config';
+import { API_BASE_URL, CLIENT_PROTOCOL_VERSION } from '../config';
 import { encodeBase58 } from '../utils/bs58';
 import { normalizeSkrName } from '../utils/format';
 
@@ -89,6 +89,10 @@ export async function prepareBounty(
     timestamp: number;
     bountyPda: string;
     entryAmount: number;
+    entryAmountSkr?: number;
+    instructionVersion?: 1 | 2;
+    returnAmount?: number;
+    returnAmountSkr?: number;
   };
   error?: string;
 }> {
@@ -97,6 +101,7 @@ export async function prepareBounty(
       tier,
       playerWallet,
       permissionsConfirmed: options?.permissionsConfirmed === true,
+      clientProtocolVersion: CLIENT_PROTOCOL_VERSION,
     }, { headers: options?.authHeaders || { 'ngrok-skip-browser-warning': '1' } });
 
     if (response.data.success && response.data.data) {

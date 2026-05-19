@@ -1,6 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { createHash, randomBytes, timingSafeEqual } from 'crypto';
-import { ActiveBounty, Tier, BountyStatus, ENTRY_AMOUNTS, TIER_DURATIONS } from '../types';
+import {
+  AcceptBountyInstructionVersion,
+  ActiveBounty,
+  Tier,
+  BountyStatus,
+  ENTRY_AMOUNTS,
+  TIER_DURATIONS,
+} from '../types';
 import { getRandomMission, getMissionById } from '../data/missions';
 import { getRedis, RK, redisAcquireLock, redisReleaseLock } from './redis.service';
 import {
@@ -67,6 +74,8 @@ export interface PreparedBounty {
   prepareId?: string;
   bountyPda?: string;
   tier: Tier;
+  instructionVersion: AcceptBountyInstructionVersion;
+  entryAmount: string;
   playerWallet: string;
   timestamp: number;
   missionId: string;
@@ -96,7 +105,8 @@ export async function createBounty(
   bountyPda: string,
   transactionSignature?: string,
   sgtVerified?: boolean,
-  preparedMissionId?: string
+  preparedMissionId?: string,
+  preparedEntryAmount?: bigint
 ): Promise<{ bounty: ActiveBounty; missionDescription: string }> {
   // Check if player already has an active bounty
   const existing = await getPlayerActiveBounty(playerWallet);
@@ -119,7 +129,7 @@ export async function createBounty(
     missionId: mission.id,
     playerWallet,
     tier,
-    entryAmount: ENTRY_AMOUNTS[tier],
+    entryAmount: preparedEntryAmount ?? ENTRY_AMOUNTS[tier],
     status: 'pending',
     createdAt: now,
     expiresAt,
@@ -422,6 +432,8 @@ function deserializePreparedBounty(raw: string): PreparedBounty {
   const parsed = JSON.parse(raw);
   return {
     ...parsed,
+    instructionVersion: (parsed.instructionVersion ?? 1) as AcceptBountyInstructionVersion,
+    entryAmount: parsed.entryAmount ?? ENTRY_AMOUNTS[parsed.tier as Tier].toString(),
     missionIdBytes: Buffer.from(parsed.missionIdBytes, 'base64'),
     salt: Buffer.from(parsed.salt, 'base64'),
     commitment: Buffer.from(parsed.commitment, 'base64'),

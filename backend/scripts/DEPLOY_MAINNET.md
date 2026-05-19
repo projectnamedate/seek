@@ -6,7 +6,10 @@ deployment with Ledger-backed cold authority + Railway-hosted backend.
 Prereqs (user-side):
 - **Cold authority Ledger** (Ledger #1) with Solana app installed — used for admin ops (fund_house, pause/resume, withdraw unreserved house funds, withdraw Singularity while paused with zero active bounties, set_hot_authority, set_treasury, propose/accept_authority_transfer, resolve_dispute) AND program upgrade authority by default
 - **Fees wallet Ledger** (Ledger #2): `Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr` — separate Ledger that owns the SKR ATA receiving the 10% rake. Signs nothing on-chain in the Seek protocol; rake accumulates as SKR, user periodically swaps to USDC/SOL on a DEX (Ledger-signed) and off-ramps to fiat. Operating expenses are funded separately, not paid from this wallet. **Rotatable** post-init via `admin.ts set-treasury` (cold-signed) — not locked forever.
-- ~5 SOL mainnet on cold Ledger for program deploy + rent
+- SOL on the cold Ledger for Ledger-signed admin/IDL transactions, plus a
+  durable git-ignored upgrade payer funded only after pubkey/permission
+  verification for program upgrade fees, buffer rent, and drain-after-upgrade
+  cleanup
 - $SKR tokens for house vault (**launch starter ~58,824 SKR ≈ $1000 at $0.017** — intentionally small; mission pool + AI thresholds tuned for ruin avoidance)
 - Release keystore generated per `mobile/android/SIGNING.md`
 - Railway account + project provisioned
@@ -105,51 +108,65 @@ git-ignored storage, set `0600`, verify the pubkey, define a backup or drain
 plan, and drain remaining SOL after the upgrade. Do not use `--final`.
 
 ```bash
+cd "$(git rev-parse --show-toplevel)"
+
 # Confirm cluster. Set RPC_URL in your shell or load it from an ignored env file;
 # do not paste private RPC keys in chat or docs.
 : "${RPC_URL:?set RPC_URL to a mainnet RPC endpoint first}"
+LEDGER_URL='usb://ledger?key=1'
 LEDGER_PUBKEY=GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY
-UPGRADE_KEYPAIR=../.secrets/solana/seek-upgrade-fee-payer.json
+PROGRAM_ID=DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
+UPGRADE_KEYPAIR=.secrets/solana/seek-upgrade-payer-20260517.json
+UPGRADE_BUFFER_KEYPAIR=.secrets/solana/seek-upgrade-buffer-20260517.json
+EXPECTED_UPGRADE_PUBKEY=3EKi2PzKrDi22Ld6NgixdBX7djSKMrZA2TG1utg1tJAS
+EXPECTED_UPGRADE_BUFFER_PUBKEY=C3y6AWfaM4vR5vocLa8Bozv768PkeyDwmaQWhM3buH2i
 
-mkdir -p ../.secrets/solana
-chmod 700 ../.secrets ../.secrets/solana
-test "$(git check-ignore -q ../.secrets/solana/seek-upgrade-fee-payer.json; echo $?)" = "0"
+# Must pass immediately before funding or deploying.
+test "$(solana address -k "$LEDGER_URL")" = "$LEDGER_PUBKEY"
 
-# Create only if this durable ignored key does not already exist.
+mkdir -p .secrets/solana
+chmod 700 .secrets .secrets/solana
+git check-ignore -q "$UPGRADE_KEYPAIR"
+git check-ignore -q "$UPGRADE_BUFFER_KEYPAIR"
+
+# Create only if these durable ignored keys do not already exist.
 test -f "$UPGRADE_KEYPAIR" || solana-keygen new --outfile "$UPGRADE_KEYPAIR"
-chmod 600 "$UPGRADE_KEYPAIR"
-UPGRADE_PUBKEY=$(solana-keygen pubkey "$UPGRADE_KEYPAIR")
-solana-keygen verify "$UPGRADE_PUBKEY" "$UPGRADE_KEYPAIR"
-# Fund only after the path, permissions, pubkey, and drain/backup plan are verified.
+test -f "$UPGRADE_BUFFER_KEYPAIR" || solana-keygen new --outfile "$UPGRADE_BUFFER_KEYPAIR"
+chmod 600 "$UPGRADE_KEYPAIR" "$UPGRADE_BUFFER_KEYPAIR"
 
-# Deploy with durable non-Ledger authority. Do NOT add --final; the program must
-# remain upgradeable while mainnet economics and UX settle.
-cd contracts
+UPGRADE_PUBKEY=$(solana-keygen pubkey "$UPGRADE_KEYPAIR")
+UPGRADE_BUFFER_PUBKEY=$(solana-keygen pubkey "$UPGRADE_BUFFER_KEYPAIR")
+test "$UPGRADE_PUBKEY" = "$EXPECTED_UPGRADE_PUBKEY"
+test "$UPGRADE_BUFFER_PUBKEY" = "$EXPECTED_UPGRADE_BUFFER_PUBKEY"
+solana-keygen verify "$EXPECTED_UPGRADE_PUBKEY" "$UPGRADE_KEYPAIR"
+solana-keygen verify "$EXPECTED_UPGRADE_BUFFER_PUBKEY" "$UPGRADE_BUFFER_KEYPAIR"
+
+# Fund only after the paths, permissions, pubkeys, and drain/backup plan are verified.
+# The 2026-05-17 durable payer pubkey is
+# `3EKi2PzKrDi22Ld6NgixdBX7djSKMrZA2TG1utg1tJAS`; it was verified at 0600 and
+# drained to 0 SOL after the last upgrade. Reverify before reuse.
+#
+# The cold Ledger remains the program upgrade authority. The durable keypair is
+# only the fee payer, and the durable buffer keypair avoids temp/random buffer
+# custody. Do NOT add --final; the program must remain upgradeable under Ledger.
 solana -u "$RPC_URL" \
   -k "$UPGRADE_KEYPAIR" \
-  program deploy target/deploy/seek_protocol.so \
-  --program-id target/deploy/seek_protocol-keypair.json \
-  --upgrade-authority "$UPGRADE_KEYPAIR" \
+  program deploy contracts/target/deploy/seek_protocol.so \
+  --program-id "$PROGRAM_ID" \
+  --buffer "$UPGRADE_BUFFER_KEYPAIR" \
+  --upgrade-authority "$LEDGER_URL" \
   --fee-payer "$UPGRADE_KEYPAIR" \
   --use-rpc
 
-# Immediately transfer upgrade authority to the cold Ledger.
-solana -u "$RPC_URL" \
-  -k "$UPGRADE_KEYPAIR" \
-  program set-upgrade-authority \
-  DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v \
-  --new-upgrade-authority "$LEDGER_PUBKEY"
+# Verify ProgramData upgrade authority is still the Ledger and the program is not final.
+solana -u "$RPC_URL" program show "$PROGRAM_ID"
 
-# Verify ProgramData upgrade authority is the Ledger and the program is not final.
-solana -u "$RPC_URL" \
-  program show DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
-
-# Publish IDL on-chain (so indexers/explorers can decode)
-anchor idl init \
+# Upgrade the already-published IDL on-chain (so indexers/explorers can decode)
+(cd contracts && anchor idl upgrade \
   --provider.cluster mainnet \
   --provider.wallet "$LEDGER_URL" \
   --filepath target/idl/seek_protocol.json \
-  DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v
+  "$PROGRAM_ID")
 ```
 
 ## 4. Optionally publish a verified build
@@ -365,14 +382,22 @@ cd mobile/android
 ./gradlew assembleRelease
 # → mobile/android/app/build/outputs/apk/release/app-release.apk
 
-# 3. Verify signing + install on Seeker
+# 3. Verify signing + install on the Solana Mobile test app device
 keytool -printcert -jarfile app/build/outputs/apk/release/app-release.apk
 adb install -r app/build/outputs/apk/release/app-release.apk
 ```
 
-Smoke-test the full flow end-to-end with real SKR before submitting.
+Smoke-test the full upgraded flow end-to-end after the program upgrade and
+backend deploy, before submitting any Solana Mobile dApp Store update. Confirm
+the test app receives the 500 / 1000 / 2000 tier payload, signs
+`accept_bounty_v2`, starts a bounty, captures camera/location proof, and
+reaches a validation/result state.
 
 ## 13. Submit to Solana dApp Store
+
+Do not submit until the pre-release audit gate and the post-upgrade Solana
+Mobile test-app smoke both pass, and the user approves the exact "What's new"
+text.
 
 Follow `dapp-store-publishing/README.md`:
 1. Fund publisher wallet with 0.5 SOL, back up `.secrets/dapp-store/publisher.json`, and finish Publisher Portal KYC/KYB.

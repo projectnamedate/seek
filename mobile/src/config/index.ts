@@ -24,6 +24,7 @@ export const API_BASE_URL = NGROK_URL
 
 // Network toggle (mainnet is the default). Switch to 'devnet' for devnet build/testing.
 export const NETWORK: 'mainnet-beta' | 'devnet' = 'mainnet-beta';
+export const CLIENT_PROTOCOL_VERSION = 2;
 
 // Build-time safety net: a release APK accidentally shipped with NETWORK='devnet'
 // would point users at the devnet RPC + 9-decimal test SKR mint. Refuse to boot.
@@ -49,19 +50,19 @@ export const GAME_CONFIG = {
 // Tier Configuration - Solana Mobile colors
 export const TIERS = {
   1: {
-    entry: 1000,
+    entry: 500,
     timeLimit: 180, // 3 minutes
     difficulty: 'Easy',
     color: '#cfe6e4', // light teal (Easy)
   },
   2: {
-    entry: 3000,
+    entry: 1000,
     timeLimit: 120, // 2 minutes
     difficulty: 'Medium',
     color: '#95d2e6', // sky blue (Medium)
   },
   3: {
-    entry: 5000,
+    entry: 2000,
     timeLimit: 60, // 1 minute
     difficulty: 'Hard',
     color: '#61afbd', // bright cyan (Hard)

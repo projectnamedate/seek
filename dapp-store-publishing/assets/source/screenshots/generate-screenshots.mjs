@@ -111,9 +111,9 @@ const screens = {
     ${text({ x: 1050, y: 704, value: '4', size: 124, fill: '#95d2e6', anchor: 'middle', spacing: -2 })}
     ${text({ x: 1050, y: 758, value: 'DAY STREAK', size: 24, fill: '#99b3be', family: utility, spacing: 1.2, anchor: 'middle' })}
     ${text({ x: 92, y: 1064, value: 'Choose a tier', size: 44, fill: '#f6f6f5' })}
-    ${tier(92, 1120, 'Scout', '50 SKR', 'Return on win')}
-    ${tier(530, 1120, 'Hunter', '100 SKR', 'Return on win', true)}
-    ${tier(968, 1120, 'Legend', '250 SKR', 'Return on win')}
+    ${tier(92, 1120, 'Easy', '500 SKR', 'Return 1000')}
+    ${tier(530, 1120, 'Medium', '1000 SKR', 'Return 2000', true)}
+    ${tier(968, 1120, 'Hard', '2000 SKR', 'Return 4000')}
     ${rect({ x: 92, y: 1488, width: 1256, height: 336, rx: 34, fill: '#101618', stroke: '#10282c' })}
     ${text({ x: 144, y: 1584, value: 'Recent mission', size: 32, fill: '#cfe6e4' })}
     ${text({ x: 144, y: 1662, value: 'Find a public chess table with pieces in play.', size: 40, fill: '#f6f6f5' })}
@@ -140,7 +140,7 @@ const screens = {
     'COMMITMENT FLOW',
     `
     ${text({ x: 92, y: 520, value: 'Selected tier', size: 34, fill: '#99b3be', family: utility, spacing: 1.1 })}
-    ${tier(92, 586, 'Hunter', '100 SKR', 'Payout: 250 SKR', true)}
+    ${tier(92, 586, 'Medium', '1000 SKR', 'Return 2000', true)}
     ${rect({ x: 530, y: 586, width: 818, height: 280, rx: 34, fill: '#101618', stroke: '#10282c' })}
     ${text({ x: 590, y: 674, value: 'Entry transaction', size: 42, fill: '#f6f6f5' })}
     ${text({ x: 590, y: 748, value: 'Your entry enters escrow before the target is revealed.', size: 31, fill: '#99b3be' })}
@@ -171,7 +171,7 @@ const screens = {
     ${text({ x: 144, y: 1666, value: 'Target must be visible', size: 31, fill: '#99b3be' })}
     ${rect({ x: 752, y: 1350, width: 596, height: 408, rx: 34, fill: '#010101', stroke: '#373c3e' })}
     ${text({ x: 804, y: 1460, value: 'Reward', size: 40, fill: '#f6f6f5' })}
-    ${text({ x: 804, y: 1550, value: '250 SKR', size: 78, fill: '#61afbd', spacing: -1 })}
+    ${text({ x: 804, y: 1550, value: '2000 SKR', size: 78, fill: '#61afbd', spacing: -1 })}
     `
   ),
   '05-validation.svg': base(
@@ -200,7 +200,7 @@ const screens = {
     `
     ${rect({ x: 120, y: 560, width: 1200, height: 1000, rx: 58, fill: 'url(#panel)', stroke: '#10282c' })}
     ${text({ x: 720, y: 760, value: 'COMPLETE', size: 118, fill: '#f6f6f5', anchor: 'middle', spacing: -2 })}
-    ${text({ x: 720, y: 870, value: '+250 SKR', size: 118, fill: '#95d2e6', anchor: 'middle', spacing: -2 })}
+    ${text({ x: 720, y: 870, value: '+1000 SKR', size: 118, fill: '#95d2e6', anchor: 'middle', spacing: -2 })}
     ${text({ x: 720, y: 942, value: 'Mission validated and settlement proposed.', size: 34, fill: '#cfe6e4', anchor: 'middle' })}
     ${rect({ x: 220, y: 1064, width: 1000, height: 210, rx: 34, fill: 'rgba(1,1,1,0.48)', stroke: '#373c3e' })}
     ${text({ x: 276, y: 1152, value: 'Target', size: 28, fill: '#99b3be', family: utility, spacing: 1.1 })}
@@ -217,7 +217,12 @@ const screens = {
 };
 
 for (const [name, content] of Object.entries(screens)) {
-  fs.writeFileSync(path.join(outDir, name), content);
+  const cleaned = content
+    .split('\n')
+    .map((line) => line.trimEnd())
+    .join('\n')
+    .trimEnd();
+  fs.writeFileSync(path.join(outDir, name), `${cleaned}\n`);
 }
 
 console.log(`wrote ${Object.keys(screens).length} screenshot SVGs to ${outDir}`);

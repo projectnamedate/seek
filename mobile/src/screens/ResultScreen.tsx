@@ -11,9 +11,11 @@ import {
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
+import { CommonActions } from '@react-navigation/native';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList } from '../types';
 import { playWinSound, playLoseSound } from '../utils/sounds';
+import { useApp } from '../context/AppContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Result'>;
@@ -22,10 +24,13 @@ type Props = {
 
 export default function ResultScreen({ navigation, route }: Props) {
   const { bounty, validation } = route.params;
+  const { refreshWalletBalance } = useApp();
   const isWin = bounty.status === 'won';
   // Balance is on-chain. AppContext fetches it via fetchRealBalance after the
   // finalize tx confirms. We do NOT mutate UI balance here — that caused a
   // bug where players saw +2000 SKR pre-confirmation, then a flicker.
+  // Finalization can land a few seconds after the result screen renders, so
+  // refresh from chain a few times instead of relying on a one-time connect fetch.
 
   // Animations
   const scaleAnim = useRef(new Animated.Value(0)).current;
@@ -119,8 +124,25 @@ export default function ResultScreen({ navigation, route }: Props) {
     }
   }, [isWin]);
 
+  useEffect(() => {
+    const timers = [0, 3000, 9000].map((delay) =>
+      setTimeout(() => {
+        void refreshWalletBalance();
+      }, delay)
+    );
+
+    return () => {
+      timers.forEach(clearTimeout);
+    };
+  }, [refreshWalletBalance]);
+
   const handlePlayAgain = () => {
-    navigation.popToTop();
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'Home' }],
+      })
+    );
   };
 
   const confidencePercent = Math.round(validation.confidence * 100);

@@ -129,18 +129,25 @@ describe("seek-protocol (client-side invariants)", () => {
     // 10^9 on devnet (test mint is 9 decimals). A regression here = every
     // tier entry misbehaves by 1000× on mainnet.
 
-    it("mainnet tier entries match 6-decimal base units", () => {
+    it("mainnet current tier entries match 6-decimal base units", () => {
       const mult = 1_000_000n; // 10^6
-      assert.equal(1000n * mult, 1_000_000_000n); // tier 1 = 1000 SKR
-      assert.equal(3000n * mult, 3_000_000_000n);
-      assert.equal(5000n * mult, 5_000_000_000n);
+      assert.equal(500n * mult, 500_000_000n); // tier 1 = 500 SKR
+      assert.equal(1000n * mult, 1_000_000_000n);
+      assert.equal(2000n * mult, 2_000_000_000n);
     });
 
-    it("devnet tier entries match 9-decimal base units", () => {
+    it("devnet current tier entries match 9-decimal base units", () => {
       const mult = 1_000_000_000n; // 10^9
+      assert.equal(500n * mult, 500_000_000_000n);
       assert.equal(1000n * mult, 1_000_000_000_000n);
-      assert.equal(3000n * mult, 3_000_000_000_000n);
-      assert.equal(5000n * mult, 5_000_000_000_000n);
+      assert.equal(2000n * mult, 2_000_000_000_000n);
+    });
+
+    it("contract keeps legacy v1 amounts for installed clients", () => {
+      assert.include(programSource, "LEGACY_TIER_1_ENTRY: u64 = 1000 * DECIMALS_MULTIPLIER");
+      assert.include(programSource, "LEGACY_TIER_2_ENTRY: u64 = 3000 * DECIMALS_MULTIPLIER");
+      assert.include(programSource, "LEGACY_TIER_3_ENTRY: u64 = 5000 * DECIMALS_MULTIPLIER");
+      assert.include(programSource, "validate_entry_amount_for_tier");
     });
 
     it("2x total return is entry + 1x profit", () => {
@@ -226,6 +233,7 @@ describe("seek-protocol (client-side invariants)", () => {
     it("exposes core bounty lifecycle instructions", () => {
       const names = instructions.map((i) => i.name);
       assert.include(names, "accept_bounty");
+      assert.include(names, "accept_bounty_v2");
       assert.include(names, "reveal_mission");
       assert.include(names, "propose_resolution");
       assert.include(names, "finalize_bounty");
@@ -233,6 +241,25 @@ describe("seek-protocol (client-side invariants)", () => {
       assert.include(names, "resolve_dispute");
       assert.include(names, "cancel_bounty");
       assert.include(names, "close_bounty");
+    });
+
+    it("accept_bounty_v2 keeps tier-first args and bounty PDA accounts", () => {
+      const acceptV1 = instructions.find((i) => i.name === "accept_bounty");
+      const acceptV2 = instructions.find((i) => i.name === "accept_bounty_v2");
+      assert.ok(acceptV1);
+      assert.ok(acceptV2);
+
+      const v2Args = ((acceptV2 as any).args as Array<{ name: string }>).map((a) => a.name);
+      assert.deepEqual(v2Args, [
+        "tier",
+        "entry_amount",
+        "timestamp",
+        "mission_commitment",
+      ]);
+
+      const v1Accounts = ((acceptV1 as any).accounts as Array<{ name: string }>).map((a) => a.name);
+      const v2Accounts = ((acceptV2 as any).accounts as Array<{ name: string }>).map((a) => a.name);
+      assert.deepEqual(v2Accounts, v1Accounts);
     });
 
     it("exposes the new auth-model instructions", () => {

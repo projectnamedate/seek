@@ -25,11 +25,11 @@ means losing control of the app listing.
 
 ## Current test-device note
 
-User now has a Seeker device. The sideloaded `app.seek.mobile` v1.0.3 /
-versionCode `4` hardware-test build was uninstalled after v1.0.2 was accepted,
-so the next validation should install/open the official Solana Mobile store
-build without USB and run wallet, passive SGT, camera/location, and
-finalization smoke.
+User now has a Seeker device. The v1.0.4 test-app smoke passed before
+Publisher upload, and v1.0.4 / versionCode `5` is in Solana Mobile review.
+After acceptance, install/open the official Solana Mobile store build without
+USB and run wallet, passive SGT, camera/location, funded hunt, balance refresh,
+Try Again navigation, and finalization smoke.
 
 ## Publisher Portal setup
 
@@ -67,7 +67,7 @@ npx dapp-store publish submit \
 dapp-store \
   --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk \
   --keypair ../.secrets/dapp-store/publisher.json \
-  --whats-new "Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow."
+  --whats-new "Updates SKR hunt tiers and refreshes the mission pool for more globally available targets."
 ```
 
 ## Current live update
@@ -100,6 +100,31 @@ Fixes Seeker camera capture, passive SGT verification, AI validation reliability
 ```
 
 ## Current submitted update
+
+v1.0.4 / versionCode `5` was submitted to Solana Mobile dApp Store review on
+2026-05-19 with the portal-backed CLI and `--api-key-stdin`.
+
+```text
+Updates SKR hunt tiers and refreshes the mission pool for more globally available targets.
+```
+
+- Release mint: `DvXz61SCghoPMwD3jED8qDj3CBXtXRXoLXiRVku7zMWg`
+- Collection mint: `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`
+- Ticket ID: `312122131169`
+- APK SHA-256:
+  `5ed166ca0d7da0f3cec2e30de6d94ccab1fcbeb7457e210cb66384cd473b842b`
+- Ingestion session: `4322b65e-8b0c-4441-bc12-ef08d84f8ed1`
+- Release ID: `5b2e62d8-38d4-4365-b97e-b1b7c3ba0847`
+- Publication session: `e5ea4d2e-fe43-491e-8a8a-0be876c7ac15`
+- Idempotency key: `seek-update-1.0.4-v5-20260519`
+- Release transaction:
+  `5MCL4spjg1u43cjLKNAubeWAxj6KovHXijFUvLh1ssr584zaY5DGxdSGfe2akmr2ZaVZSt6JvBU9J9gSECvsACMF`
+- Collection verification transaction:
+  `3fLoBEGmg2rsJD6R99kVZZuH9nuW94ZeF71qTGUr1pDFEakpzacCL6doTDPt81LAS5TcTmtsk8r7qstWJPuUhmiX`
+- Attestation request ID: `17985067346990183540214621176997`
+- Publisher wallet balance after submission: `0.07655074 SOL`
+
+## Previous submitted update
 
 v1.0.3 / versionCode `4` was submitted to Solana Mobile dApp Store review on
 2026-05-18 with the portal-backed CLI and `--api-key-stdin`.

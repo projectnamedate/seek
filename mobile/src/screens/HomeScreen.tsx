@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   AppState,
 } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TierNumber, TIERS } from '../types';
 import walletService from '../services/wallet.service';
@@ -27,7 +28,7 @@ import {
   SeekPermissionState,
 } from '../services/permissions.service';
 
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 
 // Tier colors - Solana Mobile inspired
 const TIER_COLORS = {
@@ -45,6 +46,7 @@ export default function HomeScreen({ navigation }: Props) {
     wallet,
     connectWallet,
     disconnectWallet,
+    refreshWalletBalance,
   } = useApp();
   const [selectedTier, setSelectedTier] = useState<TierNumber>(1);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -84,6 +86,14 @@ export default function HomeScreen({ navigation }: Props) {
   };
 
   // Wallet state is now managed by AppContext — no subscription needed
+
+  useFocusEffect(
+    useCallback(() => {
+      if (wallet.connected) {
+        void refreshWalletBalance();
+      }
+    }, [wallet.connected, refreshWalletBalance])
+  );
 
   // Singularity pool pulse and live stats refresh.
   useEffect(() => {

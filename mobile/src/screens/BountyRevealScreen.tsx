@@ -18,6 +18,7 @@ import { buildAcceptBountyTransaction } from '../services/solana.mobile';
 import { useApp } from '../context/AppContext';
 import { formatTime } from '../utils/format';
 import { hasSeekPermissions, requestSeekPermissions } from '../services/permissions.service';
+import { TOKEN } from '../config';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'BountyReveal'>;
@@ -30,6 +31,10 @@ function parseMissionDescription(description: string): { target: string; hint: s
     target: (targetPart || description).replace(/^Find\s+(a\s+|an\s+)?/i, ''),
     hint: hintPart || 'Capture all listed cues in one photo',
   };
+}
+
+function wholeSkrFromBaseUnits(baseUnits: number): number {
+  return Number(BigInt(baseUnits) / (10n ** BigInt(TOKEN.DECIMALS)));
 }
 
 export default function BountyRevealScreen({ navigation, route }: Props) {
@@ -104,8 +109,23 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         throw new Error(prepResult.error || 'Failed to prepare bounty');
       }
 
-      const { commitment, prepareId, timestamp, bountyPda, entryAmount } = prepResult.data;
-      if (__DEV__) console.log('[BountyReveal] Prepared:', { bountyPda: bountyPda.slice(0, 8), timestamp });
+      const {
+        commitment,
+        prepareId,
+        timestamp,
+        bountyPda,
+        entryAmount,
+        entryAmountSkr,
+        instructionVersion,
+        returnAmountSkr,
+      } = prepResult.data;
+      if (__DEV__) {
+        console.log('[BountyReveal] Prepared:', {
+          bountyPda: bountyPda.slice(0, 8),
+          timestamp,
+          instructionVersion,
+        });
+      }
 
       // Step 2: Build the accept_bounty transaction
       setStatusText('Building transaction...');
@@ -117,7 +137,11 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         BigInt(entryAmount),
         BigInt(timestamp),
         commitment,
-        bountyPdaPubkey
+        bountyPdaPubkey,
+        {
+          instructionVersion: instructionVersion ?? 1,
+          tier,
+        }
       );
 
       // Step 3: Sign & send via wallet (only required approval for this flow)
@@ -165,6 +189,9 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       const description = responseData?.mission?.description || 'Find the target';
       const { target, hint } = parseMissionDescription(description);
 
+      const displayEntryAmount = responseData?.entryAmountSkr ?? entryAmountSkr ?? wholeSkrFromBaseUnits(entryAmount);
+      const displayReturnAmount = responseData?.returnAmountSkr ?? returnAmountSkr ?? displayEntryAmount * 2;
+
       const newBounty: Bounty = {
         id: responseData?.bountyId || `onchain-${now}`,
         tier,
@@ -175,8 +202,8 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
           ? new Date(responseData.expiresAt).getTime()
           : now + tierData.timeLimit * 1000,
         status: 'revealing',
-        entryAmount: tierData.entry,
-        potentialReward: tierData.entry * 2,
+        entryAmount: displayEntryAmount,
+        potentialReward: displayReturnAmount,
         bountyPda,
         submitToken: responseData?.submitToken,
       };

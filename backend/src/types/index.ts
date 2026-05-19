@@ -2,6 +2,7 @@ import { config } from '../config';
 
 // Bounty tiers
 export type Tier = 1 | 2 | 3;
+export type AcceptBountyInstructionVersion = 1 | 2;
 
 // SKR base-unit multiplier — MUST match the on-chain SKR_DECIMALS const.
 // Mainnet SKR (official Solana Mobile token) uses 6 decimals; devnet test
@@ -10,8 +11,16 @@ export type Tier = 1 | 2 | 3;
 export const SKR_DECIMALS = config.solana.network === 'mainnet-beta' ? 6 : 9;
 export const SKR_MULTIPLIER = BigInt(10) ** BigInt(SKR_DECIMALS);
 
-// Entry amounts in base units (whole SKR × SKR_MULTIPLIER).
+// Current v2 entry amounts in base units (whole SKR x SKR_MULTIPLIER).
 export const ENTRY_AMOUNTS: Record<Tier, bigint> = {
+  1: 500n * SKR_MULTIPLIER,
+  2: 1000n * SKR_MULTIPLIER,
+  3: 2000n * SKR_MULTIPLIER,
+};
+
+// Legacy v1 amounts kept for already-installed clients that still serialize the
+// amount-inferred accept_bounty instruction.
+export const LEGACY_ENTRY_AMOUNTS: Record<Tier, bigint> = {
   1: 1000n * SKR_MULTIPLIER,
   2: 3000n * SKR_MULTIPLIER,
   3: 5000n * SKR_MULTIPLIER,
@@ -117,6 +126,8 @@ export interface StartBountyResponse {
   expiresAt: string;
   bountyPda: string;
   submitToken?: string;
+  entryAmountSkr?: number;
+  returnAmountSkr?: number;
 }
 
 export interface SubmitPhotoResponse {

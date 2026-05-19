@@ -2,9 +2,14 @@
 
 Real-world scavenger hunts with on-chain SKR rewards. Complete missions by finding physical targets, capturing proof, and settling results on Solana Seeker.
 
-## How It Works
+> Release status: this checkout stages the v1.0.4 tier/mission update. The
+> currently deployed mainnet program and submitted store build remain on the
+> legacy production path until the Ledger-signed program upgrade, backend
+> deploy, Solana Mobile test-app smoke, and dApp Store update are completed.
 
-1. **Select Tier** - Choose your challenge level (1000/3000/5000 $SKR)
+## How It Works (staged v1.0.4)
+
+1. **Select Tier** - Choose your challenge level (500/1000/2000 $SKR)
 2. **Accept Bounty** - Wallet approves entry, you get a random target
 3. **Hunt** - Find the object in the real world before time runs out
 4. **Capture** - Take a photo with your camera
@@ -15,9 +20,9 @@ Real-world scavenger hunts with on-chain SKR rewards. Complete missions by findi
 
 | Tier | Entry | Time | Difficulty | Example Bounties |
 |------|-------|------|------------|------------------|
-| 1 | 1000 $SKR | 3 min | Easy | Public bench, doorway number, transit stop sign |
-| 2 | 3000 $SKR | 2 min | Medium | Route map beside ticket machine, shelf price label |
-| 3 | 5000 $SKR | 1 min | Hard | Park map plus bench plus bin, station concourse combo |
+| 1 | 500 $SKR | 3 min | Easy | Public bench, doorway number, transit route marker |
+| 2 | 1000 $SKR | 2 min | Medium | Route map beside ticket machine, shelf price label |
+| 3 | 2000 $SKR | 1 min | Hard | Park map plus bench plus bin, station concourse combo |
 
 ## Economics
 
@@ -76,7 +81,8 @@ seek/
 
 ## Smart Contract Features
 
-- Variable entry validation (1000/3000/5000 SKR only)
+- Variable entry validation (staged v1.0.4: 500/1000/2000 SKR for new clients;
+  currently live legacy path: 1000/3000/5000 until the upgrade is deployed)
 - 2x total return on success (entry returned + 1x profit from house vault)
 - Automatic 70/20/10 distribution on failure
 - Singularity bonus pool for eligible completions
@@ -95,7 +101,7 @@ seek/
 
 **On-Chain Flow:**
 - `POST /api/bounty/prepare` - Prepare bounty (generates commitment, returns tx data)
-- `POST /api/bounty/start` - Start hunt (after MWA signs accept_bounty on-chain)
+- `POST /api/bounty/start` - Start hunt (after MWA signs the accept-bounty instruction on-chain)
 - `POST /api/bounty/submit` - Submit photo for AI validation + on-chain resolve
 - `GET /api/bounty/:id` - Get bounty status
 - `GET /api/bounty/player/:wallet` - Get player's active bounty
@@ -121,7 +127,9 @@ The app runs fully on-chain. Production is mainnet-beta by default; devnet is
 available only through the explicit devnet build/config path:
 
 1. Mobile calls `/prepare` → backend generates commitment + returns account addresses
-2. Mobile builds `accept_bounty` instruction → Seeker Wallet signs through Mobile Wallet Adapter
+2. Staged v1.0.4 mobile builds `accept_bounty_v2` instruction → Seeker Wallet
+   signs through Mobile Wallet Adapter. Current live store builds still use the
+   legacy `accept_bounty` path until the upgrade ships.
 3. `/start` verifies the on-chain transaction → hunt begins with timer
 4. Player finds target, takes photo → `/submit` with AI validation
 5. Backend reveals the mission, proposes the result, then the finalizer cranks
@@ -129,7 +137,8 @@ available only through the explicit devnet build/config path:
 
 **Mainnet deploy status:** the program is deployed and initialized at
 `DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v`; it remains upgradeable under
-the cold Ledger. Never deploy with `--final`. See
+the cold Ledger. The v1.0.4 tier/mission update is staged locally, not deployed
+or submitted. Never deploy with `--final`. See
 [`backend/scripts/DEPLOY_MAINNET.md`](backend/scripts/DEPLOY_MAINNET.md).
 
 ```bash

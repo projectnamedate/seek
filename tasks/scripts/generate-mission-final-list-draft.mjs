@@ -10,26 +10,26 @@ const families = [
     location: outdoor,
     t1: [
       'a doorway with a visible number',
-      'a residential mailbox or postal slot',
+      'a doorway with a visible doorbell or knocker',
       'a parked bicycle near a home entrance',
-      'a scooter parked beside a curb',
+      'a scooter parked beside a building entrance',
       'a building entrance mat',
-      'a planted strip beside a sidewalk',
+      'a planted strip beside a pedestrian path',
       'a balcony or window ledge with plants',
       'a street name sign',
       'a public trash or recycling bin',
       'a small front gate',
-      'a porch light or entry light',
+      'an entry light above or beside a doorway',
       'a residential intercom panel',
       'a shared stairway outside a building',
-      'a curb ramp at a street corner',
+      'a ramped pedestrian crossing edge at a street corner',
     ],
     t2: [
-      'a doorway with a number and a mail slot in the same frame',
+      'a doorway with a number and a doorbell or buzzer in the same frame',
       'a residential intercom with several buttons visible',
       'a bicycle locked to a rack or fence near a residence',
       'a scooter parked beside a doorway with a building number visible',
-      'a planted strip with a tree guard beside the sidewalk',
+      'a planted strip with a tree guard beside a pedestrian path',
       'a balcony with plants and a railing visible',
       'a street name sign above a pedestrian crossing',
       'a residential recycling bin with a sorting label visible',
@@ -40,15 +40,15 @@ const families = [
     ],
     t3: [
       'a residential entrance showing a number, intercom, parcel shelf, and entry mat in one frame',
-      'a street corner showing a street name sign, curb ramp, drainage grate, and residential doorway',
+      'a street corner showing a street name sign, ramped crossing edge, drainage grate, and residential doorway',
       'a bicycle rack outside housing with two locked bikes and a building number visible',
-      'a residential gate showing a keypad, posted notice, and row of mail slots',
+      'a residential gate showing a keypad, posted notice, and parcel shelf',
       'a balcony row with laundry, plants, and matching railings visible together',
-      'a residential lane showing a delivery drop point, postal box, and numbered doorway together',
+      'a residential lane showing a delivery drop point, parcel shelf, and numbered doorway together',
       'an exterior stairway with a floor marker, handrail, light fixture, and landing sign visible',
       'a shared entry showing an intercom, camera dome, access reader, and posted notice together',
-      'a planted curb strip with a tree guard, utility cover, and street name sign in one frame',
-      'a residential corner with a curb ramp, road mirror, building number, and posted parking sign visible',
+      'a planted street-edge strip with a tree guard, utility cover, and street name sign in one frame',
+      'a residential corner with a ramped crossing edge, road mirror, building number, and posted parking sign visible',
     ],
   },
   {
@@ -106,11 +106,11 @@ const families = [
       'a paved walking path',
       'a public trash bin',
       'a shade tree',
-      'a drinking fountain',
+      'a public water point',
       'a park map board',
       'a public sculpture',
-      'a picnic table',
-      'a grass lawn',
+      'a public seating table',
+      'an open grass or planted area',
       'a public notice board',
       'a plaza fountain',
       'a bicycle rack near a park path',
@@ -118,28 +118,28 @@ const families = [
     ],
     t2: [
       'a park map board with paths or zones visible',
-      'a drinking fountain beside a path or bench',
+      'a public water point beside a path or bench',
       'a public sculpture with a plaque or base visible',
-      'a picnic table near a trash or recycling bin',
+      'a public seating table near a trash or recycling bin',
       'a planted garden bed with a plant label or border',
       'a plaza fountain with water visibly active',
       'a park entrance sign beside a paved path',
       'a public notice board with posted papers visible',
       'a bench facing a fountain or sculpture',
       'a bicycle rack beside a park map or entrance sign',
-      'a grass lawn with a marked path or boundary nearby',
+      'an open grass or planted area with a marked path or boundary nearby',
       'a shade tree beside a public seating area',
     ],
     t3: [
       'a park map board, route marker, bench, and public trash bin in one frame',
       'a plaza fountain with active water, plaque, surrounding seating, and planted bed visible',
       'a public sculpture showing its plaque, base, nearby path, and plaza seating together',
-      'a picnic area with a table, recycling bin, posted rule sign, and path marker visible',
+      'a public seating area with a table, recycling bin, posted rule sign, and path marker visible',
       'a park entrance showing the sign, path map, bicycle rack, and notice board together',
       'a garden bed showing plant labels, border stones, watering fixture, and public path',
       'a public notice board with a date, park name, path map, and bench nearby',
-      'a park lawn showing a boundary marker, shade tree, bench, and path intersection',
-      'a drinking fountain beside a route marker, bench, and posted park rule sign',
+      'a park open area showing a boundary marker, shade tree, bench, and path intersection',
+      'a public water point beside a route marker, bench, and posted park rule sign',
       'a plaza scene with fountain, sculpture, seating, and wayfinding sign all visible',
     ],
   },
@@ -160,7 +160,7 @@ const families = [
       'a court entrance gate',
       'a playground safety surface',
       'a sports field boundary',
-      'a drinking fountain near a court',
+      'a public water point near a court',
     ],
     t2: [
       'a basketball hoop with court lines visible below it',
@@ -172,7 +172,7 @@ const families = [
       'a court entrance gate beside a fence and court line',
       'a ball stop net behind a goal or court line',
       'a bench facing a sports court or playground',
-      'a drinking fountain beside a court or playground sign',
+      'a public water point beside a court or playground sign',
       'a marked sports field boundary with a goal or hoop visible',
       'a playground surface with a posted rule sign nearby',
     ],
@@ -185,7 +185,7 @@ const families = [
       'a ball stop net, goal post, court line, and rule sign visible in one frame',
       'a playground climbing frame with a safety label, surface edge, slide, and bench nearby',
       'a court showing two different sport markings plus a hoop and a goal in one frame',
-      'a drinking fountain beside a court map, rule sign, and marked playing surface',
+      'a public water point beside a court map, rule sign, and marked playing surface',
       'a sports area showing a scoreboard or score panel, boundary line, seating, and court sign',
     ],
   },
@@ -193,7 +193,7 @@ const families = [
     name: 'Transit Stop Or Station Exterior',
     location: outdoor,
     t1: [
-      'a transit stop sign',
+      'a transit route marker',
       'a shelter roof',
       'a timetable board',
       'a platform edge',
@@ -205,11 +205,11 @@ const families = [
       'a wayfinding sign',
       'a fare gate outside a station',
       'a pedestrian crossing near transit',
-      'a taxi or rideshare waiting area',
+      'a taxi or hired-car waiting area',
       'a bus or tram lane marker',
     ],
     t2: [
-      'a transit stop sign with a timetable board below it',
+      'a transit route marker with a timetable board below it',
       'a shelter roof with a bench and route sign visible',
       'a ticket machine beside a route map or fare sign',
       'a platform edge with a warning strip visible',
@@ -217,10 +217,10 @@ const families = [
       'a bike rack beside a station entrance sign',
       'a wayfinding sign pointing to a platform or exit',
       'a fare gate with a ticket machine nearby',
-      'a taxi or rideshare waiting area with a posted sign',
+      'a taxi or hired-car waiting area with a posted sign',
       'a bus or tram lane marker beside a transit stop',
       'a station entrance with a route symbol or line marker',
-      'a pedestrian crossing directly beside a transit stop sign',
+      'a pedestrian crossing directly beside a transit route marker',
     ],
     t3: [
       'a transit stop showing a route map, timetable, bench, and shelter roof in one frame',
@@ -229,10 +229,10 @@ const families = [
       'a transit entrance with a bike rack, wayfinding sign, ticket machine, and route map',
       'a stop area showing a vehicle route number, timetable board, shelter, and platform marker',
       'a fare zone showing a ticket machine, fare rules, route map, and gate in one frame',
-      'a taxi or rideshare waiting area with lane marker, queue sign, curb marking, and shelter',
+      'a taxi or hired-car waiting area with lane marker, queue sign, street-edge marking, and shelter',
       'a transit stop beside a pedestrian crossing, bike rack, route board, and bench',
       'a station entrance showing exit numbering, platform direction, ticket machine, and route symbol',
-      'a covered stop showing a live arrival display, route map, stop sign, and bench together',
+      'a covered stop showing a live arrival display, route map, route marker, and bench together',
     ],
   },
   {
@@ -286,7 +286,7 @@ const families = [
     location: outdoor,
     t1: [
       'a marked parking bay',
-      'a parking pay machine',
+      'a parking payment terminal',
       'a garage entrance',
       'a height clearance sign',
       'a painted directional arrow',
@@ -301,7 +301,7 @@ const families = [
       'a bicycle parking rack',
     ],
     t2: [
-      'a parking pay machine beside a tariff board',
+      'a parking payment terminal beside a tariff board',
       'a garage entrance with a height clearance sign',
       'a marked parking bay with a painted number or symbol',
       'an electric charging station with its cable dock visible',
@@ -311,11 +311,11 @@ const families = [
       'a speed bump with a warning sign nearby',
       'a pedestrian walkway crossing a parking area',
       'a barrier gate with a ticket or access reader',
-      'a bicycle parking rack beside a garage or lot entrance',
+      'a bicycle parking rack beside a garage or parking area entrance',
       'a painted directional arrow pointing toward an exit sign',
     ],
     t3: [
-      'a parking pay area showing a pay machine, tariff board, barrier gate, and exit arrow together',
+      'a parking payment area showing a terminal, tariff board, barrier gate, and exit arrow together',
       'a garage entrance with height clearance, level marker, security mirror, and barrier gate visible',
       'an electric charging bay showing cable dock, bay marking, charger screen, and parking sign',
       'a parking corner with a security mirror, speed bump, pedestrian walkway, and direction arrow',
@@ -447,7 +447,7 @@ const families = [
       'a portable generator beside cables or a work barrier',
       'a roadwork sign beside cones or temporary fencing',
       'a cable reel with loose cable visible nearby',
-      'a temporary ramp leading over a curb or threshold',
+      'a temporary ramp leading over a raised edge or threshold',
       'a utility cabinet with a warning label or number visible',
       'a permit board mounted beside a construction barrier',
       'a stack of construction materials behind a safety fence',
@@ -483,14 +483,14 @@ const families = [
       'a room number sign beside a corridor doorway',
       'a lobby doormat below a building or property sign',
       'a reception counter with a bell or check-in sign',
-      'a mailroom or locker area with labels visible',
+      'a parcel locker area with labels visible',
       'an intercom panel beside a lobby entrance',
     ],
     t3: [
       'a lobby entrance showing an intercom panel, parcel shelf, doormat, and property sign together',
       'an elevator area showing call button, floor sign, inspection notice, and lobby seating',
       'a reception counter with check-in sign, bell, parcel shelf, and directory visible',
-      'a mailroom area showing lockers, posted rules, parcel shelf, and room number sign',
+      'a parcel locker area showing lockers, posted rules, parcel shelf, and room number sign',
       'a lobby seating area with plant, directory, elevator sign, and reception counter visible',
       'a residential lobby showing doormat, intercom, elevator button, and posted notice together',
       'a corridor entrance from a lobby showing room number sign, floor marker, and elevator panel',
@@ -817,9 +817,9 @@ function idFor(tier, index) {
 }
 
 function titleForTier(tier) {
-  if (tier === 1) return 'Tier 1 - Easy - 1000 SKR - 3 minutes';
-  if (tier === 2) return 'Tier 2 - Medium - 3000 SKR - 2 minutes';
-  return 'Tier 3 - Hard - 5000 SKR - 1 minute';
+  if (tier === 1) return 'Tier 1 - Easy - 500 SKR - 3 minutes';
+  if (tier === 2) return 'Tier 2 - Medium - 1000 SKR - 2 minutes';
+  return 'Tier 3 - Hard - 2000 SKR - 1 minute';
 }
 
 function missionLine(id, text) {
@@ -886,7 +886,7 @@ const lines = [
   '',
   'Generated on 2026-05-17 from the approved global location taxonomy.',
   '',
-  'Status: Draft for user approval before wiring into the production mission pool.',
+  'Status: Approved by the user on 2026-05-17 and wired into the production mission pool. Updated on 2026-05-19 to remove region-specific object assumptions.',
   '',
   'Difficulty rules:',
   '',
@@ -908,5 +908,6 @@ const lines = [
 ];
 
 const outputPath = path.resolve('tasks/mission-final-list-draft.md');
-fs.writeFileSync(outputPath, `${lines.join('\n').replace(/\n{3,}/g, '\n\n')}\n`);
+const markdown = lines.join('\n').replace(/\n{3,}/g, '\n\n').trimEnd();
+fs.writeFileSync(outputPath, `${markdown}\n`);
 console.log(outputPath);

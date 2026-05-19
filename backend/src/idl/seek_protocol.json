@@ -66,9 +66,11 @@
     {
       "name": "accept_bounty",
       "docs": [
-        "Accept a bounty - player submits their entry and starts the hunt.",
-        "entry_amount must be exactly TIER_1_ENTRY / TIER_2_ENTRY / TIER_3_ENTRY",
-        "(1000 / 3000 / 5000 SKR in base units — multiplier depends on SKR_DECIMALS).",
+        "Accept a legacy v1 bounty - player submits their entry and starts the",
+        "hunt. entry_amount must be exactly LEGACY_TIER_1_ENTRY /",
+        "LEGACY_TIER_2_ENTRY / LEGACY_TIER_3_ENTRY (1000 / 3000 / 5000 SKR in",
+        "base units). New clients should call accept_bounty_v2 with an explicit",
+        "tier.",
         "mission_commitment is hash(mission_id || salt) for commit-reveal.",
         "timestamp must be within 60 seconds of current time (for PDA derivation)."
       ],
@@ -207,6 +209,171 @@
         }
       ],
       "args": [
+        {
+          "name": "entry_amount",
+          "type": "u64"
+        },
+        {
+          "name": "timestamp",
+          "type": "i64"
+        },
+        {
+          "name": "mission_commitment",
+          "type": {
+            "array": [
+              "u8",
+              32
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "accept_bounty_v2",
+      "docs": [
+        "Accept a current v2 bounty - player submits their entry and starts the",
+        "hunt. tier must be explicit and entry_amount must match that tier:",
+        "1=500 SKR, 2=1000 SKR, 3=2000 SKR in base units."
+      ],
+      "discriminator": [
+        6,
+        224,
+        241,
+        216,
+        81,
+        119,
+        234,
+        132
+      ],
+      "accounts": [
+        {
+          "name": "player",
+          "docs": [
+            "Player accepting the bounty"
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "Bounty PDA - unique per player + timestamp"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  98,
+                  111,
+                  117,
+                  110,
+                  116,
+                  121
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              },
+              {
+                "kind": "arg",
+                "path": "timestamp"
+              }
+            ]
+          }
+        },
+        {
+          "name": "player_token_account",
+          "docs": [
+            "Player's SKR token account — pinned to the canonical ATA.",
+            "Prevents passing a delegated/frozen/alt-ATA that could reroute winnings."
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault to receive entry"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "skr_mint",
+          "docs": [
+            "The SKR token mint"
+          ],
+          "address": "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3"
+        },
+        {
+          "name": "system_program",
+          "docs": [
+            "System program"
+          ],
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "tier",
+          "type": "u8"
+        },
         {
           "name": "entry_amount",
           "type": "u64"
@@ -2000,7 +2167,7 @@
     {
       "code": 6000,
       "name": "InvalidEntryAmount",
-      "msg": "Invalid entry amount. Must be 1000, 3000, or 5000 SKR"
+      "msg": "Invalid entry amount for tier"
     },
     {
       "code": 6001,
@@ -2173,7 +2340,8 @@
           {
             "name": "entry_amount",
             "docs": [
-              "Entry amount in SKR base units (1000, 3000, or 5000 whole SKR)"
+              "Entry amount in SKR base units. Current v2 tiers are 500, 1000, or 2000",
+              "whole SKR; legacy v1 bounties may be 1000, 3000, or 5000 whole SKR."
             ],
             "type": "u64"
           },

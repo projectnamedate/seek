@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const draftPath = path.resolve('tasks/mission-final-list-draft.md');
 const outputPath = path.resolve('backend/src/data/missions.ts');
+const listOutputPath = path.resolve('tasks/mission-list-by-tier.md');
 
 const draft = fs.readFileSync(draftPath, 'utf8').split(/\r?\n/);
 
@@ -221,3 +222,16 @@ export function getMissionById(id: string): Mission | undefined {
 
 fs.writeFileSync(outputPath, source);
 console.log(outputPath);
+
+const productionList = fs.readFileSync(draftPath, 'utf8')
+  .replace(
+    '# Seek Final Mission List Draft',
+    '# Seek Mission List By Tier'
+  )
+  .replace(
+    /^Status: .+$/m,
+    'Status: Approved production mission list. Updated on 2026-05-19 for the 500 / 1000 / 2000 SKR tier ladder and more globally plausible targets.'
+  );
+
+fs.writeFileSync(listOutputPath, `${productionList.trimEnd()}\n`);
+console.log(listOutputPath);

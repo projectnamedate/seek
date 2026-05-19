@@ -19,9 +19,12 @@ Source: docs.solanamobile.com/dapp-store (verified 2026-05-05).
 - [x] Developer contact email (`jeff@projectname.date`)
 - [x] Release APK emulator smoke: launch, age gate, home screen, live stats,
   and no fatal app crash on `SeekDryRun_API35`
-- [ ] Official store-build smoke on Seeker after v1.0.2 acceptance:
+- [x] Post-upgrade Solana Mobile test-app smoke before v1.0.4 submission:
+  MWA signing, funded 500 SKR hunt flow, camera/location capture, finalizer
+  settlement, balance refresh, and Try Again navigation.
+- [ ] Official store-build smoke on Seeker after v1.0.4 acceptance:
   MWA connect/signing, SGT status, camera/location capture, funded-wallet hunt
-  flow
+  flow from the store-delivered build.
 
 ### Required assets
 
@@ -43,7 +46,7 @@ Source: docs.solanamobile.com/dapp-store (verified 2026-05-05).
 - Release mint: `2xwDFP9Vz1Xf5rDbGBpaLQkvzYYqgx2RsBdFrvWKtzHm`
 - Collection mint: `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`
 - Ticket ID: `310370751180`
-- Publisher wallet balance after v1.0.2 submission: `0.11787386 SOL`
+- Publisher wallet balance after v1.0.4 submission: `0.07655074 SOL`
 - 2026-05-15: Solana Mobile support reported an unrecoverable backend ingest
   error on their side and requested another submission. Same-APK resubmit with
   idempotency key `seek-resubmit-1.0.0-a420b658897d4631-20260515` reached
@@ -92,9 +95,30 @@ Source: docs.solanamobile.com/dapp-store (verified 2026-05-05).
   `96332cdd-cf73-4074-b0b1-1cdcd915e7c1`
 - v1.0.3 publication session:
   `6a60d162-3db2-4d3a-90b4-c4fdacfe6c46`
+- [x] v1.0.4 / versionCode `5` submitted to review on 2026-05-19 with
+  idempotency key `seek-update-1.0.4-v5-20260519`.
+- v1.0.4 release mint:
+  `DvXz61SCghoPMwD3jED8qDj3CBXtXRXoLXiRVku7zMWg`
+- v1.0.4 collection mint:
+  `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`
+- v1.0.4 ticket ID: `312122131169`
+- v1.0.4 APK SHA-256:
+  `5ed166ca0d7da0f3cec2e30de6d94ccab1fcbeb7457e210cb66384cd473b842b`
+- v1.0.4 portal ingestion session:
+  `4322b65e-8b0c-4441-bc12-ef08d84f8ed1`
+- v1.0.4 release ID:
+  `5b2e62d8-38d4-4365-b97e-b1b7c3ba0847`
+- v1.0.4 publication session:
+  `e5ea4d2e-fe43-491e-8a8a-0be876c7ac15`
+- v1.0.4 release transaction:
+  `5MCL4spjg1u43cjLKNAubeWAxj6KovHXijFUvLh1ssr584zaY5DGxdSGfe2akmr2ZaVZSt6JvBU9J9gSECvsACMF`
+- v1.0.4 collection verification transaction:
+  `3fLoBEGmg2rsJD6R99kVZZuH9nuW94ZeF71qTGUr1pDFEakpzacCL6doTDPt81LAS5TcTmtsk8r7qstWJPuUhmiX`
+- v1.0.4 attestation request ID:
+  `17985067346990183540214621176997`
 - 2026-05-17: sideloaded/debug package `app.seek.mobile` v1.0.3 / versionCode
-  `4` was uninstalled from the Seeker so the next test uses the official store
-  build.
+  `4` was uninstalled from the Seeker so official store tests use the
+  store-delivered build.
 
 ### Copy to prepare
 
@@ -102,10 +126,10 @@ Source: docs.solanamobile.com/dapp-store (verified 2026-05-05).
 - **Long description:** draft from deck + README — highlight commit-reveal, AI validation, MWA integration.
 - **What's new (v1.0.2 submitted):**
   "Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow."
-- **What's new (v1.0.3 submitted):**
-  "Adds camera and location permission preflight before paid hunts."
-- **v1.0.3 APK SHA-256:**
-  `83d5c49b6b4d010b1d604c65efc6d7221732f8d44e4e444b871d6e7412471a43`
+- **What's new (v1.0.4 submitted):**
+  "Updates SKR hunt tiers and refreshes the mission pool for more globally available targets."
+- **v1.0.4 APK SHA-256:**
+  `5ed166ca0d7da0f3cec2e30de6d94ccab1fcbeb7457e210cb66384cd473b842b`
   Do not mention payout math or `2x` total return in the store changelog.
 
 ## Legacy/config.yaml CLI flow

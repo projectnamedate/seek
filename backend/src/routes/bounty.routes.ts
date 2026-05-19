@@ -7,7 +7,10 @@ import {
   StartBountyResponse,
   SubmitPhotoResponse,
   Tier,
+  AcceptBountyInstructionVersion,
   ENTRY_AMOUNTS,
+  LEGACY_ENTRY_AMOUNTS,
+  SKR_MULTIPLIER,
   TIER_CONFIDENCE_THRESHOLDS,
 } from '../types';
 import {
@@ -60,6 +63,7 @@ import { permissionPreflightSchema } from '../services/permission-preflight.serv
 const log = childLogger('bounty-routes');
 
 const router = Router();
+const CURRENT_CLIENT_PROTOCOL_VERSION = 2;
 
 // Configure multer for photo uploads
 const upload = multer({
@@ -92,7 +96,20 @@ const prepareBountySchema = z.object({
   tier: z.number().int().min(1).max(3) as z.ZodType<Tier>,
   playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address'),
   permissionsConfirmed: permissionPreflightSchema,
+  clientProtocolVersion: z.number().int().min(1).max(CURRENT_CLIENT_PROTOCOL_VERSION).optional(),
 });
+
+function instructionVersionForClient(clientProtocolVersion?: number): AcceptBountyInstructionVersion {
+  return clientProtocolVersion === CURRENT_CLIENT_PROTOCOL_VERSION ? 2 : 1;
+}
+
+function entryAmountsForInstruction(version: AcceptBountyInstructionVersion): Record<Tier, bigint> {
+  return version === 2 ? ENTRY_AMOUNTS : LEGACY_ENTRY_AMOUNTS;
+}
+
+function wholeSkr(baseUnits: bigint): number {
+  return Number(baseUnits / SKR_MULTIPLIER);
+}
 
 /**
  * POST /api/bounty/prepare
@@ -105,7 +122,14 @@ const prepareBountySchema = z.object({
  */
 router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), async (req: Request, res: Response) => {
   try {
-    const { tier, playerWallet } = req.body as { tier: Tier; playerWallet: string };
+    const { tier, playerWallet, clientProtocolVersion } = req.body as {
+      tier: Tier;
+      playerWallet: string;
+      clientProtocolVersion?: number;
+    };
+    const instructionVersion = instructionVersionForClient(clientProtocolVersion);
+    const entryAmount = entryAmountsForInstruction(instructionVersion)[tier];
+    const returnAmount = entryAmount * 2n;
 
     const finalizerPause = await getFinalizerSafetyPause();
     if (finalizerPause.paused) {
@@ -158,6 +182,8 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
     await storePreparedBounty(bountyPda.toBase58(), {
       prepareId,
       tier,
+      instructionVersion,
+      entryAmount: entryAmount.toString(),
       playerWallet,
       timestamp: Number(timestamp),
       missionId: mission.id,
@@ -168,7 +194,10 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
       createdAt: Date.now(),
     });
 
-    log.info({ bountyPda: bountyPda.toBase58().slice(0, 8), tier, missionId: mission.id }, 'bounty prepared');
+    log.info(
+      { bountyPda: bountyPda.toBase58().slice(0, 8), tier, instructionVersion, missionId: mission.id },
+      'bounty prepared'
+    );
 
     return res.status(200).json({
       success: true,
@@ -177,7 +206,11 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
         prepareId,
         timestamp: Number(timestamp),
         bountyPda: bountyPda.toBase58(),
-        entryAmount: Number(ENTRY_AMOUNTS[tier]),
+        instructionVersion,
+        entryAmount: Number(entryAmount),
+        entryAmountSkr: wholeSkr(entryAmount),
+        returnAmount: Number(returnAmount),
+        returnAmountSkr: wholeSkr(returnAmount),
       },
     });
   } catch (error) {
@@ -219,32 +252,6 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
-    // Verify on-chain transaction actually contains an accept_bounty call
-    // for THIS player against THIS bountyPda. Confirmation status alone is
-    // not enough — an attacker could paste any random confirmed tx sig.
-    if (!transactionSignature) {
-      return res.status(400).json({
-        success: false,
-        error: 'transactionSignature required',
-      } as ApiResponse<never>);
-    }
-    const txVerified = await verifyTransaction(transactionSignature, playerWallet, bountyPda);
-    if (!txVerified) {
-      return res.status(400).json({
-        success: false,
-        error: 'Transaction does not contain a valid accept_bounty for this player + bountyPda',
-      } as ApiResponse<never>);
-    }
-
-    // Check SGT verification status. If the passive home-screen check has not
-    // populated the cache yet, read Token-2022 ownership directly here. This
-    // route is already bound to an on-chain accept_bounty from the same wallet.
-    const cachedSgtResult = await isWalletSGTVerified(playerWallet);
-    const sgtResult = cachedSgtResult?.verified
-      ? cachedSgtResult
-      : await verifySGTOwnershipForWallet(playerWallet);
-    const sgtVerified = sgtResult?.verified || false;
-
     // Try to use prepared bounty data (from /prepare endpoint). New clients send
     // prepareId so anonymous callers cannot poison a wallet+bountyPda record.
     const prepared = prepareId
@@ -285,6 +292,39 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
+    // Verify on-chain transaction actually contains the prepared accept_bounty
+    // call for THIS player, THIS bountyPda, THIS tier, and THIS amount.
+    // Confirmation status alone is not enough — an attacker could paste any
+    // random confirmed tx sig.
+    if (!transactionSignature) {
+      return res.status(400).json({
+        success: false,
+        error: 'transactionSignature required',
+      } as ApiResponse<never>);
+    }
+    const txVerified = await verifyTransaction(transactionSignature, playerWallet, bountyPda, {
+      instructionVersion: prepared.instructionVersion,
+      tier: prepared.tier,
+      entryAmount: BigInt(prepared.entryAmount),
+      timestamp: prepared.timestamp,
+      commitment: prepared.commitment,
+    });
+    if (!txVerified) {
+      return res.status(400).json({
+        success: false,
+        error: 'Transaction does not contain a valid accept_bounty for this player + bountyPda',
+      } as ApiResponse<never>);
+    }
+
+    // Check SGT verification status. If the passive home-screen check has not
+    // populated the cache yet, read Token-2022 ownership directly here. This
+    // route is already bound to an on-chain accept_bounty from the same wallet.
+    const cachedSgtResult = await isWalletSGTVerified(playerWallet);
+    const sgtResult = cachedSgtResult?.verified
+      ? cachedSgtResult
+      : await verifySGTOwnershipForWallet(playerWallet);
+    const sgtVerified = sgtResult?.verified || false;
+
     const dailyLimit = await reserveWalletDailyBounty(playerWallet);
     if (!dailyLimit.allowed) {
       return res.status(429).json({
@@ -304,7 +344,8 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       bountyPda,
       transactionSignature,
       sgtVerified,
-      prepared.missionId // Use the prepared mission, not a random one
+      prepared.missionId, // Use the prepared mission, not a random one
+      BigInt(prepared.entryAmount)
     );
 
     // Store prepared mission secrets (must match on-chain commitment)
@@ -322,6 +363,8 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       expiresAt: bounty.expiresAt.toISOString(),
       bountyPda: bounty.bountyPda,
       submitToken,
+      entryAmountSkr: wholeSkr(bounty.entryAmount),
+      returnAmountSkr: wholeSkr(bounty.entryAmount * 2n),
     };
 
     log.info({ bountyId: bounty.id, tier, missionDescription }, 'bounty started');

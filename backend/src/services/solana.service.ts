@@ -6,7 +6,7 @@ import {
 import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
 import { getAssociatedTokenAddress } from '@solana/spl-token';
 import { config } from '../config';
-import { Tier, ENTRY_AMOUNTS, SKR_MULTIPLIER } from '../types';
+import { Tier, AcceptBountyInstructionVersion, ENTRY_AMOUNTS, SKR_MULTIPLIER } from '../types';
 import bs58 from 'bs58';
 import { createHash, randomFillSync } from 'crypto';
 import { queueFinalization } from './finalizer.service';
@@ -18,7 +18,15 @@ import idl from '../idl/seek_protocol.json';
 
 const log = childLogger('solana');
 
-const ACCEPT_BOUNTY_DISCRIMINATOR = Buffer.from([165, 37, 99, 130, 123, 244, 67, 35]);
+export const ACCEPT_BOUNTY_DISCRIMINATOR = Buffer.from([165, 37, 99, 130, 123, 244, 67, 35]);
+export const ACCEPT_BOUNTY_V2_DISCRIMINATOR = Buffer.from([6, 224, 241, 216, 81, 119, 234, 132]);
+
+export type ParsedAcceptBountyInstruction = {
+  tier?: number;
+  entryAmount: bigint;
+  timestamp: bigint;
+  commitment: Buffer;
+};
 
 // Initialize connection (singleton)
 let connection: Connection;
@@ -381,11 +389,41 @@ function getInstructionData(ix: any): Buffer {
   return Buffer.alloc(0);
 }
 
+export function parseAcceptBountyInstructionData(
+  data: Buffer,
+  version: AcceptBountyInstructionVersion,
+): ParsedAcceptBountyInstruction | null {
+  if (version === 2) {
+    if (data.length < 8 + 1 + 8 + 8 + 32) return null;
+    if (!data.subarray(0, 8).equals(ACCEPT_BOUNTY_V2_DISCRIMINATOR)) return null;
+    return {
+      tier: data.readUInt8(8),
+      entryAmount: data.readBigUInt64LE(9),
+      timestamp: data.readBigInt64LE(17),
+      commitment: data.subarray(25, 57),
+    };
+  }
+
+  if (data.length < 8 + 8 + 8 + 32) return null;
+  if (!data.subarray(0, 8).equals(ACCEPT_BOUNTY_DISCRIMINATOR)) return null;
+  return {
+    entryAmount: data.readBigUInt64LE(8),
+    timestamp: data.readBigInt64LE(16),
+    commitment: data.subarray(24, 56),
+  };
+}
+
 export async function verifyTransaction(
   signature: string,
   expectedPlayer: string,
   expectedBountyPda: string,
-  expectedDiscriminator: Buffer = ACCEPT_BOUNTY_DISCRIMINATOR,
+  expected?: {
+    instructionVersion: AcceptBountyInstructionVersion;
+    tier: Tier;
+    entryAmount: bigint;
+    timestamp?: number;
+    commitment?: Buffer;
+  },
 ): Promise<boolean> {
   try {
     const conn = getConnection();
@@ -420,7 +458,23 @@ export async function verifyTransaction(
       }
 
       const data = getInstructionData(ix);
-      return data.subarray(0, 8).equals(expectedDiscriminator);
+      const expectedVersion = expected?.instructionVersion ?? 1;
+      const expectedDiscriminator = expectedVersion === 2
+        ? ACCEPT_BOUNTY_V2_DISCRIMINATOR
+        : ACCEPT_BOUNTY_DISCRIMINATOR;
+      if (!data.subarray(0, 8).equals(expectedDiscriminator)) return false;
+
+      if (!expected) return true;
+
+      const parsed = parseAcceptBountyInstructionData(data, expectedVersion);
+      if (!parsed) return false;
+
+      return (
+        (expectedVersion !== 2 || parsed.tier === expected.tier) &&
+        parsed.entryAmount === expected.entryAmount &&
+        (expected.timestamp === undefined || parsed.timestamp === BigInt(expected.timestamp)) &&
+        (!expected.commitment || parsed.commitment.equals(expected.commitment))
+      );
     });
 
     return seekIxFound;

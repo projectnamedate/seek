@@ -41,6 +41,8 @@ app:
     website: https://seek.mythx.art
 
 release:
+  # Submitted v1.0.4 update config. Keep this aligned with the latest
+  # portal-backed review submission until the next version bump.
   address: AUTO_GENERATED_AT_CREATE_TIME
   media:
     - purpose: icon
@@ -67,7 +69,7 @@ release:
 
         HOW IT WORKS
         1. Connect your Solana wallet with MWA (no browser, no extension).
-        2. Pick a tier: Easy (1000 $SKR / 3 min), Medium (3000 $SKR / 2 min), or Hard (5000 $SKR / 1 min).
+        2. Pick a tier: Easy (500 $SKR / 3 min), Medium (1000 $SKR / 2 min), or Hard (2000 $SKR / 1 min).
         3. Pay your entry and receive a randomly-assigned target.
         4. Race the clock. Find it in the real world. Photograph it.
         5. AI (Claude Vision) verifies.
@@ -88,9 +90,9 @@ release:
 
         18+ only. Skill-based competition. Not available where skill-based
         contests with cash prizes are restricted.
-      # Must be shown to the user and approved before upload. Do not mention
-      # payout math or 2x total return in this store changelog.
-      new_in_version: Adds camera and location permission preflight before paid hunts.
+      # Approved by the user before the 2026-05-19 upload. Do not mention
+      # payout math or 2x total return in store changelogs.
+      new_in_version: Updates SKR hunt tiers and refreshes the mission pool for more globally available targets.
       saga_features_localized: Native Mobile Wallet Adapter, .SKR name resolution, Seeker Genesis Token bonus, camera attestation.
 
 solana_mobile_dapp_publisher_portal:
@@ -103,7 +105,7 @@ solana_mobile_dapp_publisher_portal:
     1. Launch the app (age gate on first run — accept 18+)
     2. Tap Connect Wallet → approve the Mobile Wallet Adapter prompt in Seeker Wallet
     3. Seeker Genesis Token verification runs passively when the connected wallet holds one
-    4. Pick Easy tier (1,000 SKR) → Start Hunt → approve the accept_bounty tx
+    4. Pick Easy tier (500 SKR) → Start Hunt → approve the accept_bounty_v2 tx
     5. Accept the random mission (commit-revealed by backend)
     6. Tap camera → capture any photo matching the mission target
     7. AI (Claude Vision) validates in ~3 seconds

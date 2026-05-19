@@ -22,6 +22,7 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xW
 
 // accept_bounty instruction discriminator (from IDL)
 const ACCEPT_BOUNTY_DISCRIMINATOR = Buffer.from([165, 37, 99, 130, 123, 244, 67, 35]);
+const ACCEPT_BOUNTY_V2_DISCRIMINATOR = Buffer.from([6, 224, 241, 216, 81, 119, 234, 132]);
 
 // Program public key
 const SEEK_PROGRAM_ID = new PublicKey(PROGRAM_ID);
@@ -90,11 +91,32 @@ function serializeAcceptBountyData(
 }
 
 /**
+ * Serialize accept_bounty_v2 instruction data
+ * Layout: [8 discriminator] [1 u8 tier] [8 u64 entry_amount] [8 i64 timestamp] [32 commitment]
+ */
+function serializeAcceptBountyV2Data(
+  tier: number,
+  entryAmount: bigint,
+  timestamp: bigint,
+  commitment: number[]
+): Buffer {
+  const data = Buffer.alloc(8 + 1 + 8 + 8 + 32); // 57 bytes total
+
+  ACCEPT_BOUNTY_V2_DISCRIMINATOR.copy(data, 0);
+  data.writeUInt8(tier, 8);
+  data.writeBigUInt64LE(entryAmount, 9);
+  data.writeBigInt64LE(timestamp, 17);
+  Buffer.from(commitment).copy(data, 25);
+
+  return data;
+}
+
+/**
  * Build the accept_bounty transaction for MWA signing.
  *
  * @param connection - Solana connection
  * @param playerPubkey - Player's wallet public key
- * @param entryAmount - Entry amount in lamports (e.g., 1_000_000_000_000 for 1000 SKR)
+ * @param entryAmount - Entry amount in SKR base units from /prepare
  * @param timestamp - Solana timestamp from /prepare endpoint
  * @param commitment - 32-byte mission commitment from /prepare endpoint
  * @param bountyPda - Pre-computed bounty PDA from /prepare endpoint
@@ -106,7 +128,11 @@ export async function buildAcceptBountyTransaction(
   entryAmount: bigint,
   timestamp: bigint,
   commitment: number[],
-  bountyPda: PublicKey
+  bountyPda: PublicKey,
+  options?: {
+    instructionVersion?: 1 | 2;
+    tier?: number;
+  }
 ): Promise<Transaction> {
   // Derive PDAs
   const [globalStatePda] = deriveGlobalStatePda();
@@ -116,11 +142,22 @@ export async function buildAcceptBountyTransaction(
   const playerTokenAccount = getAssociatedTokenAddress(SKR_MINT, playerPubkey);
 
   // Serialize instruction data
-  const instructionData = serializeAcceptBountyData(
-    entryAmount,
-    timestamp,
-    commitment
-  );
+  const instructionVersion = options?.instructionVersion ?? 1;
+  if (instructionVersion === 2 && ![1, 2, 3].includes(options?.tier ?? 0)) {
+    throw new Error('accept_bounty_v2 requires tier 1, 2, or 3');
+  }
+  const instructionData = instructionVersion === 2
+    ? serializeAcceptBountyV2Data(
+        options?.tier ?? 0,
+        entryAmount,
+        timestamp,
+        commitment
+      )
+    : serializeAcceptBountyData(
+        entryAmount,
+        timestamp,
+        commitment
+      );
 
   // Build instruction with accounts in exact IDL order
   const instruction = new TransactionInstruction({

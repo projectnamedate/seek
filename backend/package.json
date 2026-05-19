@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "lint": "eslint src/**/*.ts",
-    "test:launch-tools": "node --test -r ts-node/register tests/authority-signer.test.ts tests/program-upgrade.test.ts tests/bounty-persistence.test.ts tests/rate-limit-store.test.ts tests/wallet-bounty-limit.test.ts tests/permission-preflight.test.ts tests/missions.test.ts tests/attestation-metadata.test.ts tests/ai-hard-reject.test.ts tests/sgt-verification.test.ts tests/skr-normalization.test.ts tests/no-demo-residue.test.ts",
+    "test:launch-tools": "node --test -r ts-node/register tests/authority-signer.test.ts tests/program-upgrade.test.ts tests/bounty-persistence.test.ts tests/rate-limit-store.test.ts tests/wallet-bounty-limit.test.ts tests/permission-preflight.test.ts tests/missions.test.ts tests/attestation-metadata.test.ts tests/ai-hard-reject.test.ts tests/sgt-verification.test.ts tests/skr-normalization.test.ts tests/accept-bounty-instruction-layout.test.ts tests/no-demo-residue.test.ts",
     "preflight:mainnet": "ts-node scripts/mainnet-preflight.ts"
   },
   "keywords": [

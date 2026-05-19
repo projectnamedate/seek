@@ -40,7 +40,7 @@
 
     <rect x="120" y="560" width="1200" height="1000" rx="58" fill="url(#panel)" stroke="#10282c" stroke-width="2" opacity="1"/>
     <text x="720" y="760" text-anchor="middle" fill="#f6f6f5" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="118" font-weight="400" letter-spacing="-2">COMPLETE</text>
-    <text x="720" y="870" text-anchor="middle" fill="#95d2e6" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="118" font-weight="400" letter-spacing="-2">+250 SKR</text>
+    <text x="720" y="870" text-anchor="middle" fill="#95d2e6" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="118" font-weight="400" letter-spacing="-2">+1000 SKR</text>
     <text x="720" y="942" text-anchor="middle" fill="#cfe6e4" opacity="1" font-family="'PP Mori Regular','PP Mori Regular Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="34" font-weight="400" letter-spacing="0">Mission validated and settlement proposed.</text>
     <rect x="220" y="1064" width="1000" height="210" rx="34" fill="rgba(1,1,1,0.48)" stroke="#373c3e" stroke-width="2" opacity="1"/>
     <text x="276" y="1152" text-anchor="start" fill="#99b3be" opacity="1" font-family="'Rational TW Text Book','Rational TW Text Book Placeholder','Avenir Next','Helvetica Neue',Arial,sans-serif" font-size="28" font-weight="400" letter-spacing="1.1">Target</text>

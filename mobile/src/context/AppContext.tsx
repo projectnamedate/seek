@@ -14,6 +14,7 @@ interface AppContextType {
   wallet: WalletState;
   connectWallet: () => Promise<void>;
   disconnectWallet: () => Promise<void>;
+  refreshWalletBalance: () => Promise<void>;
 
   // MWA (for transaction signing)
   signAndSendTransaction: MobileWalletContext['signAndSendTransaction'];
@@ -94,6 +95,21 @@ export function AppProvider({ children }: AppProviderProps) {
 
   // Track whether we've started a balance fetch to avoid duplicates
   const balanceFetchRef = useRef<string | null>(null);
+
+  const refreshWalletBalance = useCallback(async () => {
+    if (!mwa.account || !mwa.connection) return;
+
+    const publicKey = mwa.account.publicKey;
+    const fullAddress = publicKey.toBase58();
+    const balance = await fetchRealBalance(mwa.connection, publicKey);
+
+    setWallet((prev) =>
+      prev.connected && prev.fullAddress === fullAddress
+        ? { ...prev, balance: balance ?? 0 }
+        : prev
+    );
+  }, [mwa.account, mwa.connection]);
+
   // Sync MWA state to wallet state
   useEffect(() => {
     if (mwa.account) {
@@ -109,30 +125,31 @@ export function AppProvider({ children }: AppProviderProps) {
         balance: prev.address === shortAddress ? prev.balance : 0,
       }));
 
-      // Fetch real balance + .skr name in background (only once per address)
+      // Fetch .skr name once per address. Refresh the token balance whenever
+      // the wallet connection object changes, and from screens after settlement.
       if (balanceFetchRef.current !== fullAddress) {
         balanceFetchRef.current = fullAddress;
-
-        // Always reflect the on-chain balance — no fallback constant.
-        // A wallet with 0 SKR shows 0 (not 50,000).
-        if (mwa.connection) {
-          fetchRealBalance(mwa.connection, mwa.account.publicKey).then((balance) => {
-            setWallet((prev) => prev.connected ? { ...prev, balance: balance ?? 0 } : prev);
-          });
-        }
 
         // Fetch .skr name
         apiService.resolveSkrName(fullAddress).then((result) => {
           if (result.success && result.skrName) {
-            setWallet((prev) => prev.connected ? { ...prev, skrName: result.skrName! } : prev);
+            setWallet((prev) =>
+              prev.connected && prev.fullAddress === fullAddress
+                ? { ...prev, skrName: result.skrName! }
+                : prev
+            );
           }
         });
       }
+
+      // Always reflect the on-chain balance — no fallback constant.
+      // A wallet with 0 SKR shows 0 (not 50,000).
+      void refreshWalletBalance();
     } else {
       balanceFetchRef.current = null;
       setWallet(EMPTY_WALLET);
     }
-  }, [mwa.account, mwa.connection]);
+  }, [mwa.account, refreshWalletBalance]);
 
   // Passively check SGT ownership when wallet connects.
   useEffect(() => {
@@ -198,6 +215,7 @@ export function AppProvider({ children }: AppProviderProps) {
     wallet,
     connectWallet,
     disconnectWallet,
+    refreshWalletBalance,
     signAndSendTransaction: mwa.signAndSendTransaction,
     signMessage: mwa.signMessage as (message: Uint8Array) => Promise<Uint8Array>,
     connection: mwa.connection,
