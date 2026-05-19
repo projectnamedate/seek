@@ -27,9 +27,10 @@ means losing control of the app listing.
 
 User now has a Seeker device. The v1.0.4 test-app smoke passed before
 Publisher upload, and v1.0.4 / versionCode `5` is in Solana Mobile review.
-After acceptance, install/open the official Solana Mobile store build without
-USB and run wallet, passive SGT, camera/location, funded hunt, balance refresh,
-Try Again navigation, and finalization smoke.
+The sideloaded v1.0.4 test build has been uninstalled from the device. After
+acceptance, install/open the official Solana Mobile store build without USB and
+run wallet, passive SGT, camera/location, funded hunt, balance refresh, Try
+Again navigation, and finalization smoke.
 
 ## Publisher Portal setup
 

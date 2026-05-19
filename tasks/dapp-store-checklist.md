@@ -119,6 +119,10 @@ Source: docs.solanamobile.com/dapp-store (verified 2026-05-05).
 - 2026-05-17: sideloaded/debug package `app.seek.mobile` v1.0.3 / versionCode
   `4` was uninstalled from the Seeker so official store tests use the
   store-delivered build.
+- 2026-05-19: sideloaded/test package `app.seek.mobile` v1.0.4 / versionCode
+  `5` was uninstalled from the connected Seeker after the v1.0.4 Publisher
+  upload. Official post-acceptance testing should use the store-delivered
+  build.
 
 ### Copy to prepare
 

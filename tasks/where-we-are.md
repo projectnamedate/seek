@@ -105,6 +105,11 @@
   2026-05-17 before unplugged store testing. Removed package:
   `app.seek.mobile`, version `1.0.3` / versionCode `4`,
   `installerPackageName=null`.
+- The sideloaded v1.0.4 test-app package was removed from the connected Seeker
+  on 2026-05-19 after Publisher upload. Removed package: `app.seek.mobile`,
+  version `1.0.4` / versionCode `5`, `installerPackageName=null`. ADB
+  verification after uninstall returned `Unable to find package:
+  app.seek.mobile`.
 - Release Android keystore/env exist under `.secrets/android/`. Back them up
   before store submission; losing the keystore means losing update ability.
 - Release APK exists at `mobile/android/app/build/outputs/apk/release/app-release.apk`,
