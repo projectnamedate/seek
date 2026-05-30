@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canApplySgtConfidenceBonus, performPreChecks } from '../src/services/ai.service';
-import { Mission } from '../src/types';
+import { buildValidationPrompt, canApplySgtConfidenceBonus, performPreChecks } from '../src/services/ai.service';
+import { Mission, TIER_CONFIDENCE_THRESHOLDS } from '../src/types';
 
 const mission: Mission = {
   id: 'test-mission',
@@ -52,4 +52,24 @@ test('SGT bonus is allowed only for soft target-confidence misses', () => {
     }),
     false,
   );
+});
+
+test('tier 1 verified-Seeker threshold catches the dumbbell-rack false negative', () => {
+  assert.equal(TIER_CONFIDENCE_THRESHOLDS[1], 0.88);
+  assert.ok(
+    0.85 >= TIER_CONFIDENCE_THRESHOLDS[1] - 0.05,
+    'verified Seeker Tier 1 matches at 85% should clear the SGT-adjusted threshold',
+  );
+});
+
+test('validation prompt does not invent venue constraints for plain noun targets', () => {
+  const prompt = buildValidationPrompt({
+    ...mission,
+    id: 'dumbbell-rack',
+    description: 'Find a dumbbell rack',
+    keywords: ['dumbbell', 'rack'],
+  });
+
+  assert.match(prompt, /Do not invent unstated location, brand, size, style, or venue constraints/);
+  assert.match(prompt, /any real-world version counts when clearly visible/);
 });

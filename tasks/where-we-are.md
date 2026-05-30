@@ -1,7 +1,18 @@
-# Where we are - Seek - 2026-05-19 - v1.0.4 in Solana Mobile review
+# Where we are - Seek - 2026-05-30 - AI false-negative hotfix ready
 
 ## Current State
 
+- 2026-05-30 user complaint traced: wallet
+  `AfHbufmvMfTU7oty25nv9GBoBDZzZuuWyKEbSR3Mexpx` is SGT-verified via mint
+  `CwyvfwhNxmskhXz1j6fbpxXPtki1QRmcjyQDQgjPm1sH` and played one 500 SKR
+  tier-1 bounty (`AYVuNRZ39b6DpajW7K2PuK8FUgS8A6FqZo1cC4o5tQtD`) for mission
+  `t1-178`, "Find a dumbbell rack." Railway logs show Claude recognized "a
+  dumbbell rack with multiple sets of hex dumbbells" in a home gym at 85%
+  confidence, but production rejected it because the live Tier 1 threshold was
+  91% and the SGT-adjusted threshold was still 86%. `origin/master` already
+  has the intended 88% Tier 1 threshold; this hotfix adds a prompt guard against
+  invented location/style/venue constraints and regression tests that verify an
+  85% verified-Seeker Tier 1 match clears the adjusted threshold.
 - Mainnet program `DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v` is
   deployed, initialized, IDL-published, and still upgradeable under Ledger
   `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`. Never use `--final`.
@@ -162,6 +173,13 @@
 
 ## Fresh Checks
 
+- 2026-05-30 hotfix worktree verification PASS from clean `origin/master`:
+  backend focused test `node --test -r ts-node/register
+  tests/ai-hard-reject.test.ts tests/missions.test.ts` PASS 8/8; backend
+  `npx tsc --noEmit --pretty false` PASS; backend `npm run test:launch-tools`
+  PASS 44/44; `git diff --check` PASS. Tests ran with non-secret test env
+  values in the external worktree because the worktree intentionally does not
+  copy local `.env` secrets.
 - GitHub CI on master: PASS, latest run `26055065510`.
 - 2026-05-19 local v1.0.4 patch verification PASS: `anchor build` PASS and
   `backend/src/idl/seek_protocol.json` regenerated; Solana `rust_autofixer`
@@ -359,11 +377,12 @@ under ticket `312122131169`. Do not paste API keys or private keys in chat.
 
 ## Next Concrete Action
 
-1. Wait for Solana Mobile review on v1.0.4 / ticket `312122131169`.
-2. After acceptance, run a short official-store smoke on Seeker: wallet
-   connect, passive SGT status, camera/location capture, funded 500 SKR hunt,
-   finalizer settlement, balance refresh, and Try Again Home navigation.
-3. Before any future upload, top up the publisher wallet; current post-submit
-   balance is `0.07655074 SOL`.
+Deploy the pushed backend validation hotfix to Railway and verify
+`/api/health/ready`, then confirm production is serving a commit with Tier 1 at
+88%.
+
+After that, resume the v1.0.4 store-review path: wait for ticket
+`312122131169`, run the official-store Seeker smoke after acceptance, and top
+up the publisher wallet before any future upload.
 
 Launch risks: Singularity grinding remains until VRF; Solana JS advisories remain.
