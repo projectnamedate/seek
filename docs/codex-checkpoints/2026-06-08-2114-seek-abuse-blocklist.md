@@ -85,4 +85,5 @@ Continue from the clean hotfix state in
 `/Users/hammer/.config/superpowers/worktrees/seek/hotfix-block-cheat-wallet-2026-06-08`.
 Verify `git status`, `gh run list --branch master --limit 1`, and live
 `/api/bounty/prepare` for the blocked wallet before making any new claim. Then
-resume the v1.0.4 store-review path or the grant/application work as directed.
+run the live v1.0.4 official-store Seeker smoke or resume the
+grant/application work as directed.

@@ -61,6 +61,10 @@
   audit, user approval, Ledger program upgrade with durable payer/buffer,
   ProgramData authority/hash verification, backend deploy, signed APK rebuild,
   Solana Mobile test-app smoke, and Publisher Portal upload.
+- 2026-06-09 user-provided Publisher Portal screenshot shows v1.0.4 /
+  versionCode `5` status `Live` with upload date 2026-05-19. The remaining
+  validation is the official Solana dApp Store Seeker smoke, not waiting for
+  ticket review.
 - The upgraded program uses
   `accept_bounty_v2(tier, entry_amount, timestamp, commitment)` with explicit
   tier+amount validation so `1000 SKR` is Tier 2 for new clients. Legacy
@@ -145,7 +149,8 @@
   2026-05-19 with idempotency key `seek-update-1.0.4-v5-20260519`. Release
   mint: `DvXz61SCghoPMwD3jED8qDj3CBXtXRXoLXiRVku7zMWg`; collection mint:
   `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`; ticket ID:
-  `312122131169`.
+  `312122131169`. User-provided Publisher Portal screenshot on 2026-06-09
+  shows this build is now `Live`.
 - The sideloaded/debug hardware-test package was removed from the Seeker on
   2026-05-17 before unplugged store testing. Removed package:
   `app.seek.mobile`, version `1.0.3` / versionCode `4`,
@@ -408,16 +413,16 @@ The reported cheater wallet and its soulbound verified SGT are blocked in live
 production, route-level regression coverage is pushed, and no non-final
 on-chain bounty exists for that wallet. On-chain mainnet upgrade, Railway
 backend update, public legal URLs, store assets, Solana Mobile test-app smoke,
-and the Solana Mobile Publisher Portal v1.0.4 update submission are otherwise
-complete. v1.0.4 / versionCode `5` is in review under ticket `312122131169`.
-Do not paste API keys or private keys in chat.
+and the Solana Mobile Publisher Portal v1.0.4 update submission/acceptance are
+otherwise complete. v1.0.4 / versionCode `5` is live; ticket
+`312122131169` is historical review context. Do not paste API keys or private
+keys in chat.
 
 ## Next Concrete Action
 
-Resume the v1.0.4 store-review path: wait for ticket `312122131169`, run the
-official-store Seeker smoke after acceptance, and top up the publisher wallet
-before any future upload. If this abuse block is questioned later, first rerun
-the production probe: `POST /api/bounty/prepare` for
+Run the official-store Seeker smoke for live v1.0.4, then top up the publisher
+wallet before any future upload. If this abuse block is questioned later, first
+rerun the production probe: `POST /api/bounty/prepare` for
 `Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6` must return HTTP `403`.
 
 Launch risks: Singularity grinding remains until VRF; Solana JS advisories remain.

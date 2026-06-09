@@ -1,7 +1,7 @@
 # Seek Roadmap
 
-**Current phase:** live dApp Store -> v1.0.4 tier reprice update in review.
-**Snapshot date:** 2026-05-19.
+**Current phase:** v1.0.4 tier reprice update live -> official-store smoke.
+**Snapshot date:** 2026-06-09.
 **Timeline target:** 2-week solid launch.
 **Founder/operator:** Jeff (solo). Ledger hot/cold split. External audit skipped.
 
@@ -81,7 +81,7 @@ roadmap previously misclaimed "green" without actually checking the runs.
 
 ---
 
-## Phase B — User-gated actions (✅ LIVE; TIER REPRICE PATCH NEXT)
+## Phase B — User-gated actions (✅ LIVE; OFFICIAL-STORE SMOKE NEXT)
 
 The on-chain hardware/funding actions, Railway/Redis/backend DNS, legal site,
 Publisher Portal app setup, API-key submission, and dApp Store release
@@ -89,22 +89,20 @@ resubmission are complete. User reports the v1.0.1 dApp Store listing is live.
 The first real Solana Mobile runs exposed camera metadata, AI/provider,
 passive-SGT, public-dispute, mission-farmability, stale settlement copy, and
 payout-economics issues now tracked in `tasks/todo.md`. The previous
-mobile-first/no-upgrade path is superseded. Remaining user-gated work is the
-audited mainnet program upgrade that removes the stale finalization delay,
-changes the payout to `2x` total return, removes the success-screen settlement
-note, then another Seeker smoke before any Publisher upload. The Solana Mobile
-Store changelog must be shown to the user and approved before upload, and it
-must not mention payout math or `2x` total return. The next planned patch is the
-community-feedback update in `tasks/todo.md` is now in Solana Mobile review as
+mobile-first/no-upgrade path is superseded. The audited mainnet program upgrade
+that removes the stale finalization delay, changes payout behavior, removes
+the success-screen settlement note, and supports the tier reprice has passed.
+The Solana Mobile Store changelog was approved without payout-math language.
+The community-feedback update in `tasks/todo.md` is now live in the Solana
+Mobile dApp Store as
 v1.0.4 / versionCode `5`: visible tiers moved to `500 / 1000 / 2000 SKR`,
 Home screen tier buttons were redesigned around that ladder, missions were
 audited for country-specific or locally unavailable targets, and the contract
 path adds explicit tier+amount validation via `accept_bounty_v2` so `1000 SKR`
 is not ambiguous between old and new clients. The required pre-release audit,
 Ledger program upgrade, backend deploy, Solana Mobile test-app smoke, signed
-APK verification, and Publisher Portal upload have all passed. Next gate:
-wait for Solana Mobile review, then run a short store-delivered v1.0.4 smoke
-on Seeker.
+APK verification, Publisher Portal upload, and Solana Mobile acceptance have
+all passed. Next gate: run a short store-delivered v1.0.4 smoke on Seeker.
 
 **📋 Execution playbook:** [tasks/phase-b-execution.md](phase-b-execution.md) —
 sequenced sub-items B0-B9 with parallelization plan, hard dependencies,
@@ -321,7 +319,7 @@ Per [backend/scripts/DEPLOY_MAINNET.md](../backend/scripts/DEPLOY_MAINNET.md):
 
 ---
 
-## Phase D — Solana dApp Store submission (✅ LIVE; v1.0.4 IN REVIEW)
+## Phase D — Solana dApp Store submission (✅ LIVE; v1.0.4 LIVE)
 
 Per [dapp-store-publishing/README.md](../dapp-store-publishing/README.md):
 
@@ -375,6 +373,8 @@ v1.0.4 / versionCode `5` was submitted to Solana Mobile review on 2026-05-19.
 Ticket ID `312122131169`; release mint
 `DvXz61SCghoPMwD3jED8qDj3CBXtXRXoLXiRVku7zMWg`; collection mint
 `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`.
+User-provided Publisher Portal screenshot on 2026-06-09 shows v1.0.4 /
+versionCode `5` status `Live`, upload date 2026-05-19.
 
 Original v1.0.0 ticket `310370751180` was superseded after Solana Mobile
 reported a backend ingest failure and approved the versionCode bump.
@@ -472,8 +472,7 @@ Remaining post-launch: ~3 more T1 trivials worth tightening (mowed lawn, closed 
 - ~840 LoC + / ~2820 LoC − across 23 files (mostly mobile lock regeneration).
 
 ### Still gated on user
-- Solana Mobile review acceptance for v1.0.4.
-- Post-approval store-delivered v1.0.4 smoke on Seeker: Wallet Adapter,
+- Store-delivered v1.0.4 smoke on Seeker: Wallet Adapter,
   passive Seeker Genesis Token, location-backed camera capture, funded-wallet
   hunt flow, immediate settlement behavior, and no public challenge/deposit
   action.

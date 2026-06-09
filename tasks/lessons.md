@@ -37,6 +37,16 @@
 
 ## Brand + dApp Store Screenshot Sequencing
 
+### Verify Publisher Portal status before saying "in review"
+- On 2026-06-09, the repo handoff still said v1.0.4 was in Solana Mobile
+  review even though the user's Publisher Portal screenshot showed v1.0.4 /
+  versionCode `5` as `Live`.
+- **Rule:** Before repeating a store-review handoff, verify the current
+  Publisher Portal/App Store status from live evidence in the current session.
+  If the only evidence is a user screenshot, attribute it as user-provided
+  portal evidence and update the next action to store-build smoke instead of
+  "wait for review."
+
 ### Preserve the app during screenshot review
 - User reaffirmed on 2026-05-03 that the existing app design is fine and does
   not need drastic changes.
