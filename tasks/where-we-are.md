@@ -15,19 +15,25 @@
   from the isolated `hotfix/block-cheat-wallet-2026-06-08` worktree. Public
   verification after deploy: `/api/bounty/prepare` for the blocked wallet
   returned HTTP `403` with `This wallet is not eligible for Seek bounties`;
+  `/api/bounty/start` for the blocked wallet also returned HTTP `403`;
   `/api/health/ready` returned `ready: true` with RPC/program/Redis OK;
   `/api/health/stats` showed pending `0`, validating `0`, finalizer queue `0`,
   house `78,288 SKR`, and Singularity `9,000 SKR`.
 - Validation for the hotfix: backend `npx tsc --noEmit --pretty false` PASS;
   `node --test -r ts-node/register tests/bounty-blocklist.test.ts` PASS 4/4;
-  backend `npm run test:launch-tools` PASS 48/48 when run with local test env
-  values; `git diff --check` PASS. Running `npm run test:launch-tools` without
-  env in the clean worktree fails because config requires
-  `SOLANA_RPC_URL`, `SEEK_PROGRAM_ID`, `SKR_MINT`, and `ANTHROPIC_API_KEY`.
+  `node --test -r ts-node/register tests/bounty-blocklist-routes.test.ts` PASS
+  2/2; backend `npm run test:launch-tools` PASS 50/50 with local test env
+  values; mobile `npx tsc --noEmit --pretty false` PASS; contract
+  `cargo check --features mainnet --no-default-features` PASS with known Anchor
+  cfg warnings; contract `npm test` PASS 25/25; `git diff --check` PASS.
+- On-chain audit for the blocked wallet found 7 historical bounty accounts:
+  4 final `Won`, 3 final `Lost`, and zero `Pending`, `Submitted`,
+  `ChallengeWon`, `ChallengeLost`, or `Disputed` accounts. There is no
+  existing finalizable win for this wallet.
 - Latest relevant pushed commits before this closeout note:
-  `3b85203` docs: record abuse blocklist hotfix;
-  `1be5161` fix: block reported bounty abuser;
-  `9b0ff85` fix: prevent venue drift in AI validation.
+  `4b40ddf` test: cover bounty blocklist route gates;
+  `1e32ee2` docs: update abuse hotfix closeout;
+  `3b85203` docs: record abuse blocklist hotfix.
 - The broader session-proof rollout remains unreleased WIP. Do not assume any
   local session-proof routes are live unless production endpoints prove it.
 - 2026-05-30 user complaint traced: wallet
@@ -398,12 +404,13 @@
 
 ## Where The User Paused
 
-The reported cheater wallet and its verified SGT are blocked in live
-production. On-chain mainnet upgrade, Railway backend update, public legal
-URLs, store assets, Solana Mobile test-app smoke, and the Solana Mobile
-Publisher Portal v1.0.4 update submission are otherwise complete. v1.0.4 /
-versionCode `5` is in review under ticket `312122131169`. Do not paste API
-keys or private keys in chat.
+The reported cheater wallet and its soulbound verified SGT are blocked in live
+production, route-level regression coverage is pushed, and no non-final
+on-chain bounty exists for that wallet. On-chain mainnet upgrade, Railway
+backend update, public legal URLs, store assets, Solana Mobile test-app smoke,
+and the Solana Mobile Publisher Portal v1.0.4 update submission are otherwise
+complete. v1.0.4 / versionCode `5` is in review under ticket `312122131169`.
+Do not paste API keys or private keys in chat.
 
 ## Next Concrete Action
 
