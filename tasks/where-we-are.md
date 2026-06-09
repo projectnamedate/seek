@@ -1,7 +1,35 @@
-# Where we are - Seek - 2026-05-30 - AI false-negative hotfix ready
+# Where we are - Seek - 2026-06-09 - abuse blocklist hotfix live
 
 ## Current State
 
+- 2026-06-09 abuse incident response PASS. Wallet
+  `Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6` was supposed to be blocked
+  but production did not include the local session-proof WIP where the original
+  blocklist lived. The verified SGT for that wallet is
+  `B1fHfkVLjnqCih7xcN7gDyDfu7eR2PtZxzQvZiupPPDH`.
+- Narrow backend hotfix `1be5161` adds a code-seeded bounty denylist plus
+  optional `BLOCKED_PLAYER_WALLETS` / `BLOCKED_SGT_MINTS` env overrides. Guards
+  now run on `/api/bounty/prepare`, `/api/bounty/start`, and
+  `/api/bounty/submit`, blocking both the wallet and the SGT mint.
+- Railway production deploy `e3b9b90b-6100-41ff-aa08-09f0f95bf89e` completed
+  from the isolated `hotfix/block-cheat-wallet-2026-06-08` worktree. Public
+  verification after deploy: `/api/bounty/prepare` for the blocked wallet
+  returned HTTP `403` with `This wallet is not eligible for Seek bounties`;
+  `/api/health/ready` returned `ready: true` with RPC/program/Redis OK;
+  `/api/health/stats` showed pending `0`, validating `0`, finalizer queue `0`,
+  house `78,288 SKR`, and Singularity `9,000 SKR`.
+- Validation for the hotfix: backend `npx tsc --noEmit --pretty false` PASS;
+  `node --test -r ts-node/register tests/bounty-blocklist.test.ts` PASS 4/4;
+  backend `npm run test:launch-tools` PASS 48/48 when run with local test env
+  values; `git diff --check` PASS. Running `npm run test:launch-tools` without
+  env in the clean worktree fails because config requires
+  `SOLANA_RPC_URL`, `SEEK_PROGRAM_ID`, `SKR_MINT`, and `ANTHROPIC_API_KEY`.
+- Latest code commits before this docs update:
+  `1be5161` fix: block reported bounty abuser;
+  `9b0ff85` fix: prevent venue drift in AI validation;
+  `f29d617` docs: record device test build cleanup.
+- The broader session-proof rollout remains unreleased WIP. Do not assume any
+  local session-proof routes are live unless production endpoints prove it.
 - 2026-05-30 user complaint traced: wallet
   `AfHbufmvMfTU7oty25nv9GBoBDZzZuuWyKEbSR3Mexpx` is SGT-verified via mint
   `CwyvfwhNxmskhXz1j6fbpxXPtki1QRmcjyQDQgjPm1sH` and played one 500 SKR
@@ -370,16 +398,19 @@
 
 ## Where The User Paused
 
-On-chain mainnet upgrade, Railway backend update, public legal URLs, store
-assets, Solana Mobile test-app smoke, and the Solana Mobile Publisher Portal
-v1.0.4 update submission are complete. v1.0.4 / versionCode `5` is in review
-under ticket `312122131169`. Do not paste API keys or private keys in chat.
+The reported cheater wallet and its verified SGT are blocked in live
+production. On-chain mainnet upgrade, Railway backend update, public legal
+URLs, store assets, Solana Mobile test-app smoke, and the Solana Mobile
+Publisher Portal v1.0.4 update submission are otherwise complete. v1.0.4 /
+versionCode `5` is in review under ticket `312122131169`. Do not paste API
+keys or private keys in chat.
 
 ## Next Concrete Action
 
-Deploy the pushed backend validation hotfix to Railway and verify
-`/api/health/ready`, then confirm production is serving a commit with Tier 1 at
-88%.
+Push the hotfix/docs commits to GitHub, verify the new CI run, and keep the
+production block probe in the closeout notes:
+`POST /api/bounty/prepare` for
+`Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6` must remain HTTP `403`.
 
 After that, resume the v1.0.4 store-review path: wait for ticket
 `312122131169`, run the official-store Seeker smoke after acceptance, and top

@@ -1,5 +1,21 @@
 # Lessons Learned
 
+## Incident Response
+
+### Emergency denylist changes must ship outside broad WIP
+- A 2026-06-09 reported cheater wallet was already present in local
+  session-proof WIP blocklist code, but production Railway did not include that
+  broader rollout. The user correctly expected the wallet to be blocked; the
+  live backend still accepted bounty entry because the block had not shipped.
+- **Rule:** For abuse, fraud, or eligibility blocks, extract the smallest
+  production hotfix instead of waiting for a larger feature rollout.
+- **Rule:** A wallet, SGT mint, or actor is not "blocked" until the live
+  production route returns the denial. Verify the exact public endpoint, status
+  code, and response body before claiming it.
+- **Rule:** When a block is tied to a transferable proof like an SGT, block both
+  the wallet and the proof/mint so moving the proof to another wallet does not
+  bypass the decision.
+
 ## Keypair Custody
 
 ### Never put funded keypairs in temp
