@@ -24,10 +24,10 @@
   values; `git diff --check` PASS. Running `npm run test:launch-tools` without
   env in the clean worktree fails because config requires
   `SOLANA_RPC_URL`, `SEEK_PROGRAM_ID`, `SKR_MINT`, and `ANTHROPIC_API_KEY`.
-- Latest code commits before this docs update:
+- Latest relevant pushed commits before this closeout note:
+  `3b85203` docs: record abuse blocklist hotfix;
   `1be5161` fix: block reported bounty abuser;
-  `9b0ff85` fix: prevent venue drift in AI validation;
-  `f29d617` docs: record device test build cleanup.
+  `9b0ff85` fix: prevent venue drift in AI validation.
 - The broader session-proof rollout remains unreleased WIP. Do not assume any
   local session-proof routes are live unless production endpoints prove it.
 - 2026-05-30 user complaint traced: wallet
@@ -407,13 +407,10 @@ keys or private keys in chat.
 
 ## Next Concrete Action
 
-Push the hotfix/docs commits to GitHub, verify the new CI run, and keep the
-production block probe in the closeout notes:
-`POST /api/bounty/prepare` for
-`Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6` must remain HTTP `403`.
-
-After that, resume the v1.0.4 store-review path: wait for ticket
-`312122131169`, run the official-store Seeker smoke after acceptance, and top
-up the publisher wallet before any future upload.
+Resume the v1.0.4 store-review path: wait for ticket `312122131169`, run the
+official-store Seeker smoke after acceptance, and top up the publisher wallet
+before any future upload. If this abuse block is questioned later, first rerun
+the production probe: `POST /api/bounty/prepare` for
+`Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6` must return HTTP `403`.
 
 Launch risks: Singularity grinding remains until VRF; Solana JS advisories remain.
