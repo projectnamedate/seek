@@ -48,6 +48,11 @@ import { getRandomMission } from '../data/missions';
 import { PublicKey } from '@solana/web3.js';
 import { isWalletSGTVerified, verifySGTOwnershipForWallet } from '../services/sgt.service';
 import {
+  BLOCKED_BOUNTY_ERROR,
+  hasBlockedSgtMints,
+  isBlockedBountyActor,
+} from '../services/bounty-blocklist.service';
+import {
   attestationService,
   AttestationPayload,
   mergeAttestationMetadata,
@@ -111,6 +116,33 @@ function wholeSkr(baseUnits: bigint): number {
   return Number(baseUnits / SKR_MULTIPLIER);
 }
 
+async function blockedSgtMintForWallet(playerWallet: string): Promise<string | null> {
+  if (!hasBlockedSgtMints()) return null;
+
+  const cached = await isWalletSGTVerified(playerWallet);
+  const result = cached?.verified
+    ? cached
+    : await verifySGTOwnershipForWallet(playerWallet);
+
+  return result?.sgtMintAddress ?? null;
+}
+
+async function isWalletBlockedForBounties(playerWallet: string): Promise<boolean> {
+  if (isBlockedBountyActor({ walletAddress: playerWallet })) {
+    return true;
+  }
+
+  const sgtMintAddress = await blockedSgtMintForWallet(playerWallet);
+  return isBlockedBountyActor({ walletAddress: playerWallet, sgtMintAddress });
+}
+
+function sendBlockedBountyResponse(res: Response) {
+  return res.status(403).json({
+    success: false,
+    error: BLOCKED_BOUNTY_ERROR,
+  } as ApiResponse<never>);
+}
+
 /**
  * POST /api/bounty/prepare
  * Prepare a bounty before on-chain transaction.
@@ -130,6 +162,10 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
     const instructionVersion = instructionVersionForClient(clientProtocolVersion);
     const entryAmount = entryAmountsForInstruction(instructionVersion)[tier];
     const returnAmount = entryAmount * 2n;
+
+      if (await isWalletBlockedForBounties(playerWallet)) {
+        return sendBlockedBountyResponse(res);
+      }
 
     const finalizerPause = await getFinalizerSafetyPause();
     if (finalizerPause.paused) {
@@ -243,6 +279,10 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
     }
 
     try {
+    if (await isWalletBlockedForBounties(playerWallet)) {
+      return sendBlockedBountyResponse(res);
+    }
+
     // Check for existing active bounty
     const existing = await getPlayerActiveBounty(playerWallet);
     if (existing) {
@@ -443,6 +483,10 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
         success: false,
         error: 'Bounty not found',
       } as ApiResponse<never>);
+    }
+
+    if (await isWalletBlockedForBounties(bounty.playerWallet)) {
+      return sendBlockedBountyResponse(res);
     }
 
     const tokenAuthorized = submitToken

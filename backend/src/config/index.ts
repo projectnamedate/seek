@@ -37,6 +37,10 @@ const envSchema = z.object({
   HELIUS_API_KEY: z.string().optional(),
   SGT_BONUS_CONFIDENCE_REDUCTION: z.string().default('0.05'),
 
+  // Emergency anti-abuse controls. Comma- or newline-separated public addresses.
+  BLOCKED_PLAYER_WALLETS: z.string().optional(),
+  BLOCKED_SGT_MINTS: z.string().optional(),
+
   // Observability + persistence (optional; production strongly recommended)
   SENTRY_DSN: z.string().optional(),
   REDIS_URL: z.string().optional(),
