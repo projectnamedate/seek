@@ -62,14 +62,17 @@ test('tier 1 verified-Seeker threshold catches the dumbbell-rack false negative'
   );
 });
 
-test('validation prompt does not invent venue constraints for plain noun targets', () => {
+test('tier 1 validation prompt is launch-hardened without inventing venue constraints', () => {
   const prompt = buildValidationPrompt({
     ...mission,
     id: 'dumbbell-rack',
     description: 'Find a dumbbell rack',
     keywords: ['dumbbell', 'rack'],
-  });
+  }, 1);
 
+  assert.match(prompt, /TIER 1 LAUNCH-HARDENING RULES/);
+  assert.match(prompt, /central subject/);
   assert.match(prompt, /Do not invent unstated location, brand, size, style, or venue constraints/);
   assert.match(prompt, /any real-world version counts when clearly visible/);
+  assert.match(prompt, /Reject partial, distant, blurry, generic, or cropped matches/);
 });

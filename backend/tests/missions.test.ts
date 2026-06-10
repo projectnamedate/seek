@@ -5,9 +5,11 @@ import {
   getMissionById,
   getMissionsByTier,
   getMissionsByTierAndLocation,
+  getSelectableMissionsByTierAndLocation,
   getRandomMission,
   MISSIONS,
   OUTDOOR_RATIO,
+  TIER_ONE_RETIRED_RANDOM_MISSION_IDS,
 } from '../src/data/missions';
 import { Tier } from '../src/types';
 
@@ -57,6 +59,36 @@ test('mission picker honors tier-specific outdoor-first ratios', () => {
     const indoorMission = getRandomMission(tier, sequenceRandom([OUTDOOR_RATIO[tier], 0]));
     assert.equal(indoorMission.tier, tier);
     assert.equal(indoorMission.location, 'indoor');
+  }
+});
+
+test('tier 1 random picker excludes retired farmable missions', () => {
+  for (const missionId of TIER_ONE_RETIRED_RANDOM_MISSION_IDS) {
+    assert.equal(getMissionById(missionId)?.tier, 1, missionId);
+  }
+
+  const selectableTierOne = [
+    ...getSelectableMissionsByTierAndLocation(1, 'outdoor'),
+    ...getSelectableMissionsByTierAndLocation(1, 'indoor'),
+  ];
+  const selectableIds = new Set(selectableTierOne.map((mission) => mission.id));
+
+  for (const missionId of TIER_ONE_RETIRED_RANDOM_MISSION_IDS) {
+    assert.equal(selectableIds.has(missionId), false, missionId);
+  }
+
+  assert.ok(getSelectableMissionsByTierAndLocation(1, 'outdoor').length >= 80);
+  assert.ok(getSelectableMissionsByTierAndLocation(1, 'indoor').length >= 35);
+});
+
+test('tier 2 and tier 3 random-selectable pools are unchanged', () => {
+  for (const tier of [2, 3] as const) {
+    for (const location of ['outdoor', 'indoor'] as const) {
+      assert.equal(
+        getSelectableMissionsByTierAndLocation(tier, location).length,
+        getMissionsByTierAndLocation(tier, location).length,
+      );
+    }
   }
 });
 

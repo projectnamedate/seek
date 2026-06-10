@@ -84,6 +84,9 @@ export interface PreparedBounty {
   salt: Buffer;
   commitment: Buffer;
   createdAt: number;
+  sessionId?: string;
+  sessionSgtMintAddress?: string;
+  sessionClientProtocolVersion?: number;
 }
 const preparedBounties = new Map<string, PreparedBounty>();
 const preparedBountiesById = new Map<string, PreparedBounty>();
@@ -105,8 +108,13 @@ export async function createBounty(
   bountyPda: string,
   transactionSignature?: string,
   sgtVerified?: boolean,
+  sgtMintAddress?: string | null,
   preparedMissionId?: string,
-  preparedEntryAmount?: bigint
+  preparedEntryAmount?: bigint,
+  session?: {
+    sessionId: string;
+    sessionClientProtocolVersion: number;
+  }
 ): Promise<{ bounty: ActiveBounty; missionDescription: string }> {
   // Check if player already has an active bounty
   const existing = await getPlayerActiveBounty(playerWallet);
@@ -136,6 +144,9 @@ export async function createBounty(
     bountyPda,
     transactionSignature,
     sgtVerified: sgtVerified || false,
+    sgtMintAddress: sgtMintAddress || undefined,
+    sessionId: session?.sessionId,
+    sessionClientProtocolVersion: session?.sessionClientProtocolVersion,
   };
 
   // Store bounty. Redis is durable/shared truth on production; Maps are a

@@ -72,6 +72,9 @@ export interface ActiveBounty {
   challengeEndsAt?: Date;
   disputedAt?: Date;
   sgtVerified?: boolean; // Seeker Genesis Token verified
+  sgtMintAddress?: string; // SGT mint used for anti-abuse controls
+  sessionId?: string; // Wallet-signed bounty session bound to this bounty
+  sessionClientProtocolVersion?: number;
   attestationType?: 'none' | 'standard'; // Camera attestation type used
 }
 
@@ -126,6 +129,7 @@ export interface StartBountyResponse {
   expiresAt: string;
   bountyPda: string;
   submitToken?: string;
+  sessionRequired?: boolean;
   entryAmountSkr?: number;
   returnAmountSkr?: number;
 }

@@ -19,6 +19,9 @@ export interface SerializedActiveBounty {
   challengeEndsAt?: string;
   disputedAt?: string;
   sgtVerified?: boolean;
+  sgtMintAddress?: string;
+  sessionId?: string;
+  sessionClientProtocolVersion?: number;
   attestationType?: 'none' | 'standard';
 }
 

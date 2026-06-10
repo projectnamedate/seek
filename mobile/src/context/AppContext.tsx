@@ -5,6 +5,7 @@ import walletService, { fetchRealBalance } from '../services/wallet.service';
 import { getStats, PlayerStats, recordGameResult } from '../utils/storage';
 import sgtService from '../services/sgt.service';
 import apiService from '../services/api.service';
+import { clearBountySessionCache } from '../services/session.service';
 
 // Get MWA hook return type
 type MobileWalletContext = ReturnType<typeof useMobileWallet>;
@@ -198,6 +199,7 @@ export function AppProvider({ children }: AppProviderProps) {
     setActiveBounty(null);
     setSgtVerified(false);
     sgtService.clearVerification();
+    clearBountySessionCache();
   }, [mwa]);
 
   // Stats actions

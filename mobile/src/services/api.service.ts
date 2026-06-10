@@ -4,6 +4,7 @@ import { Bounty, TierNumber, ValidationResult, AttestationPayload } from '../typ
 import { API_BASE_URL, CLIENT_PROTOCOL_VERSION } from '../config';
 import { encodeBase58 } from '../utils/bs58';
 import { normalizeSkrName } from '../utils/format';
+import { bountySessionHeaders } from './session.service';
 
 // Dev-only logging - stripped from production builds
 const log = (...args: any[]) => __DEV__ && console.log(...args);
@@ -71,8 +72,8 @@ export async function getWalletAuthHeaders(
 /**
  * Prepare a bounty (pre-transaction).
  * Returns commitment, timestamp, bountyPda for building on-chain tx.
- * No wallet prompt required. /start authorizes the prepared bounty with the
- * signed accept_bounty transaction, and prepareId binds the returned commitment.
+ * New builds include a reusable off-chain bounty session token; /start still
+ * authorizes the paid bounty with the signed accept_bounty transaction.
  */
 export async function prepareBounty(
   playerWallet: string,
@@ -80,6 +81,7 @@ export async function prepareBounty(
   options?: {
     permissionsConfirmed?: boolean;
     authHeaders?: Record<string, string>;
+    sessionToken?: string;
   },
 ): Promise<{
   success: boolean;
@@ -97,12 +99,18 @@ export async function prepareBounty(
   error?: string;
 }> {
   try {
+    const headers = {
+      'ngrok-skip-browser-warning': '1',
+      ...bountySessionHeaders(options?.sessionToken),
+      ...(options?.authHeaders || {}),
+    };
+
     const response = await api.post('/bounty/prepare', {
       tier,
       playerWallet,
       permissionsConfirmed: options?.permissionsConfirmed === true,
       clientProtocolVersion: CLIENT_PROTOCOL_VERSION,
-    }, { headers: options?.authHeaders || { 'ngrok-skip-browser-warning': '1' } });
+    }, { headers });
 
     if (response.data.success && response.data.data) {
       return {
@@ -125,10 +133,9 @@ export async function prepareBounty(
 }
 
 /**
- * Start a new bounty hunt. No auth header required — backend's
- * verifyTransaction parses the on-chain accept_bounty tx and asserts
- * (player, bountyPda, programId) match. The on-chain signature IS the
- * authorization for /start.
+ * Start a new bounty hunt. The optional bounty session token binds this call to
+ * the pre-transaction session; the on-chain accept_bounty signature remains the
+ * only transaction authorization.
  */
 export async function startBounty(
   wallet: string,
@@ -137,6 +144,7 @@ export async function startBounty(
     bountyPda: string;
     transactionSignature: string;
     prepareId?: string;
+    sessionToken?: string;
   },
 ): Promise<{ success: boolean; bounty?: Bounty; data?: any; error?: string }> {
   try {
@@ -146,6 +154,11 @@ export async function startBounty(
       bountyPda: options.bountyPda,
       transactionSignature: options.transactionSignature,
       prepareId: options.prepareId,
+    }, {
+      headers: {
+        'ngrok-skip-browser-warning': '1',
+        ...bountySessionHeaders(options.sessionToken),
+      },
     });
 
     if (response.data.success && response.data.data) {
@@ -173,6 +186,7 @@ export async function submitPhoto(
   attestation?: AttestationPayload,
   authOptions?: {
     submitToken?: string;
+    sessionToken?: string;
     signMessage?: (message: Uint8Array) => Promise<Uint8Array>;
     walletAddress?: string;
   }
@@ -222,7 +236,10 @@ export async function submitPhoto(
     }
 
     // Wallet auth headers are only used by old builds without submitToken.
-    const submitHeaders: Record<string, string> = { 'ngrok-skip-browser-warning': '1' };
+    const submitHeaders: Record<string, string> = {
+      'ngrok-skip-browser-warning': '1',
+      ...bountySessionHeaders(authOptions?.sessionToken),
+    };
     if (!authOptions?.submitToken && authOptions?.signMessage && authOptions?.walletAddress) {
       const wAuth = await getWalletAuthHeaders(authOptions.signMessage, authOptions.walletAddress, 'submit');
       Object.assign(submitHeaders, wAuth);

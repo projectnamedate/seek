@@ -24,7 +24,7 @@ export const API_BASE_URL = NGROK_URL
 
 // Network toggle (mainnet is the default). Switch to 'devnet' for devnet build/testing.
 export const NETWORK: 'mainnet-beta' | 'devnet' = 'mainnet-beta';
-export const CLIENT_PROTOCOL_VERSION = 2;
+export const CLIENT_PROTOCOL_VERSION = 3;
 
 // Build-time safety net: a release APK accidentally shipped with NETWORK='devnet'
 // would point users at the devnet RPC + 9-decimal test SKR mint. Refuse to boot.

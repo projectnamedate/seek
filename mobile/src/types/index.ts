@@ -31,6 +31,9 @@ export interface Bounty {
   potentialReward: number;
   bountyPda?: string;
   submitToken?: string;
+  sessionToken?: string;
+  sessionExpiresAt?: string;
+  sgtMintAddress?: string;
   challengeEndsAt?: number;
   resolutionTransactionSignature?: string;
   disputeTransactionSignature?: string;

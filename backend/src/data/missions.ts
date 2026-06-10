@@ -710,6 +710,83 @@ function generateMissions(): Mission[] {
 
 export const MISSIONS = generateMissions();
 
+// Retire the most farmable / recently-hit tier-1 missions from new random
+// assignments without deleting their IDs. Existing prepared or active bounties
+// can still resolve by mission id through getMissionById().
+export const TIER_ONE_RETIRED_RANDOM_MISSION_IDS = new Set<string>([
+  't1-001',
+  't1-005',
+  't1-008',
+  't1-009',
+  't1-011',
+  't1-018',
+  't1-019',
+  't1-024',
+  't1-029',
+  't1-031',
+  't1-032',
+  't1-033',
+  't1-038',
+  't1-047',
+  't1-052',
+  't1-058',
+  't1-060',
+  't1-061',
+  't1-062',
+  't1-063',
+  't1-069',
+  't1-071',
+  't1-072',
+  't1-074',
+  't1-075',
+  't1-077',
+  't1-080',
+  't1-081',
+  't1-083',
+  't1-084',
+  't1-085',
+  't1-090',
+  't1-094',
+  't1-100',
+  't1-101',
+  't1-107',
+  't1-111',
+  't1-113',
+  't1-114',
+  't1-115',
+  't1-117',
+  't1-123',
+  't1-127',
+  't1-129',
+  't1-130',
+  't1-131',
+  't1-132',
+  't1-133',
+  't1-134',
+  't1-141',
+  't1-142',
+  't1-147',
+  't1-148',
+  't1-153',
+  't1-155',
+  't1-156',
+  't1-157',
+  't1-161',
+  't1-164',
+  't1-165',
+  't1-169',
+  't1-174',
+  't1-179',
+  't1-184',
+  't1-193',
+  't1-198',
+  't1-199',
+]);
+
+export function isMissionRandomlySelectable(mission: Mission): boolean {
+  return mission.tier !== 1 || !TIER_ONE_RETIRED_RANDOM_MISSION_IDS.has(mission.id);
+}
+
 export function getMissionsByTier(tier: Tier): Mission[] {
   return MISSIONS.filter((mission) => mission.tier === tier);
 }
@@ -718,9 +795,13 @@ export function getMissionsByTierAndLocation(tier: Tier, location: MissionLocati
   return MISSIONS.filter((mission) => mission.tier === tier && mission.location === location);
 }
 
+export function getSelectableMissionsByTierAndLocation(tier: Tier, location: MissionLocation): Mission[] {
+  return getMissionsByTierAndLocation(tier, location).filter(isMissionRandomlySelectable);
+}
+
 export function getRandomMission(tier: Tier, random: () => number = Math.random): Mission {
   const location: MissionLocation = random() < OUTDOOR_RATIO[tier] ? 'outdoor' : 'indoor';
-  const pool = getMissionsByTierAndLocation(tier, location);
+  const pool = getSelectableMissionsByTierAndLocation(tier, location);
 
   if (pool.length === 0) {
     const allTierMissions = getMissionsByTier(tier);

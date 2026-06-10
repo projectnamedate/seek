@@ -37,9 +37,12 @@ const envSchema = z.object({
   HELIUS_API_KEY: z.string().optional(),
   SGT_BONUS_CONFIDENCE_REDUCTION: z.string().default('0.05'),
 
-  // Emergency anti-abuse controls. Comma- or newline-separated public addresses.
-  BLOCKED_PLAYER_WALLETS: z.string().optional(),
-  BLOCKED_SGT_MINTS: z.string().optional(),
+  // Anti-abuse controls. Comma- or newline-separated public addresses.
+  BLOCKED_PLAYER_WALLETS: z.string().default(''),
+  BLOCKED_SGT_MINTS: z.string().default(''),
+  REQUIRE_BOUNTY_SESSION_PROOF: z.enum(['true', 'false']).default('false'),
+  MIN_SESSION_CLIENT_PROTOCOL_VERSION: z.string().regex(/^\d+$/).default('3'),
+  BOUNTY_SESSION_TTL_SECONDS: z.string().regex(/^\d+$/).default('1800'),
 
   // Observability + persistence (optional; production strongly recommended)
   SENTRY_DSN: z.string().optional(),
@@ -114,6 +117,15 @@ function loadConfig() {
     sgt: {
       heliusApiKey: parsed.data.HELIUS_API_KEY || '',
       bonusConfidenceReduction: parseFloat(parsed.data.SGT_BONUS_CONFIDENCE_REDUCTION),
+    },
+    security: {
+      blockedPlayerWallets: parsed.data.BLOCKED_PLAYER_WALLETS,
+      blockedSgtMints: parsed.data.BLOCKED_SGT_MINTS,
+    },
+    sessionProof: {
+      requireForBounties: parsed.data.REQUIRE_BOUNTY_SESSION_PROOF === 'true',
+      minClientProtocolVersion: parseInt(parsed.data.MIN_SESSION_CLIENT_PROTOCOL_VERSION, 10),
+      ttlSeconds: parseInt(parsed.data.BOUNTY_SESSION_TTL_SECONDS, 10),
     },
     // Protocol parameters. Public disputes are disabled in the current mainnet
     // program, so finalization is immediate and this must match the on-chain

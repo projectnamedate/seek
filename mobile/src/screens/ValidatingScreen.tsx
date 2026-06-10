@@ -100,11 +100,14 @@ export default function ValidatingScreen({ navigation, route }: Props) {
       }).start();
 
       try {
-        const authOptions = bounty.submitToken
-          ? { submitToken: bounty.submitToken, walletAddress: wallet.fullAddress || undefined }
-          : wallet.fullAddress
-            ? { signMessage, walletAddress: wallet.fullAddress }
-            : undefined;
+        const authOptions = wallet.fullAddress
+          ? {
+            submitToken: bounty.submitToken,
+            sessionToken: bounty.sessionToken,
+            signMessage: bounty.submitToken ? undefined : signMessage,
+            walletAddress: wallet.fullAddress,
+          }
+          : undefined;
         const result = await apiService.submitPhoto(bounty.id, photoUri, attestation, authOptions);
 
         if (!isMounted) return;

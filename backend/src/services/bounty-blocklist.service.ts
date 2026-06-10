@@ -1,3 +1,5 @@
+import { config } from '../config';
+
 const DEFAULT_BLOCKED_PLAYER_WALLETS = [
   'Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6',
 ];
@@ -20,14 +22,14 @@ export function parseAddressList(value: string | undefined): Set<string> {
 function configuredBlockedWallets(): Set<string> {
   return new Set([
     ...DEFAULT_BLOCKED_PLAYER_WALLETS,
-    ...parseAddressList(process.env.BLOCKED_PLAYER_WALLETS),
+    ...parseAddressList(config.security.blockedPlayerWallets),
   ]);
 }
 
 function configuredBlockedSgtMints(): Set<string> {
   return new Set([
     ...DEFAULT_BLOCKED_SGT_MINTS,
-    ...parseAddressList(process.env.BLOCKED_SGT_MINTS),
+    ...parseAddressList(config.security.blockedSgtMints),
   ]);
 }
 

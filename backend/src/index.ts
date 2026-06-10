@@ -9,6 +9,7 @@ import bountyRoutes from './routes/bounty.routes';
 import healthRoutes from './routes/health.routes';
 import skrRoutes from './routes/skr.routes';
 import sgtRoutes from './routes/sgt.routes';
+import sessionRoutes from './routes/session.routes';
 import { startFinalizationWorker, stopFinalizationWorker } from './services/finalizer.service';
 import { startBountyWorkers, stopBountyWorkers } from './services/bounty.service';
 import { startSGTWorkers, stopSGTWorkers } from './services/sgt.service';
@@ -97,6 +98,7 @@ app.use('/api/bounty', bountyRoutes);
 app.use('/api/health', healthRoutes);
 app.use('/api/skr', skrRoutes);
 app.use('/api/sgt', sgtRoutes);
+app.use('/api/session', sessionRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {
@@ -112,6 +114,7 @@ app.get('/', (req, res) => {
       getBounty: 'GET /api/bounty/:id',
       getPlayerBounty: 'GET /api/bounty/player/:wallet',
       resolveSkr: 'GET /api/skr/lookup/:addressOrDomain',
+      createSessionChallenge: 'POST /api/session/challenge',
     },
   });
 });

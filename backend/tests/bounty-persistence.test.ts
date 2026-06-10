@@ -20,6 +20,9 @@ const bounty: ActiveBounty = {
   bountyPda: 'DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v',
   transactionSignature: '5BqExampleSig',
   sgtVerified: true,
+  sgtMintAddress: 'B1fHfkVLjnqCih7xcN7gDyDfu7eR2PtZxzQvZiupPPDH',
+  sessionId: 'e7ec369873d89d35f0f76843b54fb55a',
+  sessionClientProtocolVersion: 3,
   attestationType: 'standard',
 };
 

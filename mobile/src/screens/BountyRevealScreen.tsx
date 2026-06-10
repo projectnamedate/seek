@@ -15,6 +15,7 @@ import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TIERS, Bounty } from '../types';
 import apiService from '../services/api.service';
 import { buildAcceptBountyTransaction } from '../services/solana.mobile';
+import { getOrCreateBountySession } from '../services/session.service';
 import { useApp } from '../context/AppContext';
 import { formatTime } from '../utils/format';
 import { hasSeekPermissions, requestSeekPermissions } from '../services/permissions.service';
@@ -40,7 +41,7 @@ function wholeSkrFromBaseUnits(baseUnits: number): number {
 export default function BountyRevealScreen({ navigation, route }: Props) {
   const { tier } = route.params;
   const tierData = TIERS[tier];
-  const { wallet, signAndSendTransaction, connection } = useApp();
+  const { wallet, signAndSendTransaction, signMessage, connection } = useApp();
 
   const [bounty, setBounty] = useState<Bounty | null>(null);
   const [isRevealing, setIsRevealing] = useState(true);
@@ -74,11 +75,12 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
 
   /**
    * On-chain flow:
-   * 1. Call /prepare to get commitment + timestamp + bountyPda
-   * 2. Build accept_bounty transaction
-   * 3. Sign & send via Seeker Wallet (MWA)
-   * 4. Call /start with bountyPda + tx signature
-   * 5. Get mission details back
+   * 1. Create/reuse an off-chain bounty session
+   * 2. Call /prepare to get commitment + timestamp + bountyPda
+   * 3. Build accept_bounty transaction
+   * 4. Sign & send via Seeker Wallet (MWA)
+   * 5. Call /start with bountyPda + tx signature
+   * 6. Get mission details back
    */
   const startOnChainBounty = async () => {
     const playerWallet = wallet.fullAddress;
@@ -100,10 +102,14 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         return;
       }
 
-      // Step 1: Prepare bounty (get commitment from backend)
+      setStatusText('Creating secure session...');
+      const bountySession = await getOrCreateBountySession(playerWallet, signMessage);
+
+      // Step 2: Prepare bounty (get commitment from backend)
       setStatusText('Preparing bounty...');
       const prepResult = await apiService.prepareBounty(playerWallet, tier, {
         permissionsConfirmed: true,
+        sessionToken: bountySession.sessionToken,
       });
       if (!prepResult.success || !prepResult.data) {
         throw new Error(prepResult.error || 'Failed to prepare bounty');
@@ -127,7 +133,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         });
       }
 
-      // Step 2: Build the accept_bounty transaction
+      // Step 3: Build the accept_bounty transaction
       setStatusText('Building transaction...');
       const playerPubkey = new PublicKey(playerWallet);
       const bountyPdaPubkey = new PublicKey(bountyPda);
@@ -144,7 +150,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         }
       );
 
-      // Step 3: Sign & send via wallet (only required approval for this flow)
+      // Step 4: Sign & send via wallet (only on-chain approval for this flow)
       setStatusText('Approve in Seeker Wallet...');
       let slot: number | undefined;
       try {
@@ -161,9 +167,8 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       // Brief delay after wallet return to let network stabilize
       await new Promise(r => setTimeout(r, 1500));
 
-      // Step 4: Call /start — no auth header needed; the on-chain tx signature
-      // IS the player's authorization, and backend verifyTransaction asserts
-      // (player, bountyPda, programId) all match the supplied signature.
+      // Step 5: Call /start. The session token binds this to /prepare; the
+      // on-chain tx signature authorizes the paid bounty.
       setStatusText('Starting mission...');
       if (__DEV__) console.log('[BountyReveal] Calling /start...');
       if (typeof txSignature !== 'string') {
@@ -176,6 +181,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
           bountyPda,
           transactionSignature: txSignature,
           prepareId,
+          sessionToken: bountySession.sessionToken,
         },
       );
 
@@ -183,7 +189,7 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         throw new Error(startResult.error || 'Failed to start bounty');
       }
 
-      // Step 5: Build bounty object from response
+      // Step 6: Build bounty object from response
       const responseData = startResult.data;
       const now = Date.now();
       const description = responseData?.mission?.description || 'Find the target';
@@ -206,6 +212,9 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
         potentialReward: displayReturnAmount,
         bountyPda,
         submitToken: responseData?.submitToken,
+        sessionToken: bountySession.sessionToken,
+        sessionExpiresAt: bountySession.expiresAt,
+        sgtMintAddress: bountySession.sgtMintAddress,
       };
 
       if (__DEV__) console.log('[BountyReveal] On-chain bounty started:', newBounty.id);

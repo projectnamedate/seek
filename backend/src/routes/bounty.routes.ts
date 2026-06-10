@@ -57,6 +57,11 @@ import {
   AttestationPayload,
   mergeAttestationMetadata,
 } from '../services/attestation.service';
+import {
+  BountySession,
+  BountySessionError,
+  verifyBountySessionToken,
+} from '../services/bounty-session.service';
 import { getWalletDailyBountyStatus, reserveWalletDailyBounty } from '../services/wallet-bounty-limit.service';
 import { validate } from '../middleware/validate.middleware';
 import { verifyWalletAuthRequest } from '../middleware/auth.middleware';
@@ -68,7 +73,7 @@ import { permissionPreflightSchema } from '../services/permission-preflight.serv
 const log = childLogger('bounty-routes');
 
 const router = Router();
-const CURRENT_CLIENT_PROTOCOL_VERSION = 2;
+const CURRENT_CLIENT_PROTOCOL_VERSION = 3;
 
 // Configure multer for photo uploads
 const upload = multer({
@@ -105,7 +110,7 @@ const prepareBountySchema = z.object({
 });
 
 function instructionVersionForClient(clientProtocolVersion?: number): AcceptBountyInstructionVersion {
-  return clientProtocolVersion === CURRENT_CLIENT_PROTOCOL_VERSION ? 2 : 1;
+  return clientProtocolVersion && clientProtocolVersion >= 2 ? 2 : 1;
 }
 
 function entryAmountsForInstruction(version: AcceptBountyInstructionVersion): Record<Tier, bigint> {
@@ -143,14 +148,64 @@ function sendBlockedBountyResponse(res: Response) {
   } as ApiResponse<never>);
 }
 
+type BountySessionResolution =
+  | { ok: true; session?: BountySession }
+  | { ok: false; status: number; error: string };
+
+async function resolveBountySessionForWallet(
+  req: Request,
+  playerWallet: string,
+  options: { required: boolean },
+): Promise<BountySessionResolution> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    if (!options.required) return { ok: true };
+    return { ok: false, status: 401, error: 'Bounty session proof required' };
+  }
+
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match) {
+    return { ok: false, status: 401, error: 'Invalid bounty session authorization header' };
+  }
+
+  try {
+    const session = await verifyBountySessionToken(match[1]);
+    if (!session) {
+      return { ok: false, status: 401, error: 'Invalid or expired bounty session' };
+    }
+    if (session.walletAddress !== playerWallet) {
+      return { ok: false, status: 403, error: 'Bounty session wallet mismatch' };
+    }
+    if (session.clientProtocolVersion < config.sessionProof.minClientProtocolVersion) {
+      return {
+        ok: false,
+        status: 426,
+        error: `Client protocol version ${config.sessionProof.minClientProtocolVersion} required`,
+      };
+    }
+    return { ok: true, session };
+  } catch (error) {
+    if (error instanceof BountySessionError) {
+      return { ok: false, status: error.status, error: error.message };
+    }
+    throw error;
+  }
+}
+
+function sendBountySessionError(res: Response, result: Extract<BountySessionResolution, { ok: false }>) {
+  return res.status(result.status).json({
+    success: false,
+    error: result.error,
+  } as ApiResponse<never>);
+}
+
 /**
  * POST /api/bounty/prepare
  * Prepare a bounty before on-chain transaction.
  * Returns commitment, timestamp, and bountyPda for the mobile client
  * to build the accept_bounty transaction.
- * Anonymous by design: the on-chain accept_bounty transaction in /start is the
- * wallet authorization. The prepareId prevents anonymous PDA-poisoning from
- * overwriting another client's prepared commitment.
+ * Session-aware but backward compatible: the off-chain session token is stored
+ * when present, while prepareId prevents anonymous PDA-poisoning for old builds.
  */
 router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), async (req: Request, res: Response) => {
   try {
@@ -162,10 +217,24 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
     const instructionVersion = instructionVersionForClient(clientProtocolVersion);
     const entryAmount = entryAmountsForInstruction(instructionVersion)[tier];
     const returnAmount = entryAmount * 2n;
+    const sessionResult = await resolveBountySessionForWallet(req, playerWallet, {
+      required: config.sessionProof.requireForBounties,
+    });
+    if (!sessionResult.ok) {
+      return sendBountySessionError(res, sessionResult);
+    }
+    const bountySession = sessionResult.session;
 
-      if (await isWalletBlockedForBounties(playerWallet)) {
-        return sendBlockedBountyResponse(res);
-      }
+    if (
+      bountySession
+        ? isBlockedBountyActor({
+          walletAddress: playerWallet,
+          sgtMintAddress: bountySession.sgtMintAddress,
+        })
+        : await isWalletBlockedForBounties(playerWallet)
+    ) {
+      return sendBlockedBountyResponse(res);
+    }
 
     const finalizerPause = await getFinalizerSafetyPause();
     if (finalizerPause.paused) {
@@ -228,10 +297,19 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
       salt,
       commitment,
       createdAt: Date.now(),
+      sessionId: bountySession?.sessionId,
+      sessionSgtMintAddress: bountySession?.sgtMintAddress,
+      sessionClientProtocolVersion: bountySession?.clientProtocolVersion,
     });
 
     log.info(
-      { bountyPda: bountyPda.toBase58().slice(0, 8), tier, instructionVersion, missionId: mission.id },
+      {
+        bountyPda: bountyPda.toBase58().slice(0, 8),
+        tier,
+        instructionVersion,
+        missionId: mission.id,
+        session: Boolean(bountySession),
+      },
       'bounty prepared'
     );
 
@@ -262,13 +340,16 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
  * POST /api/bounty/start
  * Start a new bounty hunt
  */
-// /start does NOT require wallet-auth headers — verifyTransaction below proves
-// the player authorized the bounty by signing the on-chain accept_bounty. This
-// avoids a third MWA prompt in the BountyReveal flow (prepare auth + tx + start
-// auth would be 3 prompts). The on-chain tx is stronger proof anyway.
+// /start does NOT require legacy wallet-auth headers. New clients attach the
+// off-chain bounty session token when present, and verifyTransaction below
+// still proves the player authorized the on-chain accept_bounty.
 router.post('/start', bountyStartLimiter, validate(startBountySchema), async (req: Request, res: Response) => {
   try {
     const { tier, bountyPda, transactionSignature, playerWallet, prepareId } = req.body;
+
+    if (isBlockedBountyActor({ walletAddress: playerWallet })) {
+      return sendBlockedBountyResponse(res);
+    }
 
     // Acquire per-wallet lock (Redis-backed; multi-instance safe)
     if (!(await acquireWalletLock(playerWallet))) {
@@ -332,6 +413,39 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
+    const sessionResult = await resolveBountySessionForWallet(req, playerWallet, {
+      required: config.sessionProof.requireForBounties || Boolean(prepared.sessionId),
+    });
+    if (!sessionResult.ok) {
+      return sendBountySessionError(res, sessionResult);
+    }
+    const bountySession = sessionResult.session;
+
+    if (prepared.sessionId && bountySession?.sessionId !== prepared.sessionId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Bounty session does not match prepared bounty',
+      } as ApiResponse<never>);
+    }
+    if (
+      prepared.sessionSgtMintAddress &&
+      bountySession?.sgtMintAddress !== prepared.sessionSgtMintAddress
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: 'Bounty session SGT does not match prepared bounty',
+      } as ApiResponse<never>);
+    }
+    if (
+      bountySession &&
+      isBlockedBountyActor({
+        walletAddress: playerWallet,
+        sgtMintAddress: bountySession.sgtMintAddress,
+      })
+    ) {
+      return sendBlockedBountyResponse(res);
+    }
+
     // Verify on-chain transaction actually contains the prepared accept_bounty
     // call for THIS player, THIS bountyPda, THIS tier, and THIS amount.
     // Confirmation status alone is not enough — an attacker could paste any
@@ -356,14 +470,25 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       } as ApiResponse<never>);
     }
 
-    // Check SGT verification status. If the passive home-screen check has not
-    // populated the cache yet, read Token-2022 ownership directly here. This
-    // route is already bound to an on-chain accept_bounty from the same wallet.
-    const cachedSgtResult = await isWalletSGTVerified(playerWallet);
-    const sgtResult = cachedSgtResult?.verified
-      ? cachedSgtResult
-      : await verifySGTOwnershipForWallet(playerWallet);
-    const sgtVerified = sgtResult?.verified || false;
+    // Check SGT verification status. A bounty session already binds the wallet
+    // to an SGT mint; old clients still use the passive Token-2022 lookup.
+    let sgtVerified = false;
+    let sgtMintAddress: string | null = null;
+    if (bountySession) {
+      sgtVerified = true;
+      sgtMintAddress = bountySession.sgtMintAddress;
+    } else {
+      const cachedSgtResult = await isWalletSGTVerified(playerWallet);
+      const sgtResult = cachedSgtResult?.verified
+        ? cachedSgtResult
+        : await verifySGTOwnershipForWallet(playerWallet);
+      sgtVerified = sgtResult?.verified || false;
+      sgtMintAddress = sgtResult?.sgtMintAddress ?? null;
+    }
+
+    if (isBlockedBountyActor({ walletAddress: playerWallet, sgtMintAddress })) {
+      return sendBlockedBountyResponse(res);
+    }
 
     const dailyLimit = await reserveWalletDailyBounty(playerWallet);
     if (!dailyLimit.allowed) {
@@ -384,8 +509,15 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       bountyPda,
       transactionSignature,
       sgtVerified,
+      sgtMintAddress,
       prepared.missionId, // Use the prepared mission, not a random one
-      BigInt(prepared.entryAmount)
+      BigInt(prepared.entryAmount),
+      bountySession
+        ? {
+          sessionId: bountySession.sessionId,
+          sessionClientProtocolVersion: bountySession.clientProtocolVersion,
+        }
+        : undefined,
     );
 
     // Store prepared mission secrets (must match on-chain commitment)
@@ -403,6 +535,7 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       expiresAt: bounty.expiresAt.toISOString(),
       bountyPda: bounty.bountyPda,
       submitToken,
+      sessionRequired: config.sessionProof.requireForBounties,
       entryAmountSkr: wholeSkr(bounty.entryAmount),
       returnAmountSkr: wholeSkr(bounty.entryAmount * 2n),
     };
@@ -485,8 +618,39 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       } as ApiResponse<never>);
     }
 
-    if (await isWalletBlockedForBounties(bounty.playerWallet)) {
+    if (
+      isBlockedBountyActor({
+        walletAddress: bounty.playerWallet,
+        sgtMintAddress: bounty.sgtMintAddress,
+      }) ||
+      (!bounty.sgtMintAddress && await isWalletBlockedForBounties(bounty.playerWallet))
+    ) {
       return sendBlockedBountyResponse(res);
+    }
+
+    const sessionResult = await resolveBountySessionForWallet(req, bounty.playerWallet, {
+      required: config.sessionProof.requireForBounties || Boolean(bounty.sessionId),
+    });
+    if (!sessionResult.ok) {
+      return sendBountySessionError(res, sessionResult);
+    }
+    const bountySession = sessionResult.session;
+
+    if (bounty.sessionId && bountySession?.sessionId !== bounty.sessionId) {
+      return res.status(403).json({
+        success: false,
+        error: 'Bounty session does not own this bounty',
+      } as ApiResponse<never>);
+    }
+    if (
+      bountySession &&
+      bounty.sgtMintAddress &&
+      bountySession.sgtMintAddress !== bounty.sgtMintAddress
+    ) {
+      return res.status(403).json({
+        success: false,
+        error: 'Bounty session SGT does not own this bounty',
+      } as ApiResponse<never>);
     }
 
     const tokenAuthorized = submitToken
