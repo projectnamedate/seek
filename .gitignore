@@ -60,6 +60,10 @@ coverage/
 .cache/
 tmp/
 .mcp.json
+.playwright-mcp/
+.vercel/
+.codex/checkpoints/
+.codex/skills/
 
 # Claude Code / AI tooling
 .claude/*

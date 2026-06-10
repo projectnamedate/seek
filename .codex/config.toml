@@ -1,0 +1,16 @@
+[mcp_servers.solana-mcp-server]
+url = "https://mcp.solana.com/mcp"
+enabled = true
+startup_timeout_sec = 30
+tool_timeout_sec = 60
+
+[mcp_servers.solana-mcp-server.tools.Solana_Documentation_Search]
+approval_mode = "approve"
+
+[[skills.config]]
+path = "/Users/hammer/.codex/skills.profiles/project/skills/solana-dev"
+enabled = true
+
+[[skills.config]]
+path = "/Users/hammer/.codex/skills.profiles/project/skills/check-seek"
+enabled = true
