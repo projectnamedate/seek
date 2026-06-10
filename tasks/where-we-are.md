@@ -1,7 +1,27 @@
-# Where we are - Seek - 2026-06-09 - abuse blocklist hotfix live
+# Where we are - Seek - 2026-06-10 - website TLS repaired + session-proof WIP branch
 
 ## Current State
 
+- 2026-06-10 website outage repaired. `seek.mythx.art` DNS still pointed to
+  the Helsinki Mythx VPS (`204.168.242.220`) and `/var/www/seek-web` still held
+  the static export, but HTTPS failed during TLS handshake because the active
+  `/etc/caddy/Caddyfile` had been reloaded on 2026-06-09 with only the
+  `api.agentify.nexus` block. Restored a narrow `seek.mythx.art` static block
+  on the VPS, backed up the previous Caddyfile before editing, validated Caddy,
+  and reloaded the service. Verification after reload: `https://seek.mythx.art/`,
+  `/grant`, `/privacy`, `/terms`, `/store`, `/license`, and `/sitemap.xml`
+  return HTTPS 200; `openssl s_client` verifies `CN=seek.mythx.art`; backend
+  readiness at `https://api.seek.mythx.art/api/health/ready` remains
+  `ready: true` with RPC/program/Redis OK.
+- Follow-up same outage: `mythx.art` and `www.mythx.art` were also missing
+  from the active Caddyfile. The local WordPress/PHP service on
+  `localhost:8080` was still alive, so restored the previous `mythx.art`
+  reverse proxy and `www.mythx.art` redirect blocks, backed up the config as
+  `/etc/caddy/Caddyfile.bak-20260610T160051Z`, validated Caddy, and reloaded.
+  Verification after reload: `https://mythx.art/` returns HTTPS 200 with the
+  WordPress body, `https://www.mythx.art/` 301s to the apex then 200s, and
+  `openssl s_client` verifies certificates for `mythx.art`, `www.mythx.art`,
+  and `seek.mythx.art`.
 - 2026-06-09 abuse incident response PASS. Wallet
   `Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6` was supposed to be blocked
   but production did not include the local session-proof WIP where the original
@@ -36,17 +56,74 @@
   `3b85203` docs: record abuse blocklist hotfix.
 - The broader session-proof rollout remains unreleased WIP. Do not assume any
   local session-proof routes are live unless production endpoints prove it.
+- Latest three master commits remain: `9b0ff85` AI validation hotfix,
+  `f29d617` device test build cleanup docs, `6e3b6c5` v1.0.4 tier reprice.
+  Current working branch remains `wip/session-proof-rollout` with the
+  pre-existing session-proof WIP plus the grant deck/site changes.
+- Next concrete action: submit the Superteam Instagrant using
+  `tasks/superteam-instagrant-2026-06-08.md` after attaching/verifying the
+  200+ dApp Store reviews screenshot; monitor Colosseum Eternal and start the
+  prepared 4-week sprint only after the dashboard reopens.
+- 2026-06-08 grant pipeline update: user submitted Solana Mobile Builder Grant
+  and MonkeFoundry applications. Superteam Instagrant and Colosseum Eternal
+  setup packets now live in `tasks/superteam-instagrant-2026-06-08.md` and
+  `tasks/colosseum-eternal-2026-06-08.md`. Recommended Superteam ask is
+  `$10,000` for the first Super Hunts milestone: multi-token event quests and
+  organizer playbook. Colosseum Eternal is prepared as a venture-scale 4-week
+  Super Hunts sprint, but the official Colosseum page currently says Eternal is
+  paused and not accepting new participants, so do not start the timer until it
+  reopens. Both packets preserve the canonical deck URL
+  `https://seek.mythx.art/grant`, preserve Breakpoint London 2026 as flagship
+  go-live, and mark the 200+ dApp Store reviews metric as user-reported until a
+  screenshot is attached.
+- 2026-06-08 grant deck update shipped. Canonical deck is live at
+  `https://seek.mythx.art/grant`, served from the static `web/` export on the
+  Helsinki Mythx VPS (`/var/www/seek-web`). It is now grant-program agnostic
+  while preserving Breakpoint London 2026 as the flagship Super Hunts go-live
+  target. The deck now explicitly leads with the product truth that Seek is live
+  in the Solana dApp Store and already won the Solana Mobile Monolith 2026
+  hackathon. The title slide now uses the large Seek logo, explains Seek as
+  real-world scavenger hunts on Seeker, and then frames Super Hunts as the next
+  growth step: a Pokemon Go-level event co-marketing solution for partners. It
+  asks for `$30K`. The solution slide copy uses the current
+  `500 / 1000 / 2000 SKR` ladder, but `02-home.png` has been restored to the
+  real app UI screenshot after the v1.0.4 store-marketing mockup looked wrong;
+  that screenshot still shows the older `1000 / 2000 / 3000 SKR` ladder. The standalone
+  Vercel mirror was removed at the user's request; `https://grant-deck.vercel.app`
+  and known raw Vercel deployment URLs now return 404. Verification: `web`
+  typecheck PASS, `web` static build PASS including `/grant`, `grant-deck`
+  typecheck/build PASS before retirement, live `seek.mythx.art/grant` /
+  `/privacy` / `/store` all return 200, old `$25K` / `$20K` / `Solana Mobile
+  Builder Grant` deck-wrapper strings no longer appear in live deck bodies, and
+  browser screenshots checked desktop/mobile hero; the solution screenshot
+  should be refreshed from the running app before using it as current tier proof.
 - 2026-05-30 user complaint traced: wallet
   `AfHbufmvMfTU7oty25nv9GBoBDZzZuuWyKEbSR3Mexpx` is SGT-verified via mint
   `CwyvfwhNxmskhXz1j6fbpxXPtki1QRmcjyQDQgjPm1sH` and played one 500 SKR
   tier-1 bounty (`AYVuNRZ39b6DpajW7K2PuK8FUgS8A6FqZo1cC4o5tQtD`) for mission
   `t1-178`, "Find a dumbbell rack." Railway logs show Claude recognized "a
   dumbbell rack with multiple sets of hex dumbbells" in a home gym at 85%
-  confidence, but production rejected it because the live Tier 1 threshold was
-  91% and the SGT-adjusted threshold was still 86%. `origin/master` already
-  has the intended 88% Tier 1 threshold; this hotfix adds a prompt guard against
-  invented location/style/venue constraints and regression tests that verify an
-  85% verified-Seeker Tier 1 match clears the adjusted threshold.
+  confidence, but production rejected it because Tier 1 was running at a 91%
+  threshold and the SGT-adjusted threshold was still 86%. This was a threshold
+  false negative, not a commercial-gym-only prompt issue. Hotfix commit
+  `9b0ff85` is pushed and deployed to Railway deployment
+  `59639557-eaa3-4083-b761-7b2cda6f0225`; master now restores Tier 1 to 88%,
+  adds prompt language against inventing unstated location/style/venue
+  constraints, and adds regression coverage for the 85% verified-Seeker path.
+- 2026-05-30 cleanup: session-proof WIP is isolated on branch
+  `wip/session-proof-rollout` on top of hotfix `9b0ff85`. The original dirty
+  state is preserved in `stash@{0}` (`wip session-proof before ai hotfix rebase
+  2026-05-30`) until this branch is verified; do not drop that stash
+  prematurely.
+- Latest three master commits: `9b0ff85` AI validation hotfix, `f29d617`
+  device test build cleanup docs, `6e3b6c5` v1.0.4 tier reprice.
+- 2026-05-25 anti-abuse patch is on this WIP branch for wallet-signed bounty
+  sessions with SGT mint binding. Rollout plan:
+  `tasks/session-proof-rollout-2026-05-25.md`. Deploy backend first with
+  `REQUIRE_BOUNTY_SESSION_PROOF=false`, test v3 mobile on the Seeker, submit the
+  dApp Store update, then flip enforcement only after the v3 store build is
+  live. This path does not require a contract upgrade and does not add any
+  extra on-chain transaction approval beyond `accept_bounty_v2`.
 - Mainnet program `DqsCXFjgLp4UDZgMQE6nvEHe7yiRNJsVYFv21JSbd73v` is
   deployed, initialized, IDL-published, and still upgradeable under Ledger
   `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY`. Never use `--final`.
@@ -206,9 +283,9 @@
   `/license`, and `/store` return HTTPS 200. `/store` is the post-friendly
   Solana Mobile dApp Store wrapper for
   `solanadappstore://details?id=app.seek.mobile`.
-- Working tree currently contains the completed v1.0.4 tier/mission patch and
-  release-doc updates. Keep local screenshots, logs, build output, and secret
-  material out of git.
+- This WIP branch currently contains unpublished session-proof rollout changes
+  plus the deployed AI validation hotfix merge resolution. Keep local
+  screenshots, logs, build output, and secret material out of git.
 
 ## Fresh Checks
 
@@ -219,7 +296,29 @@
   PASS 44/44; `git diff --check` PASS. Tests ran with non-secret test env
   values in the external worktree because the worktree intentionally does not
   copy local `.env` secrets.
-- GitHub CI on master: PASS, latest run `26055065510`.
+- 2026-05-30 AI hotfix deploy verification PASS: GitHub Actions run
+  `26697431882` on commit `9b0ff85` succeeded; Railway deployment
+  `59639557-eaa3-4083-b761-7b2cda6f0225` is `SUCCESS`; live
+  `https://api.seek.mythx.art/api/health/ready` returns `ready: true` with
+  RPC/program/Redis OK; `/api/health/stats` shows pending `0`, validating `0`,
+  finalizer queue `0`, house `76,488 SKR`, Singularity `8,200 SKR`, total
+  bounties `2`, win rate `0.0%`.
+- 2026-05-30 current master CI lookup after the hotfix PASS: `gh run list
+  --limit 3` shows latest master CI success `26697431882`.
+- 2026-05-30 session-proof WIP cleanup verification PASS: conflict-marker scan
+  returned no matches; `git diff --check` PASS; backend `npx tsc --noEmit
+  --pretty false` PASS; mobile `npx tsc --noEmit --pretty false` PASS; backend
+  focused `node --test -r ts-node/register tests/ai-hard-reject.test.ts
+  tests/missions.test.ts` PASS 10/10; backend `npm run test:launch-tools`
+  PASS 54/54.
+- 2026-05-30 mandatory `check-seek` before the session-proof cleanup PASS:
+  `gh run list --limit 3` and `gh run list --branch master --limit 1` showed
+  then-latest master CI success `26122564805`; backend `npx tsc --noEmit
+  --pretty false` PASS; mobile `npx tsc --noEmit --pretty false` PASS;
+  contracts `cargo check --features mainnet --no-default-features` PASS with
+  known Anchor cfg warnings; contracts `npm test` PASS 25/25; mission pool test
+  PASS 6/6; demo-residue grep returned no matches; dApp Store asset validator
+  PASS.
 - 2026-05-19 local v1.0.4 patch verification PASS: `anchor build` PASS and
   `backend/src/idl/seek_protocol.json` regenerated; Solana `rust_autofixer`
   reported no issues; backend `npx tsc --noEmit --pretty false` PASS; mobile
@@ -420,9 +519,14 @@ keys in chat.
 
 ## Next Concrete Action
 
-Run the official-store Seeker smoke for live v1.0.4, then top up the publisher
-wallet before any future upload. If this abuse block is questioned later, first
-rerun the production probe: `POST /api/bounty/prepare` for
+Finish reviewing the `wip/session-proof-rollout` branch, run backend/mobile
+verification from this branch, and keep `REQUIRE_BOUNTY_SESSION_PROOF=false`
+for the first backend deploy.
+
+If the abuse block is questioned later, first rerun the production probe:
+`POST /api/bounty/prepare` for
 `Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6` must return HTTP `403`.
+v1.0.4 / versionCode `5` is live; the next store upload needs publisher-wallet
+balance checked first.
 
 Launch risks: Singularity grinding remains until VRF; Solana JS advisories remain.
