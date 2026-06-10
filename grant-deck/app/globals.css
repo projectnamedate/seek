@@ -1,0 +1,199 @@
+@import "tailwindcss";
+
+/* ── Seek brand bible (assets/deck/seek-brand-kit.md + mobile/src/theme) ── */
+:root {
+  --frost: #cfe6e4;   /* light teal  — tertiary / rewards */
+  --ice: #95d2e6;     /* sky blue    — secondary accent   */
+  --aqua: #61afbd;    /* bright cyan — primary accent     */
+  --gold: #d4a017;    /* SGT verified */
+  --loss: #ef4444;    /* loss / error */
+
+  --bg: #010101;      /* near-black primary background */
+  --surface: #101618; /* cards / raised panels */
+  --navy: #0f172a;    /* splash / icon background */
+  --line: #21302f;    /* hairline borders */
+
+  --text: #f6f6f5;    /* off-white primary text */
+  --muted: #99b3be;   /* muted blue secondary text */
+  --faint: #5b6b71;   /* tertiary / captions */
+
+  --background: var(--bg);
+  --foreground: var(--text);
+}
+
+@theme inline {
+  --color-frost: var(--frost);
+  --color-ice: var(--ice);
+  --color-aqua: var(--aqua);
+  --color-gold: var(--gold);
+  --color-loss: var(--loss);
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-navy: var(--navy);
+  --color-line: var(--line);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  border-color: var(--line);
+}
+
+html {
+  scroll-behavior: smooth;
+  background: var(--bg);
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+/* Ambient grid + glow field behind everything */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background:
+    radial-gradient(900px 600px at 78% -8%, rgba(97, 175, 189, 0.16), transparent 60%),
+    radial-gradient(700px 500px at 8% 102%, rgba(149, 210, 230, 0.10), transparent 60%),
+    var(--bg);
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(circle at 50% 40%, black, transparent 85%);
+}
+
+/* ── Reusable brand utilities ── */
+.kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.28em;
+  font-weight: 700;
+  font-size: 0.72rem;
+  color: var(--aqua);
+}
+
+.display {
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 0.98;
+  text-transform: uppercase;
+}
+
+.grad-text {
+  background: linear-gradient(120deg, var(--aqua) 0%, var(--ice) 48%, var(--frost) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glow {
+  box-shadow: 0 0 0 1px rgba(97, 175, 189, 0.18), 0 24px 60px -20px rgba(97, 175, 189, 0.45);
+}
+.glow-text {
+  text-shadow: 0 0 32px rgba(97, 175, 189, 0.55);
+}
+
+.card {
+  background: linear-gradient(180deg, rgba(16, 22, 24, 0.9), rgba(1, 1, 1, 0.6));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 9999px;
+  padding: 0.4rem 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: rgba(16, 22, 24, 0.6);
+}
+
+/* Phone frame for app screenshots */
+.phone {
+  position: relative;
+  border-radius: 36px;
+  padding: 10px;
+  background: linear-gradient(160deg, #1b2528, #050708);
+  border: 1px solid var(--line);
+  box-shadow: 0 40px 90px -30px rgba(97, 175, 189, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.phone img {
+  border-radius: 26px;
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Scroll snap for the deck feel without trapping the user */
+.deck {
+  scroll-snap-type: y proximity;
+}
+.slide {
+  scroll-snap-align: start;
+}
+
+/* Reveal-on-load (bulletproof — content is visible even if JS never runs) */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  animation: reveal 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes reveal {
+  to { opacity: 1; transform: none; }
+}
+
+/* Location-radar motif (the "hunt" feel) */
+.radar {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(118vmin, 1080px);
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  pointer-events: none;
+  z-index: 0;
+}
+.radar i {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(97, 175, 189, 0.22);
+  border-radius: 9999px;
+  transform: scale(0.12);
+  animation: radar-ping 5.5s cubic-bezier(0, 0.2, 0.2, 1) infinite;
+}
+.radar b {
+  display: none;
+}
+@keyframes radar-ping {
+  0% { transform: scale(0.12); opacity: 0; }
+  12% { opacity: 0.55; }
+  100% { transform: scale(1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { animation: none; opacity: 1; transform: none; }
+  .radar i { animation: none; opacity: 0.18; transform: scale(0.7); }
+}

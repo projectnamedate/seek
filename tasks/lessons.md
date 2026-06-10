@@ -59,6 +59,30 @@
   organic Seeker screenshots, use a disposable capture fork that preserves the
   real app layout and stages only wallet-gated data.
 
+### Grant decks should be reusable and screenshot-verified
+- A 2026-06-08 grant deck handoff shipped with Solana-Mobile-specific wrapper
+  language and one stale screenshot showing the old 1000/2000/3000 SKR ladder
+  while the live app and copy used 500/1000/2000 SKR. A follow-up correction
+  clarified that "grant-program agnostic" must not remove the real product
+  target: Super Hunts should still go live at Breakpoint.
+- **Rule:** Keep grant decks program-agnostic by default unless the target
+  grant explicitly requires sponsor-specific framing. Put sponsor/program
+  details in the application packet, not the deck wrapper.
+- **Rule:** Keep the funding source and the product launch target separate.
+  A reusable deck can name the flagship go-live event while still being usable
+  across multiple grant programs.
+- **Rule:** On grant title slides, introduce Seek first in one short sentence
+  before naming Super Hunts. Super Hunts is the next evolution of Seek, not a
+  replacement product or standalone app name.
+- **Rule:** Keep only one public pitch-deck URL. Once the canonical Mythx deck
+  is live, retire temporary Vercel mirrors so grant reviewers cannot see a stale
+  or duplicate deck.
+- **Rule:** Before publishing a deck, visually verify every app screenshot
+  against current live economics, tier labels, and payout copy.
+- **Rule:** Do not replace a real app screenshot with a fabricated marketing
+  mockup just to fix text. If a current in-app screenshot cannot be captured
+  cleanly, prefer the real app screenshot and document the known stale copy.
+
 ## MWA (Mobile Wallet Adapter) — Critical Rules
 
 ### No back-to-back transact sessions
