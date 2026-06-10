@@ -29,6 +29,53 @@ Expected user approval flow in the v3 app:
   - only flip true after the mobile update is live in the Solana Mobile dApp
     Store
 
+## Current Next Work - Saved 2026-06-10
+
+1. Rebase/review `wip/session-proof-rollout` against current `origin/master`.
+2. Run full backend/mobile validation after the rebase.
+3. Deploy the backend first in compatibility mode with
+   `REQUIRE_BOUNTY_SESSION_PROOF=false`.
+4. Build and test the v1.0.5 mobile update on a Seeker:
+   - one off-chain session signature
+   - one on-chain `accept_bounty_v2` approval
+   - no wallet prompt during photo submit
+   - result resolves normally
+5. Submit v1.0.5 / versionCode 6 to the Solana Mobile dApp Store only after
+   the Seeker smoke passes.
+6. Flip `REQUIRE_BOUNTY_SESSION_PROOF=true` only after the store serves the v3
+   client and a live smoke confirms the new client path works.
+
+Parallel/non-blocking follow-ups:
+
+- Audit active Helsinki Caddy config against the May backups before future VPS
+  edits; restore only confirmed-active hosts. The 2026-06-10 repair restored
+  `seek.mythx.art`, `mythx.art`, and `www.mythx.art`; `api.opencrawl.gg` and
+  `claudedammit-api.mythx.art` are deprecated and should stay out unless
+  deliberately revived.
+- Submit the Superteam Instagrant packet once the 200+ dApp Store reviews
+  screenshot is attached or verified.
+- Refresh the grant deck app screenshot later; the copy uses current
+  `500 / 1000 / 2000 SKR` tiers, but one real screenshot still shows older
+  tier/reward text.
+
+## Why This Needs v1.0.5
+
+The backend can be deployed first without breaking current users because
+`REQUIRE_BOUNTY_SESSION_PROOF=false` keeps old clients compatible. But actual
+session-proof enforcement requires a mobile client that knows how to:
+
+1. request `/api/session/challenge`;
+2. ask the wallet for one off-chain message signature;
+3. exchange that signature for a `seek_sess_*` token;
+4. send that token to `/prepare`, `/start`, and `/submit`.
+
+The current store build is v1.0.4 / versionCode 5 and does not have that client
+flow. Android and the Solana Mobile dApp Store require a new `versionCode` for
+each uploaded APK, so the next upload must be versionCode 6. Calling it
+v1.0.5 is the clean user-facing version name for that versionCode bump. The
+important technical requirement is versionCode 6; the `1.0.5` name keeps store,
+docs, and operator language aligned.
+
 ## Live Rollout Order
 
 ### 1. Deploy Backend In Compatibility Mode

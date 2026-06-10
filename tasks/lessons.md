@@ -111,6 +111,16 @@ When removing `requireWalletAuth` from a route, you MUST also update:
 - Rate limiter `validate` should be `false` in dev to avoid IPv6 warnings
 - **Always verify the tunnel port matches the backend port** (e.g., backend on 3001, not 3000)
 
+## VPS / Caddy Recovery
+
+### Backups are evidence, not restore manifests
+- A 2026-06-10 site outage repair used older Caddy backups to identify missing
+  host blocks. Some historical API hosts in those backups were intentionally
+  deprecated, including `api.opencrawl.gg` and
+  `claudedammit-api.mythx.art`.
+- **Rule:** Restore only host blocks that are confirmed active and needed.
+  Treat old API domains as retired until the user explicitly revives them.
+
 ## Release Build Testing
 - `NGROK_URL` in `mobile/src/config/index.ts` must be updated every time a new tunnel is started
 - Build with `npx expo run:android --variant release` for real device testing
