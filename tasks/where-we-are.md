@@ -52,10 +52,10 @@
   `27c996f`. Branch is still local-only; do not push unfinished
   anti-abuse/session-proof work to the public GitHub remote unless the user
   explicitly asks.
-- Release metadata is prepared for v1.0.5 / versionCode `6` in
+- Release metadata is submitted for v1.0.5 / versionCode `6` in
   `mobile/package.json`, `mobile/package-lock.json`, `mobile/app.json`,
   `mobile/android/app/build.gradle`, and the in-app home-screen version label.
-  dApp Store copy is staged as:
+  dApp Store changelog:
   `Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.`
 - Validation for this prep: backend `npx tsc --noEmit --pretty false` PASS;
   backend `npm run test:launch-tools` PASS after the rebase; mobile
@@ -64,17 +64,9 @@
   cfg warnings; contract `npm test` PASS 25/25; `git diff --check` PASS;
   `cd dapp-store-publishing && node check-assets.mjs` PASS.
 - Latest local `wip/session-proof-rollout` commits before this handoff note:
-  `95aec6d` chore: prepare v1.0.5 Seeker smoke candidate, `992fba4` docs:
-  note morning session-proof pickup, `7222e85` docs: save session proof rollout
-  plan.
-- 2026-06-10 23:41 EDT closeout: user has the Seeker device but does not want
-  to use it until tomorrow morning. Do not push a dApp Store update or flip
-  backend session-proof enforcement tonight. Morning pickup order: rebase/review
-  `wip/session-proof-rollout`, run backend/mobile validation, deploy backend in
-  compatibility mode only (`REQUIRE_BOUNTY_SESSION_PROOF=false`), build the
-  v1.0.5 / versionCode 6 release APK, then use the Seeker for the smoke test.
-  This path needs no contract upgrade, no Ledger work, and no on-chain program
-  mutation.
+  `83d5d5a` chore: submit v1.0.5 dapp store update, `63d1ebb` docs:
+  record Seeker charge state before smoke, `211d5e4` docs: update v1.0.5
+  smoke handoff.
 - Latest local `wip/session-proof-rollout` commits: `f6236da` saved the
   session-proof rollout plan and deprecated-host correction, `fe2cf58` refreshed
   the site-repair handoff, and `74c46ae` published the Super Hunts grant deck.
