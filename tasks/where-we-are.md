@@ -43,10 +43,10 @@
   no wallet prompt during photo submit, result resolution/finalization, balance
   refresh, and Try Again navigation. Do not submit to the dApp Store or flip
   `REQUIRE_BOUNTY_SESSION_PROOF=true` until that Seeker smoke passes.
-- Latest local `wip/session-proof-rollout` commits before the v1.0.5 prep
-  commit: `992fba4` docs: note morning session-proof pickup, `7222e85` docs:
-  save session proof rollout plan, `2b5dccf` docs: refresh Seek handoff after
-  site repair.
+- Latest local `wip/session-proof-rollout` commits before this handoff note:
+  `95aec6d` chore: prepare v1.0.5 Seeker smoke candidate, `992fba4` docs:
+  note morning session-proof pickup, `7222e85` docs: save session proof rollout
+  plan.
 - 2026-06-10 23:41 EDT closeout: user has the Seeker device but does not want
   to use it until tomorrow morning. Do not push a dApp Store update or flip
   backend session-proof enforcement tonight. Morning pickup order: rebase/review
