@@ -73,7 +73,7 @@ release:
         3. Pay your entry and receive a randomly-assigned target.
         4. Race the clock. Find it in the real world. Photograph it.
         5. AI (Claude Vision) verifies.
-        6. Complete the mission = claim your return. Miss the mission = entry fuels the ecosystem.
+        6. Complete the mission = claim your return. Failed mission = entry fuels the ecosystem.
 
         SKILL-BASED, ON-CHAIN, PHONE-NATIVE
         All bounties are on-chain transactions on Solana. Commit-reveal mission
@@ -82,7 +82,7 @@ release:
         ECONOMICS
         Complete: keep your entry + earn 1x more from the reward pool.
         Singularity pool: eligible completions can receive an additional bonus.
-        Missed mission: 70% reward pool / 20% Singularity pool / 10% treasury.
+        Failed mission: 70% reward pool / 20% Singularity pool / 10% treasury.
 
         BUILT FOR SEEKER
         Native MWA, .SKR name resolution, camera attestation. Can only exist
@@ -110,7 +110,7 @@ solana_mobile_dapp_publisher_portal:
     6. Tap camera → capture any photo matching the mission target
     7. AI (Claude Vision) validates in ~3 seconds
     8. On Easy win: the completion return pays out from the house pool after
-       finalization. On missed mission: entry distributed 70/20/10 across
+       finalization. On failed mission: entry distributed 70/20/10 across
        reward, Singularity, and treasury pools. Public disputes are disabled in
        this release, so there is no extra challenge/deposit transaction.
 

@@ -1,7 +1,51 @@
-# Where we are - Seek - 2026-06-11 - v1.0.5 APK candidate + compatibility backend live
+# Where we are - Seek - 2026-06-11 - v1.0.5 submitted + compatibility backend live
 
 ## Current State
 
+- 2026-06-11 14:04 EDT release status: v1.0.5 / versionCode `6` was submitted
+  to Solana Mobile dApp Store review after a successful Seeker smoke. Ticket
+  ID is `314741840579`; release mint
+  `2oMPtiGumKGVsvyK2NBe2GXcoKDskgRoMsUUPCa9mb4L`; collection mint
+  `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`; ingestion session
+  `393e6329-4a02-43a9-9471-691684350fc9`; release ID
+  `3ec1276d-b3a3-48cd-a911-85d4dcb7fb5b`; publication session
+  `e1424d63-6a78-4cca-b178-8952c58cb488`; attestation request ID
+  `32557393368506399883497423818849`; idempotency key
+  `seek-update-1.0.5-v6-20260611`.
+- The final release-signed APK is at
+  `mobile/android/app/build/outputs/apk/release/app-release.apk`. Verification:
+  package `app.seek.mobile`, versionName `1.0.5`, versionCode `6`, APK SHA-256
+  `7a867ac83852d44909b319d346279d73afcb65cd50f4d681ef808deaff8e4c72`, signer
+  certificate `CN=Seek, OU=Mobile, O=Projectnamedate LLC, L=Miami, ST=Florida,
+  C=US`, signer SHA-256
+  `c50d2751f3ede1c7e3e04aab312f497783e79b95b28a1835ee23b668d80af17c`.
+  The same APK was reinstalled on Seeker device `SM02G4061996755`.
+- Seeker smoke PASS on the installed v1.0.5 APK: wallet displayed as
+  `hammathyme.skr`; Easy hunt started with a 500 SKR entry; the session path
+  created the off-chain bounty session, then one on-chain `accept_bounty_v2`
+  approval started the paid hunt; mission revealed as `PERMIT BOARD`; photo
+  submit did not ask for another wallet prompt; validation/finalization
+  completed as a loss. Final live stats: pending `0`, validating `0`, won `0`,
+  lost `1`, finalizer queue `0`, house `78,638 SKR`, Singularity `9,100 SKR`.
+  Tester balance moved from `753.024 $SKR` to `253.024 $SKR`, matching the
+  500 SKR Easy entry loss.
+- User corrected the loss-result copy during smoke. The submitted build now
+  says `MISSION FAILED` instead of `MISSION MISSED`; the how-to splash holds
+  for `4000ms` instead of `2000ms`; dApp Store listing/testing copy now says
+  `failed mission` instead of `missed mission`.
+- Railway compatibility backend remains live on production deployment
+  `d970186b-8bfc-478a-b0e0-9c22944e6b06`. Strict session enforcement is still
+  off: `REQUIRE_BOUNTY_SESSION_PROOF` is not explicitly set in Railway, so the
+  code default is `false`. Final live checks: `/api/health/ready` returned
+  `ready: true` with RPC/program/Redis OK, `/api/session/challenge` returned
+  `success: true` and `sessionRequired: false`, and `/api/health/stats` showed
+  finalizer queue `0`. No backend source changed after the compatibility
+  deploy, so no no-op Railway redeploy was needed.
+- Next concrete action: wait for dApp Store review/live status for ticket
+  `314741840579`. After the official store serves v1.0.5 / versionCode `6`,
+  install/update from the store path, run one live smoke, then flip
+  `REQUIRE_BOUNTY_SESSION_PROOF=true` and smoke old-client rejection. Do not
+  flip enforcement before the store build is live.
 - 2026-06-11 13:45 EDT prep status: `wip/session-proof-rollout` has been
   rebased onto current `origin/master` (`8fb4714`). Safety branch
   `backup/session-proof-pre-rebase-20260611` preserves the pre-rebase state at
@@ -13,38 +57,12 @@
   `mobile/android/app/build.gradle`, and the in-app home-screen version label.
   dApp Store copy is staged as:
   `Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.`
-- Release-signed APK candidate built successfully at
-  `mobile/android/app/build/outputs/apk/release/app-release.apk`. Verification:
-  package `app.seek.mobile`, versionName `1.0.5`, versionCode `6`, size `129M`,
-  APK SHA-256
-  `d49376d438683e20c597eb61853c89bf753dd322a004353b659cef3640bb6c5e`, signer
-  certificate `CN=Seek, OU=Mobile, O=Projectnamedate LLC, L=Miami, ST=Florida,
-  C=US`, signer SHA-256
-  `c50d2751f3ede1c7e3e04aab312f497783e79b95b28a1835ee23b668d80af17c`.
-- Railway compatibility backend is live on production deployment
-  `d970186b-8bfc-478a-b0e0-9c22944e6b06`. Strict session enforcement is still
-  off: `REQUIRE_BOUNTY_SESSION_PROOF` is not explicitly set in Railway, so the
-  code default is `false`. Live checks after deploy: `/api/health` OK,
-  `/api/health/ready` `ready: true` with RPC/program/Redis OK,
-  `/api/session/challenge` returns `success: true`, `sessionRequired: false`,
-  `clientProtocolVersion: 3`, and the reported blocked wallet still receives
-  HTTP `403` / `This wallet is not eligible for Seek bounties`.
 - Validation for this prep: backend `npx tsc --noEmit --pretty false` PASS;
   backend `npm run test:launch-tools` PASS after the rebase; mobile
   `npx tsc --noEmit --pretty false` PASS; contract
   `cargo check --features mainnet --no-default-features` PASS with known Anchor
   cfg warnings; contract `npm test` PASS 25/25; `git diff --check` PASS;
   `cd dapp-store-publishing && node check-assets.mjs` PASS.
-- ADB now sees the Seeker (`SM02G4061996755`), but battery is only `3%` while
-  USB charging. Current installed app is the official store build v1.0.4 /
-  versionCode `5` from `com.solanamobile.dappstore`. Next concrete action once
-  the phone has enough charge: run
-  `adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk`,
-  then smoke exactly: wallet connect, SGT status, one off-chain session
-  signature, one on-chain `accept_bounty_v2` approval, camera/location capture,
-  no wallet prompt during photo submit, result resolution/finalization, balance
-  refresh, and Try Again navigation. Do not submit to the dApp Store or flip
-  `REQUIRE_BOUNTY_SESSION_PROOF=true` until that Seeker smoke passes.
 - Latest local `wip/session-proof-rollout` commits before this handoff note:
   `95aec6d` chore: prepare v1.0.5 Seeker smoke candidate, `992fba4` docs:
   note morning session-proof pickup, `7222e85` docs: save session proof rollout

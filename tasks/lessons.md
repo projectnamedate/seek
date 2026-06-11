@@ -1,5 +1,14 @@
 # Lessons Learned
 
+## Mobile UX Copy
+
+### Failed missions should not say missed
+- During the 2026-06-11 v1.0.5 Seeker smoke, the user corrected the loss
+  result copy: the app should say "MISSION FAILED", not "MISSION MISSED".
+- **Rule:** Use "failed" for user-facing result-state copy after a lost bounty.
+  Keep "missed mission" only in internal economic notes if the historical
+  distribution language needs it.
+
 ## Incident Response
 
 ### Emergency denylist changes must ship outside broad WIP

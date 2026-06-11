@@ -85,7 +85,7 @@ export default function ResultScreen({ navigation, route }: Props) {
       useNativeDriver: true,
     }).start();
 
-    // Completion: restrained settlement pulse, miss: short shake effect
+    // Completion: restrained settlement pulse, failed mission: short shake effect
     if (isWin) {
       Animated.sequence([
         Animated.timing(pulseAnim, {
@@ -113,7 +113,7 @@ export default function ResultScreen({ navigation, route }: Props) {
         }).start();
       });
     } else {
-      // Shake animation for missed missions
+      // Shake animation for failed missions
       Animated.sequence([
         Animated.timing(shakeAnim, { toValue: 6, duration: 60, useNativeDriver: true }),
         Animated.timing(shakeAnim, { toValue: -6, duration: 60, useNativeDriver: true }),
@@ -217,7 +217,7 @@ export default function ResultScreen({ navigation, route }: Props) {
       <Animated.View style={[styles.resultContent, { opacity: fadeAnim }]}>
         <ScrollView contentContainerStyle={styles.resultScroll} showsVerticalScrollIndicator={false}>
         <Text style={[styles.resultTitle, { color: isWin ? colors.success : colors.error }]}>
-          {isWin ? 'BOUNTY COMPLETE' : 'MISSION MISSED'}
+          {isWin ? 'BOUNTY COMPLETE' : 'MISSION FAILED'}
         </Text>
 
         <Text style={styles.targetText}>

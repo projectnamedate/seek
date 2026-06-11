@@ -8,6 +8,8 @@ import {
 } from 'react-native';
 import { colors, spacing, fontSize, shadows } from '../theme';
 
+const HOW_TO_PLAY_HOLD_MS = 4000;
+
 interface Props {
   onFinish: () => void;
 }
@@ -110,7 +112,7 @@ export default function SplashScreen({ onFinish }: Props) {
         useNativeDriver: true,
       }),
       // Hold for reading
-      Animated.delay(2000),
+      Animated.delay(HOW_TO_PLAY_HOLD_MS),
       // Fade out
       Animated.timing(fadeAnim, {
         toValue: 0,

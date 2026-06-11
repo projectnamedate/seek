@@ -104,10 +104,35 @@ Approved by the user before upload. Do not mention payout math, `2x` total
 return, or economics in future store changelogs.
 
 ```text
-Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow.
+Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.
 ```
 
 ## Current submitted update
+
+v1.0.5 / versionCode `6` was submitted to Solana Mobile dApp Store review on
+2026-06-11 with the portal-backed CLI and `--api-key-stdin`.
+
+```text
+Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.
+```
+
+- Release mint: `2oMPtiGumKGVsvyK2NBe2GXcoKDskgRoMsUUPCa9mb4L`
+- Collection mint: `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`
+- Ticket ID: `314741840579`
+- APK SHA-256:
+  `7a867ac83852d44909b319d346279d73afcb65cd50f4d681ef808deaff8e4c72`
+- Ingestion session: `393e6329-4a02-43a9-9471-691684350fc9`
+- Release ID: `3ec1276d-b3a3-48cd-a911-85d4dcb7fb5b`
+- Publication session: `e1424d63-6a78-4cca-b178-8952c58cb488`
+- Idempotency key: `seek-update-1.0.5-v6-20260611`
+- Release transaction:
+  `2KUEjBDzmyGFzgxTXuraRyJXmmoEXcdqQmUEMpy5Fk6xzF73Nx6tSTwexoqf19NDPwyZAv9dZNffw74LunA9p5pX`
+- Collection verification transaction:
+  `5C6kYPWz7u7Zpuci5XVWSWFBymcRuBZxtAvnr3WZ99ikiCacada3JJiLjEDY6eEbNLJpwpGXiRLgqNhEaqaU12Ee`
+- Attestation request ID: `32557393368506399883497423818849`
+- Publisher wallet balance after submission: `0.05588918 SOL`
+
+## Previous submitted update
 
 v1.0.4 / versionCode `5` was submitted to Solana Mobile dApp Store review on
 2026-05-19 with the portal-backed CLI and `--api-key-stdin`.
@@ -132,7 +157,7 @@ Updates SKR hunt tiers and refreshes the mission pool for more globally availabl
 - Attestation request ID: `17985067346990183540214621176997`
 - Publisher wallet balance after submission: `0.07655074 SOL`
 
-## Previous submitted update
+## Earlier submitted update
 
 v1.0.3 / versionCode `4` was submitted to Solana Mobile dApp Store review on
 2026-05-18 with the portal-backed CLI and `--api-key-stdin`.

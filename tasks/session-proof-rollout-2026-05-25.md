@@ -57,30 +57,56 @@ Expected user approval flow in the v3 app:
   - package: `app.seek.mobile`
   - version: `1.0.5`
   - versionCode: `6`
-  - SHA-256:
-    `d49376d438683e20c597eb61853c89bf753dd322a004353b659cef3640bb6c5e`
+  - final SHA-256 after copy/timing fix:
+    `7a867ac83852d44909b319d346279d73afcb65cd50f4d681ef808deaff8e4c72`
   - signer certificate SHA-256:
     `c50d2751f3ede1c7e3e04aab312f497783e79b95b28a1835ee23b668d80af17c`
-- ADB now sees the Seeker (`SM02G4061996755`), but battery is only `3%` while
-  USB charging. Current installed app is the official store build v1.0.4 /
-  versionCode `5` from `com.solanamobile.dappstore`. Next action is to wait
-  until the phone has enough charge, install the signed APK, and run the smoke
-  checklist below.
+- Seeker smoke PASS on device `SM02G4061996755` after installing the signed
+  v1.0.5 / versionCode `6` APK:
+  - connected wallet displayed as `hammathyme.skr`
+  - Easy hunt started with a 500 SKR entry
+  - session path created the off-chain bounty session, then one on-chain
+    `accept_bounty_v2` approval started the paid hunt
+  - mission revealed as `PERMIT BOARD`
+  - photo submission did not require a wallet prompt
+  - validation/finalization completed as a loss
+  - final live stats: pending `0`, validating `0`, won `0`, lost `1`,
+    finalizer queue `0`, house `78,638 SKR`, Singularity `9,100 SKR`
+  - tester balance moved from `753.024 $SKR` to `253.024 $SKR`, matching the
+    500 SKR Easy entry loss
+- User corrected loss-result wording during smoke. The submitted build now says
+  `MISSION FAILED` instead of `MISSION MISSED`, the how-to splash holds for
+  `4000ms` instead of `2000ms`, and dApp Store listing/testing copy uses
+  `failed mission`.
+- Submitted v1.0.5 / versionCode `6` to Solana Mobile dApp Store review with
+  `--api-key-stdin` and idempotency key
+  `seek-update-1.0.5-v6-20260611`:
+  - Release mint: `2oMPtiGumKGVsvyK2NBe2GXcoKDskgRoMsUUPCa9mb4L`
+  - Collection mint: `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`
+  - Ticket ID: `314741840579`
+  - Ingestion session: `393e6329-4a02-43a9-9471-691684350fc9`
+  - Release ID: `3ec1276d-b3a3-48cd-a911-85d4dcb7fb5b`
+  - Publication session: `e1424d63-6a78-4cca-b178-8952c58cb488`
+  - Release tx:
+    `2KUEjBDzmyGFzgxTXuraRyJXmmoEXcdqQmUEMpy5Fk6xzF73Nx6tSTwexoqf19NDPwyZAv9dZNffw74LunA9p5pX`
+  - Collection tx:
+    `5C6kYPWz7u7Zpuci5XVWSWFBymcRuBZxtAvnr3WZ99ikiCacada3JJiLjEDY6eEbNLJpwpGXiRLgqNhEaqaU12Ee`
+  - Attestation request ID: `32557393368506399883497423818849`
+  - Publisher wallet balance after submission: `0.05588918 SOL`
+- Railway compatibility backend remains live on production deployment
+  `d970186b-8bfc-478a-b0e0-9c22944e6b06` with strict session enforcement still
+  off. No backend source changed after that compatibility deploy, so no
+  no-op Railway redeploy was needed; final live checks still returned
+  `/api/health/ready ready:true`, Redis `PONG`, and
+  `/api/session/challenge sessionRequired:false`.
 
-## Current Next Work - Saved 2026-06-10
+## Current Next Work - Saved 2026-06-11
 
-1. Rebase/review `wip/session-proof-rollout` against current `origin/master`.
-2. Run full backend/mobile validation after the rebase.
-3. Deploy the backend first in compatibility mode with
-   `REQUIRE_BOUNTY_SESSION_PROOF=false`.
-4. Build and test the v1.0.5 mobile update on a Seeker:
-   - one off-chain session signature
-   - one on-chain `accept_bounty_v2` approval
-   - no wallet prompt during photo submit
-   - result resolves normally
-5. Submit v1.0.5 / versionCode 6 to the Solana Mobile dApp Store only after
-   the Seeker smoke passes.
-6. Flip `REQUIRE_BOUNTY_SESSION_PROOF=true` only after the store serves the v3
+1. Wait for Solana Mobile dApp Store review of v1.0.5 / versionCode `6`
+   (ticket `314741840579`).
+2. After the store serves the v3 client, install/update from the official store
+   path and run one live smoke.
+3. Flip `REQUIRE_BOUNTY_SESSION_PROOF=true` only after the store serves the v3
    client and a live smoke confirms the new client path works.
 
 Parallel/non-blocking follow-ups:
