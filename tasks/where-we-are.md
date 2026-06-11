@@ -35,8 +35,10 @@
   `cargo check --features mainnet --no-default-features` PASS with known Anchor
   cfg warnings; contract `npm test` PASS 25/25; `git diff --check` PASS;
   `cd dapp-store-publishing && node check-assets.mjs` PASS.
-- ADB currently shows no attached device. Next concrete action: connect the
-  charged Seeker, run
+- ADB now sees the Seeker (`SM02G4061996755`), but battery is only `3%` while
+  USB charging. Current installed app is the official store build v1.0.4 /
+  versionCode `5` from `com.solanamobile.dappstore`. Next concrete action once
+  the phone has enough charge: run
   `adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk`,
   then smoke exactly: wallet connect, SGT status, one off-chain session
   signature, one on-chain `accept_bounty_v2` approval, camera/location capture,

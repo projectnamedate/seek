@@ -61,8 +61,11 @@ Expected user approval flow in the v3 app:
     `d49376d438683e20c597eb61853c89bf753dd322a004353b659cef3640bb6c5e`
   - signer certificate SHA-256:
     `c50d2751f3ede1c7e3e04aab312f497783e79b95b28a1835ee23b668d80af17c`
-- ADB currently shows no attached device. Next action is to connect the charged
-  Seeker, install the signed APK, and run the smoke checklist below.
+- ADB now sees the Seeker (`SM02G4061996755`), but battery is only `3%` while
+  USB charging. Current installed app is the official store build v1.0.4 /
+  versionCode `5` from `com.solanamobile.dappstore`. Next action is to wait
+  until the phone has enough charge, install the signed APK, and run the smoke
+  checklist below.
 
 ## Current Next Work - Saved 2026-06-10
 
