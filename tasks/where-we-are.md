@@ -2,6 +2,18 @@
 
 ## Current State
 
+- 2026-06-10 23:41 EDT closeout: user has the Seeker device but does not want
+  to use it until tomorrow morning. Do not push a dApp Store update or flip
+  backend session-proof enforcement tonight. Morning pickup order: rebase/review
+  `wip/session-proof-rollout`, run backend/mobile validation, deploy backend in
+  compatibility mode only (`REQUIRE_BOUNTY_SESSION_PROOF=false`), build the
+  v1.0.5 / versionCode 6 release APK, then use the Seeker for the smoke test.
+  This path needs no contract upgrade, no Ledger work, and no on-chain program
+  mutation.
+- Latest local `wip/session-proof-rollout` commits: `f6236da` saved the
+  session-proof rollout plan and deprecated-host correction, `fe2cf58` refreshed
+  the site-repair handoff, and `74c46ae` published the Super Hunts grant deck.
+  Branch is local-only and has no upstream yet.
 - 2026-06-10 website outage repaired. `seek.mythx.art` DNS still pointed to
   the Helsinki Mythx VPS (`204.168.242.220`) and `/var/www/seek-web` still held
   the static export, but HTTPS failed during TLS handshake because the active
@@ -60,10 +72,11 @@
   `f29d617` device test build cleanup docs, `6e3b6c5` v1.0.4 tier reprice.
   Current working branch remains `wip/session-proof-rollout` with the
   pre-existing session-proof WIP plus the grant deck/site changes.
-- Next concrete action: submit the Superteam Instagrant using
-  `tasks/superteam-instagrant-2026-06-08.md` after attaching/verifying the
-  200+ dApp Store reviews screenshot; monitor Colosseum Eternal and start the
-  prepared 4-week sprint only after the dashboard reopens.
+- Next concrete action: on the next morning session, resume the session-proof
+  release from `tasks/session-proof-rollout-2026-05-25.md` through the
+  compatibility deploy and Seeker smoke path. Superteam Instagrant remains the
+  main non-blocking grant follow-up after attaching/verifying the 200+ dApp
+  Store reviews screenshot.
 - 2026-06-08 grant pipeline update: user submitted Solana Mobile Builder Grant
   and MonkeFoundry applications. Superteam Instagrant and Colosseum Eternal
   setup packets now live in `tasks/superteam-instagrant-2026-06-08.md` and
