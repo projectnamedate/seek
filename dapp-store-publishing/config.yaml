@@ -41,8 +41,8 @@ app:
     website: https://seek.mythx.art
 
 release:
-  # Submitted v1.0.4 update config. Keep this aligned with the latest
-  # portal-backed review submission until the next version bump.
+  # Prepared v1.0.5 update config. Keep this aligned with the APK candidate
+  # and portal-backed review submission.
   address: AUTO_GENERATED_AT_CREATE_TIME
   media:
     - purpose: icon
@@ -90,9 +90,9 @@ release:
 
         18+ only. Skill-based competition. Not available where skill-based
         contests with cash prizes are restricted.
-      # Approved by the user before the 2026-05-19 upload. Do not mention
-      # payout math or 2x total return in store changelogs.
-      new_in_version: Updates SKR hunt tiers and refreshes the mission pool for more globally available targets.
+      # Candidate v1.0.5 copy. Show this exact text to the user before upload.
+      # Do not mention payout math or 2x total return in store changelogs.
+      new_in_version: Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.
       saga_features_localized: Native Mobile Wallet Adapter, .SKR name resolution, Seeker Genesis Token bonus, camera attestation.
 
 solana_mobile_dapp_publisher_portal:

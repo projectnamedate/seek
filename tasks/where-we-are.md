@@ -1,7 +1,52 @@
-# Where we are - Seek - 2026-06-10 - website TLS repaired + session-proof WIP branch
+# Where we are - Seek - 2026-06-11 - v1.0.5 APK candidate + compatibility backend live
 
 ## Current State
 
+- 2026-06-11 13:45 EDT prep status: `wip/session-proof-rollout` has been
+  rebased onto current `origin/master` (`8fb4714`). Safety branch
+  `backup/session-proof-pre-rebase-20260611` preserves the pre-rebase state at
+  `27c996f`. Branch is still local-only; do not push unfinished
+  anti-abuse/session-proof work to the public GitHub remote unless the user
+  explicitly asks.
+- Release metadata is prepared for v1.0.5 / versionCode `6` in
+  `mobile/package.json`, `mobile/package-lock.json`, `mobile/app.json`,
+  `mobile/android/app/build.gradle`, and the in-app home-screen version label.
+  dApp Store copy is staged as:
+  `Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.`
+- Release-signed APK candidate built successfully at
+  `mobile/android/app/build/outputs/apk/release/app-release.apk`. Verification:
+  package `app.seek.mobile`, versionName `1.0.5`, versionCode `6`, size `129M`,
+  APK SHA-256
+  `d49376d438683e20c597eb61853c89bf753dd322a004353b659cef3640bb6c5e`, signer
+  certificate `CN=Seek, OU=Mobile, O=Projectnamedate LLC, L=Miami, ST=Florida,
+  C=US`, signer SHA-256
+  `c50d2751f3ede1c7e3e04aab312f497783e79b95b28a1835ee23b668d80af17c`.
+- Railway compatibility backend is live on production deployment
+  `d970186b-8bfc-478a-b0e0-9c22944e6b06`. Strict session enforcement is still
+  off: `REQUIRE_BOUNTY_SESSION_PROOF` is not explicitly set in Railway, so the
+  code default is `false`. Live checks after deploy: `/api/health` OK,
+  `/api/health/ready` `ready: true` with RPC/program/Redis OK,
+  `/api/session/challenge` returns `success: true`, `sessionRequired: false`,
+  `clientProtocolVersion: 3`, and the reported blocked wallet still receives
+  HTTP `403` / `This wallet is not eligible for Seek bounties`.
+- Validation for this prep: backend `npx tsc --noEmit --pretty false` PASS;
+  backend `npm run test:launch-tools` PASS after the rebase; mobile
+  `npx tsc --noEmit --pretty false` PASS; contract
+  `cargo check --features mainnet --no-default-features` PASS with known Anchor
+  cfg warnings; contract `npm test` PASS 25/25; `git diff --check` PASS;
+  `cd dapp-store-publishing && node check-assets.mjs` PASS.
+- ADB currently shows no attached device. Next concrete action: connect the
+  charged Seeker, run
+  `adb install -r mobile/android/app/build/outputs/apk/release/app-release.apk`,
+  then smoke exactly: wallet connect, SGT status, one off-chain session
+  signature, one on-chain `accept_bounty_v2` approval, camera/location capture,
+  no wallet prompt during photo submit, result resolution/finalization, balance
+  refresh, and Try Again navigation. Do not submit to the dApp Store or flip
+  `REQUIRE_BOUNTY_SESSION_PROOF=true` until that Seeker smoke passes.
+- Latest local `wip/session-proof-rollout` commits before the v1.0.5 prep
+  commit: `992fba4` docs: note morning session-proof pickup, `7222e85` docs:
+  save session proof rollout plan, `2b5dccf` docs: refresh Seek handoff after
+  site repair.
 - 2026-06-10 23:41 EDT closeout: user has the Seeker device but does not want
   to use it until tomorrow morning. Do not push a dApp Store update or flip
   backend session-proof enforcement tonight. Morning pickup order: rebase/review

@@ -29,6 +29,41 @@ Expected user approval flow in the v3 app:
   - only flip true after the mobile update is live in the Solana Mobile dApp
     Store
 
+## Progress - 2026-06-11
+
+- Rebased `wip/session-proof-rollout` onto `origin/master` and preserved the
+  pre-rebase branch at `backup/session-proof-pre-rebase-20260611`.
+- Validation after rebase/prep:
+  - backend `npx tsc --noEmit --pretty false` PASS
+  - backend `npm run test:launch-tools` PASS after the rebase
+  - mobile `npx tsc --noEmit --pretty false` PASS
+  - contracts `cargo check --features mainnet --no-default-features` PASS
+  - contracts `npm test` PASS 25/25
+  - `git diff --check` PASS
+  - `cd dapp-store-publishing && node check-assets.mjs` PASS
+- Deployed the backend compatibility build to Railway production deployment
+  `d970186b-8bfc-478a-b0e0-9c22944e6b06` with strict enforcement still off
+  (`REQUIRE_BOUNTY_SESSION_PROOF` is not explicitly set, so config defaults to
+  `false`).
+- Live verification after deploy:
+  - `https://api.seek.mythx.art/api/health` returns `status: ok`
+  - `/api/health/ready` returns `ready: true` with RPC/program/Redis OK
+  - `/api/session/challenge` returns `success: true`, `sessionRequired: false`,
+    `clientProtocolVersion: 3`, `domain: seek.mythx.art`
+  - the blocked wallet still receives HTTP `403` with
+    `This wallet is not eligible for Seek bounties`
+- Built release-signed APK candidate:
+  - path: `mobile/android/app/build/outputs/apk/release/app-release.apk`
+  - package: `app.seek.mobile`
+  - version: `1.0.5`
+  - versionCode: `6`
+  - SHA-256:
+    `d49376d438683e20c597eb61853c89bf753dd322a004353b659cef3640bb6c5e`
+  - signer certificate SHA-256:
+    `c50d2751f3ede1c7e3e04aab312f497783e79b95b28a1835ee23b668d80af17c`
+- ADB currently shows no attached device. Next action is to connect the charged
+  Seeker, install the signed APK, and run the smoke checklist below.
+
 ## Current Next Work - Saved 2026-06-10
 
 1. Rebase/review `wip/session-proof-rollout` against current `origin/master`.

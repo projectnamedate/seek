@@ -26,11 +26,12 @@ means losing control of the app listing.
 ## Current test-device note
 
 User now has a Seeker device. The v1.0.4 test-app smoke passed before
-Publisher upload, and v1.0.4 / versionCode `5` is in Solana Mobile review.
-The sideloaded v1.0.4 test build has been uninstalled from the device. After
-acceptance, install/open the official Solana Mobile store build without USB and
-run wallet, passive SGT, camera/location, funded hunt, balance refresh, Try
-Again navigation, and finalization smoke.
+Publisher upload, and v1.0.4 / versionCode `5` is live per the 2026-06-09
+Publisher Portal screenshot. For the v1.0.5 session-proof update, install the
+release-signed APK on the Seeker before upload and smoke: wallet connect, SGT
+status, one off-chain session signature, one on-chain `accept_bounty_v2`
+approval, camera/location capture, no wallet prompt during photo submit,
+funded hunt resolution, balance refresh, Try Again navigation, and finalization.
 
 ## Publisher Portal setup
 
@@ -68,7 +69,13 @@ npx dapp-store publish submit \
 dapp-store \
   --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk \
   --keypair ../.secrets/dapp-store/publisher.json \
-  --whats-new "Updates SKR hunt tiers and refreshes the mission pool for more globally available targets."
+  --whats-new "Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts."
+```
+
+Candidate v1.0.5 changelog to show the user before upload:
+
+```text
+Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.
 ```
 
 ## Current live update

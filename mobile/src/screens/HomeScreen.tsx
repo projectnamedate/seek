@@ -28,7 +28,7 @@ import {
   SeekPermissionState,
 } from '../services/permissions.service';
 
-const APP_VERSION = '1.0.4';
+const APP_VERSION = '1.0.5';
 
 // Tier colors - Solana Mobile inspired
 const TIER_COLORS = {

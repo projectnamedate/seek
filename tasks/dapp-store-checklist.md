@@ -171,7 +171,7 @@ cd dapp-store-publishing
 dapp-store \
   --apk-file ../mobile/android/app/build/outputs/apk/release/app-release.apk \
   --keypair ../.secrets/dapp-store/publisher.json \
-  --whats-new "Fixes Seeker camera capture, passive SGT verification, AI validation reliability, and mission settlement flow."
+  --whats-new "Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts."
 ```
 
 Do not paste `DAPP_STORE_API_KEY` in chat. Store it in a local ignored env file
@@ -217,5 +217,14 @@ Each app update:
 4. `npx dapp-store create release` → new release NFT.
 5. `npx dapp-store publish submit`.
 6. Wait 2-5 days for review.
+
+## Next update candidate
+
+v1.0.5 / versionCode `6` is the session-proof client update candidate. Exact
+`--whats-new` text to show the user before upload:
+
+```text
+Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.
+```
 
 **Keystore stewardship:** losing the release keystore = cannot ever update the app. Multi-party backup mandatory (1Password team vault + paper backup + offline storage).
