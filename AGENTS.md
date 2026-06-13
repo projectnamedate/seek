@@ -40,6 +40,18 @@ up cold without re-reading the whole codebase. Specifically: bump date,
 list what shipped, list latest 3 commit hashes, write the next concrete
 action as a single executable step.
 
+## Shared Obsidian AgentMemory
+
+Seek is ported to the shared vault at
+`/Users/hammer/Obsidian/AgentMemory/Projects/seek/seek.md`. Do not let this
+replace the mandatory `/check-seek` first action. After the check-seek startup
+pass, read `/Users/hammer/Obsidian/AgentMemory/AGENTS.md` and the Seek project
+note before substantive product work. Treat vault notes as durable cross-agent
+memory, not a replacement for repo docs or live runtime truth. At wrap-up for
+substantive Seek work, update the project note and append a dated session
+summary; never store secrets, keypairs, `.env` values, or credentials in the
+vault.
+
 ## Workflow Orchestration
 
 ### 1. Plan Mode Default
