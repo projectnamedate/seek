@@ -50,8 +50,10 @@
   PASS; contract mainnet check PASS with known Anchor cfg warnings; contract
   tests PASS 25/25; mission tests PASS 6/6; backend launch-tool tests PASS
   56/56; dApp Store assets PASS; Compose config PASS; `git diff --check` PASS.
-- Latest three local commits remain `ea96f1c` (shared-memory pointer), `37148b2`
-  (v1.0.5 store-review checkpoint), and `83d5d5a` (v1.0.5 store submission).
+- Latest recovery/product commits before this handoff note are `d4833fe`
+  (Railway-to-VPS recovery), `ea96f1c` (shared-memory pointer), and `37148b2`
+  (v1.0.5 store-review checkpoint). They remain local-only on the no-upstream
+  WIP branch.
 - Next concrete action: after DNS caches finish expiring, run one store-installed
   Seeker smoke through the VPS backend. Then add an encrypted off-host Redis
   backup and separately decide whether to approve permissionless finalization

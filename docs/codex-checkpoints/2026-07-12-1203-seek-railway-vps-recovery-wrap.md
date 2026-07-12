@@ -37,9 +37,9 @@ and handoff.
   `127.0.0.1:3001`; Redis is isolated on the Compose network.
 - Strict bounty session enforcement remains explicitly false for v1.0.5
   compatibility.
-- Repo changes from this recovery are intended for a local checkpoint commit.
-  The pre-existing `AGENTS.md` end-session-sweep hunk is user WIP and must stay
-  uncommitted unless separately approved.
+- Recovery is committed locally beginning at `d4833fe`; nothing was pushed.
+  The pre-existing `AGENTS.md` end-session-sweep hunk is user WIP and remains
+  intentionally uncommitted unless separately approved.
 
 ## Decisions
 
