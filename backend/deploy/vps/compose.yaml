@@ -1,0 +1,40 @@
+services:
+  api:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: seek-api
+    env_file:
+      - .env
+    environment:
+      PORT: "3001"
+      REDIS_URL: redis://redis:6379
+      REQUIRE_BOUNTY_SESSION_PROOF: "false"
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3001:3001"
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.2.1
+    container_name: seek-redis
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --save
+      - "60"
+      - "1"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+    volumes:
+      - seek-redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  seek-redis-data:

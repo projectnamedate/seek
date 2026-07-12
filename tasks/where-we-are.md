@@ -1,7 +1,61 @@
-# Where we are - Seek - 2026-06-11 - v1.0.5 submitted + compatibility backend live
+# Where we are - Seek - 2026-07-12 - backend migrated off expired Railway trial
 
 ## Current State
 
+- 2026-07-12 production incident: `api.seek.mythx.art` returned Railway `404
+  Application not found` because the Railway free trial expired and Railway
+  removed the active `seek-backend` and Redis deployments. The project,
+  variables, custom domain, and Redis volume remained, but Railway refused any
+  redeploy until a paid plan was selected. The operator explicitly chose not to
+  pay Railway.
+- Backend and Redis are now running at no new platform cost on the existing
+  Helsinki Mythx VPS (`204.168.242.220`) under `/opt/seek-api`. Runtime is the
+  tracked `backend/deploy/vps/compose.yaml`: a dedicated `seek-api` container on
+  `127.0.0.1:3001`, a dedicated persistent `seek-redis` container, and Caddy for
+  `api.seek.mythx.art`. Both containers report healthy. Caddy configuration was
+  backed up before the new host block, validated, reloaded, and obtained a
+  Let's Encrypt certificate after DNS changed from the Railway CNAME to an A
+  record for the VPS.
+- VPS readiness PASS: `/api/health/ready` reports RPC, deployed program, and
+  Redis all OK. Forced-origin production checks PASS for `/api/health`,
+  `/api/health/ready`, `/api/health/stats`, POST `/api/session/challenge`, input
+  validation, and the known blocked-wallet denial. Session enforcement remains
+  explicitly off for compatibility (`REQUIRE_BOUNTY_SESSION_PROOF=false`).
+- DNS propagation is mixed only in stale caches. Authoritative Namecheap DNS,
+  Cloudflare, Quad9, and the VPS resolver serve `204.168.242.220`; an unforced
+  public HTTPS readiness request from the VPS returns `ready:true`. Some Google
+  anycast nodes and this Mac's OS cache still serve the removed Railway CNAME
+  with roughly 23 minutes of the old TTL remaining. Do not call propagation
+  universal until those caches expire.
+- Railway Redis data cannot be exported without reactivating a paid deployment,
+  so the new Redis starts clean. Current on-chain truth is 92 created, 15 won,
+  75 lost, one `Pending` bounty from 2026-07-05, and one older
+  `ChallengeLost` awaiting permissionless finalization. The Pending player can
+  cancel after the expiry grace period. Finalizing the old loss requires a
+  live signing transaction and must not be done without explicit operator
+  approval.
+- The dedicated VPS Redis persists through a Docker volume and AOF, but it does
+  not yet have an encrypted off-host backup. Treat that as the main remaining
+  infrastructure-resilience warning because mission secrets are required to
+  resolve accepted bounties after a host loss. Sentry is also disabled because
+  no `SENTRY_DSN` was present in the Railway environment.
+- Existing hot authority custody was preserved without exposing or regenerating
+  a key. Durable local backup:
+  `backend/.secrets/solana/seek-hot-authority-railway-backup.env`; VPS runtime:
+  `/opt/seek-api/.env`. Both are mode `0600`; the containing local secrets
+  directory is mode `0700`; both derive the expected hot-authority pubkey
+  `Gm6x8CZU7SQFVVHx2VnCQGteqT8gYnHFgEmdr3eqGdLk`. Railway remains a secondary
+  recovery source while the project exists. No temp path was used.
+- Validation for the incident repair: backend typecheck PASS; mobile typecheck
+  PASS; contract mainnet check PASS with known Anchor cfg warnings; contract
+  tests PASS 25/25; mission tests PASS 6/6; backend launch-tool tests PASS
+  56/56; dApp Store assets PASS; Compose config PASS; `git diff --check` PASS.
+- Latest three local commits remain `ea96f1c` (shared-memory pointer), `37148b2`
+  (v1.0.5 store-review checkpoint), and `83d5d5a` (v1.0.5 store submission).
+- Next concrete action: after DNS caches finish expiring, run one store-installed
+  Seeker smoke through the VPS backend. Then add an encrypted off-host Redis
+  backup and separately decide whether to approve permissionless finalization
+  of the old `ChallengeLost` bounty.
 - 2026-06-11 14:04 EDT release status: v1.0.5 / versionCode `6` was submitted
   to Solana Mobile dApp Store review after a successful Seeker smoke. Ticket
   ID is `314741840579`; release mint

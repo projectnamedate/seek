@@ -170,7 +170,12 @@ cd android && ./gradlew assembleRelease                           # release APK 
 Switch `NETWORK` in `mobile/src/config/index.ts` to swap mainnet/devnet ($SKR mint + decimals + challenge period all derive from it).
 
 ### Deploy targets
-- Backend → Railway (Dockerfile at `backend/Dockerfile`, `backend/railway.json`). Add Upstash Redis addon. Custom domain on `api.seek.mythx.art` (user-owned). App is **Seeker-exclusive** via Solana Mobile dApp Store — no iOS, no general Play Store, no web build. See [memory/project_distribution.md](~/.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_distribution.md).
+- Backend → Helsinki Mythx VPS at `/opt/seek-api` using
+  `backend/deploy/vps/compose.yaml`, with a dedicated persistent Redis container
+  and Caddy serving `api.seek.mythx.art`. Railway is retired after its free
+  trial removed both deployments on 2026-07-12. App is **Seeker-exclusive** via
+  Solana Mobile dApp Store — no iOS, no general Play Store, no web build. See
+  [memory/project_distribution.md](~/.claude/projects/-Users-hammer-Desktop-Claude-seek/memory/project_distribution.md).
 - APK → Solana dApp Store via `npx @solana-mobile/dapp-store-cli` flow. See `tasks/dapp-store-checklist.md`.
 
 ## On-chain auth model (3 roles, 2 Ledgers + 1 hot keypair minimum)

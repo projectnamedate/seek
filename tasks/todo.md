@@ -1,3 +1,50 @@
+# Railway Outage to VPS Recovery - 2026-07-12
+
+## Goal
+
+Restore the production game API without paying Railway, preserve signing-key
+custody, keep the existing mobile hostname unchanged, and prove the core game
+backend is usable before calling the incident closed.
+
+## Checklist
+
+- [x] Reproduce public `404 Application not found` on all production health
+  endpoints.
+- [x] Prove DNS and domains remained configured but Railway had removed all
+  backend/Redis deployments after the free trial expired.
+- [x] Verify backend variables and the Redis volume still existed.
+- [x] Back up and pubkey-verify the existing hot authority in durable ignored
+  storage; use no temp paths.
+- [x] Verify the Helsinki VPS has sufficient RAM/disk and healthy Docker/Caddy.
+- [x] Deploy isolated Seek API and persistent Redis containers.
+- [x] Fix the container healthcheck false negative (`localhost` to
+  `127.0.0.1`) and verify both containers become healthy.
+- [x] Add and validate the Caddy host, change DNS to the VPS, and obtain TLS.
+- [x] Verify forced-origin readiness, session challenge, validation failures,
+  stats, and the production blocklist.
+- [ ] Wait for the old Railway CNAME TTL to clear across all sampled Google
+  anycast nodes and this Mac's OS cache. Authoritative DNS, Cloudflare, Quad9,
+  and unforced public readiness from the VPS already pass.
+- [ ] Run one store-installed Seeker smoke through the migrated backend.
+- [ ] Add and restore-test an encrypted off-host backup for the VPS Redis AOF;
+  the Docker volume alone does not survive total host loss.
+- [ ] Obtain explicit operator approval before signing any transaction to
+  finalize the old `ChallengeLost` bounty.
+
+## Review
+
+- Root cause was account state, not application code: Railway's expired trial
+  removed active deployments but left a misleadingly intact project/domain
+  configuration.
+- The replacement uses existing paid-for VPS capacity, adds no new provider
+  bill, preserves `api.seek.mythx.art`, and keeps session enforcement off for
+  v1.0.5 compatibility.
+- Railway Redis was not recoverable on the free plan. On-chain inspection found
+  one cancellable expired Pending bounty and one permissionlessly finalizable
+  old loss; neither was silently mutated during recovery.
+
+---
+
 # Seek Tier Reprice + Global Mission Update Plan - 2026-05-19
 
 ## Goal
