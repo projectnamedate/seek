@@ -35,11 +35,11 @@
   `git diff --check` PASS; Compose validation PASS; deployed runtime/config
   SHA-256 hashes match local. The route regression was observed RED (`500`)
   before the streak breaker and GREEN (`429`) after implementation.
-- Latest relevant local commits before this handoff are `d23bf3d` (wallet/SGT
-  block plus daily win cap), `a0ab2f2` (VPS recovery handoff), and `d4833fe`
-  (Railway-to-VPS migration). The branch still has no upstream and remains
-  intentionally unpushed; the pre-existing user-owned `AGENTS.md` hunk and
-  `stash@{0}` remain untouched.
+- Latest relevant local commits before this closeout are `4c65999` (abuse
+  response handoff), `d23bf3d` (wallet/SGT block plus daily win cap), and
+  `a0ab2f2` (VPS recovery handoff). The branch still has no upstream and
+  remains intentionally unpushed; the pre-existing user-owned `AGENTS.md`
+  hunk and `stash@{0}` remain untouched.
 - Next concrete action: after 24 hours of real traffic, inspect production
   `403`/`429` counts and `seek:win:daily:*` counters, then compare the new
   completion rate against the 8-12% target before changing mission difficulty
