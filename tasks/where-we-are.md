@@ -1,7 +1,49 @@
-# Where we are - Seek - 2026-07-12 - backend migrated off expired Railway trial
+# Where we are - Seek - 2026-07-21 - repeat-win abuse contained on VPS
 
 ## Current State
 
+- 2026-07-21 abuse response is live. Wallet
+  `3vw6SovWwMAWJeKEqeFuDG2JndEnNp3o7TqDWL4W2Cvv` and its soulbound SGT
+  `6PbD4qYLYG3n5K3dEaXMZjbhX2Jq44V1uLdvkxdVj1vV` are code-seeded in the
+  production bounty denylist. Live `/api/bounty/prepare` and
+  `/api/bounty/start` both return HTTP `403` with the generic eligibility
+  denial. The block follows the SGT as well as the current wallet.
+- Forensics found six Easy hunts in 13 minutes with five wins (83.3%). The
+  five wins explain the VPS cohort's completion-rate spike; excluding this
+  session, the observed cohort was 1 win in 16 hunts (6.25%). Photos were
+  distinct, geographically coherent captures around a Tbilisi
+  university/store area. Evidence supports rapid location farming of broad
+  Easy targets, not duplicate-image replay. Standard camera attestation was
+  present but is low-confidence and non-cryptographic until Seeker TEE support
+  exists.
+- A Redis-backed streak breaker now allows at most two wins per UTC day per
+  identity, keyed by soulbound SGT when available and wallet otherwise. Both
+  `/prepare` and `/start` fail with HTTP `429` after the cap; successful
+  resolutions record the win. VPS Compose pins
+  `MAX_WINS_PER_IDENTITY_PER_DAY=2`. A live synthetic cap probe returned `429`
+  and its temporary Redis key was deleted afterward.
+- Production is healthy after deploy and drift cleanup: both containers are
+  healthy; readiness is HTTP `200` with RPC/program/Redis OK; pending `0`,
+  validating `0`, finalizer queue `0`; house `87,888 SKR`; Singularity
+  `12,600 SKR`. The latest sampled historical win rate is `27.3%` (6 wins,
+  16 losses) because it
+  includes the already-settled abuse wins; the new cap affects future hunts.
+- One pre-existing Redis bounty was stuck locally as `validating`, but its
+  on-chain PDA was already closed. The orphaned active/player/mission indexes
+  were removed and the API restarted; no signing or fund movement occurred.
+- Validation: backend launch-tool suite PASS `59/59`; backend typecheck PASS;
+  `git diff --check` PASS; Compose validation PASS; deployed runtime/config
+  SHA-256 hashes match local. The route regression was observed RED (`500`)
+  before the streak breaker and GREEN (`429`) after implementation.
+- Latest relevant local commits before this handoff are `d23bf3d` (wallet/SGT
+  block plus daily win cap), `a0ab2f2` (VPS recovery handoff), and `d4833fe`
+  (Railway-to-VPS migration). The branch still has no upstream and remains
+  intentionally unpushed; the pre-existing user-owned `AGENTS.md` hunk and
+  `stash@{0}` remain untouched.
+- Next concrete action: after 24 hours of real traffic, inspect production
+  `403`/`429` counts and `seek:win:daily:*` counters, then compare the new
+  completion rate against the 8-12% target before changing mission difficulty
+  or the two-win cap.
 - 2026-07-12 production incident: `api.seek.mythx.art` returned Railway `404
   Application not found` because the Railway free trial expired and Railway
   removed the active `seek-backend` and Redis deployments. The project,

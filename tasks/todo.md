@@ -19,7 +19,7 @@ without disturbing unrelated session-proof work.
   review.
 - [x] Deploy the scoped backend change to `/opt/seek-api` and prove live 403
   denial, readiness, stats, and exploit-path closure.
-- [ ] Update the repo and shared-vault handoffs with verified results.
+- [x] Update the repo and shared-vault handoffs with verified results.
 
 ## Review
 
