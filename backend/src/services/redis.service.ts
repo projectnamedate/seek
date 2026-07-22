@@ -58,6 +58,7 @@ export const RK = {
   activeBountyByPlayer: (wallet: string) => `seek:bounty:player:${wallet}`,
   bountySubmitToken: (bountyId: string) => `seek:bounty:submit-token:${bountyId}`,
   walletDailyBountyLimit: (wallet: string, day: string) => `seek:bounty:daily:${day}:${wallet}`,
+  identityDailyWinLimit: (identity: string, day: string) => `seek:win:daily:${day}:${identity}`,
   finalizerQueue: () => `seek:finalizer:queue`, // sorted set by challengeEndsAt
   finalizerMeta: (bountyPda: string) => `seek:finalizer:meta:${bountyPda}`,
   finalizerLock: (bountyPda: string) => `seek:lock:finalizer:${bountyPda}`,

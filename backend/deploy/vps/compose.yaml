@@ -10,6 +10,7 @@ services:
       PORT: "3001"
       REDIS_URL: redis://redis:6379
       REQUIRE_BOUNTY_SESSION_PROOF: "false"
+      MAX_WINS_PER_IDENTITY_PER_DAY: "2"
     depends_on:
       redis:
         condition: service_healthy

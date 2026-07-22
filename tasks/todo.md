@@ -1,3 +1,56 @@
+# Wallet Abuse Incident - 2026-07-21
+
+## Goal
+
+Permanently block wallet `3vw6SovWwMAWJeKEqeFuDG2JndEnNp3o7TqDWL4W2Cvv`
+from Seek, identify how it is cheating, and close the underlying abuse path
+without disturbing unrelated session-proof work.
+
+## Checklist
+
+- [x] Run the mandatory Seek startup audit and verify the live VPS baseline.
+- [x] Reconstruct the wallet's bounty history and SGT identity.
+- [x] Correlate the wallet with production API/log activity and identify the
+  exploit pattern from evidence.
+- [x] Add durable wallet and SGT containment through the existing bounty
+  denylist.
+- [x] Implement the smallest systemic fix required by the confirmed exploit.
+- [x] Run targeted abuse tests, backend launch-tool tests, typecheck, and diff
+  review.
+- [x] Deploy the scoped backend change to `/opt/seek-api` and prove live 403
+  denial, readiness, stats, and exploit-path closure.
+- [ ] Update the repo and shared-vault handoffs with verified results.
+
+## Review
+
+- Wallet `3vw6SovWwMAWJeKEqeFuDG2JndEnNp3o7TqDWL4W2Cvv` used verified
+  soulbound SGT `6PbD4qYLYG3n5K3dEaXMZjbhX2Jq44V1uLdvkxdVj1vV` for six Easy
+  hunts in 13 minutes and won five (83.3%). The five wins account for the
+  live cohort's entire completion-rate spike; excluding this session, the
+  observed cohort was 1 win in 16 hunts (6.25%).
+- The photos were distinct, geographically coherent captures around a Tbilisi
+  university/store area. Evidence supports location farming of broad Easy
+  targets, not duplicate-image replay. Standard camera attestation was present
+  but remains low-confidence and non-cryptographic until Seeker TEE support
+  exists.
+- The wallet and its SGT are code-seeded into the denylist. Live `/prepare`
+  and `/start` both return HTTP 403.
+- A new Redis-backed streak breaker caps paid wins at two per UTC day, keyed by
+  soulbound SGT when available and wallet otherwise. It is enforced at both
+  `/prepare` and `/start`, and successful resolutions record the win. The VPS
+  Compose config pins the cap to `2`.
+- TDD proof: the route regression first returned HTTP 500 before the admission
+  guard, then HTTP 429 after implementation. Final backend launch-tool suite
+  passes 59/59; backend typecheck and `git diff --check` pass.
+- Live proof: a synthetic capped identity returned HTTP 429 and its temporary
+  Redis key was deleted; readiness is HTTP 200 with RPC/program/Redis OK;
+  pending `0`, validating `0`, finalizer queue `0`; deployed source/config
+  hashes match local.
+- Drift cleanup: removed one stale Redis `validating` record whose on-chain PDA
+  was already closed. No transaction or funds moved.
+
+---
+
 # Railway Outage to VPS Recovery - 2026-07-12
 
 ## Goal

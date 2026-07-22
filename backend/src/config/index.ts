@@ -31,6 +31,7 @@ const envSchema = z.object({
   MAX_PHOTO_AGE_SECONDS: z.string().default('300'),
   MIN_CONFIDENCE_SCORE: z.string().default('0.7'),
   MAX_BOUNTIES_PER_WALLET_PER_DAY: z.string().default('20'),
+  MAX_WINS_PER_IDENTITY_PER_DAY: z.string().default('2'),
   CHALLENGE_PERIOD_SECONDS: z.string().default('0'),
 
   // SGT Verification (optional)
@@ -113,6 +114,7 @@ function loadConfig() {
       maxPhotoAgeSeconds: parseInt(parsed.data.MAX_PHOTO_AGE_SECONDS, 10),
       minConfidenceScore: parseFloat(parsed.data.MIN_CONFIDENCE_SCORE),
       maxBountiesPerWalletPerDay: parseInt(parsed.data.MAX_BOUNTIES_PER_WALLET_PER_DAY, 10),
+      maxWinsPerIdentityPerDay: parseInt(parsed.data.MAX_WINS_PER_IDENTITY_PER_DAY, 10),
     },
     sgt: {
       heliusApiKey: parsed.data.HELIUS_API_KEY || '',

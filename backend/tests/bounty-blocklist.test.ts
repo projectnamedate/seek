@@ -9,6 +9,8 @@ import {
 
 const BLOCKED_WALLET = 'Dfui8Dph4AKDVgzW5deynTvJN4n3UPvam3Sb4aH7BgU6';
 const BLOCKED_SGT = 'B1fHfkVLjnqCih7xcN7gDyDfu7eR2PtZxzQvZiupPPDH';
+const BLOCKED_WALLET_2 = '3vw6SovWwMAWJeKEqeFuDG2JndEnNp3o7TqDWL4W2Cvv';
+const BLOCKED_SGT_2 = '6PbD4qYLYG3n5K3dEaXMZjbhX2Jq44V1uLdvkxdVj1vV';
 
 test('address blocklist parsing trims whitespace and ignores empty entries', () => {
   assert.deepEqual(
@@ -24,6 +26,14 @@ test('bounty blocklist blocks the known wallet and known SGT mint', () => {
   );
   assert.equal(
     isBlockedBountyActor({ walletAddress: '11111111111111111111111111111111', sgtMintAddress: BLOCKED_SGT }),
+    true,
+  );
+  assert.equal(
+    isBlockedBountyActor({ walletAddress: BLOCKED_WALLET_2 }),
+    true,
+  );
+  assert.equal(
+    isBlockedBountyActor({ walletAddress: '11111111111111111111111111111111', sgtMintAddress: BLOCKED_SGT_2 }),
     true,
   );
 });

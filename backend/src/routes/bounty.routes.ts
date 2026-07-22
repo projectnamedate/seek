@@ -49,7 +49,6 @@ import { PublicKey } from '@solana/web3.js';
 import { isWalletSGTVerified, verifySGTOwnershipForWallet } from '../services/sgt.service';
 import {
   BLOCKED_BOUNTY_ERROR,
-  hasBlockedSgtMints,
   isBlockedBountyActor,
 } from '../services/bounty-blocklist.service';
 import {
@@ -62,7 +61,13 @@ import {
   BountySessionError,
   verifyBountySessionToken,
 } from '../services/bounty-session.service';
-import { getWalletDailyBountyStatus, reserveWalletDailyBounty } from '../services/wallet-bounty-limit.service';
+import {
+  getIdentityDailyWinStatus,
+  getWalletDailyBountyStatus,
+  identityForBountyLimits,
+  recordIdentityDailyWin,
+  reserveWalletDailyBounty,
+} from '../services/wallet-bounty-limit.service';
 import { validate } from '../middleware/validate.middleware';
 import { verifyWalletAuthRequest } from '../middleware/auth.middleware';
 import { bountyPrepareLimiter, bountyStartLimiter, bountySubmitLimiter } from '../middleware/rateLimiter.middleware';
@@ -121,9 +126,7 @@ function wholeSkr(baseUnits: bigint): number {
   return Number(baseUnits / SKR_MULTIPLIER);
 }
 
-async function blockedSgtMintForWallet(playerWallet: string): Promise<string | null> {
-  if (!hasBlockedSgtMints()) return null;
-
+async function verifiedSgtMintForWallet(playerWallet: string): Promise<string | null> {
   const cached = await isWalletSGTVerified(playerWallet);
   const result = cached?.verified
     ? cached
@@ -137,7 +140,7 @@ async function isWalletBlockedForBounties(playerWallet: string): Promise<boolean
     return true;
   }
 
-  const sgtMintAddress = await blockedSgtMintForWallet(playerWallet);
+  const sgtMintAddress = await verifiedSgtMintForWallet(playerWallet);
   return isBlockedBountyActor({ walletAddress: playerWallet, sgtMintAddress });
 }
 
@@ -146,6 +149,20 @@ function sendBlockedBountyResponse(res: Response) {
     success: false,
     error: BLOCKED_BOUNTY_ERROR,
   } as ApiResponse<never>);
+}
+
+function sendDailyWinLimitResponse(
+  res: Response,
+  dailyWinLimit: { limit: number; resetAt: Date },
+) {
+  return res.status(429).json({
+    success: false,
+    error: 'Daily win limit reached',
+    data: {
+      limit: dailyWinLimit.limit,
+      resetAt: dailyWinLimit.resetAt.toISOString(),
+    },
+  });
 }
 
 type BountySessionResolution =
@@ -225,15 +242,20 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
     }
     const bountySession = sessionResult.session;
 
-    if (
-      bountySession
-        ? isBlockedBountyActor({
-          walletAddress: playerWallet,
-          sgtMintAddress: bountySession.sgtMintAddress,
-        })
-        : await isWalletBlockedForBounties(playerWallet)
-    ) {
+    if (isBlockedBountyActor({ walletAddress: playerWallet })) {
       return sendBlockedBountyResponse(res);
+    }
+    const sgtMintAddress = bountySession?.sgtMintAddress
+      ?? await verifiedSgtMintForWallet(playerWallet);
+    if (isBlockedBountyActor({ walletAddress: playerWallet, sgtMintAddress })) {
+      return sendBlockedBountyResponse(res);
+    }
+
+    const dailyWinLimit = await getIdentityDailyWinStatus(
+      identityForBountyLimits(playerWallet, sgtMintAddress),
+    );
+    if (!dailyWinLimit.allowed) {
+      return sendDailyWinLimitResponse(res, dailyWinLimit);
     }
 
     const finalizerPause = await getFinalizerSafetyPause();
@@ -488,6 +510,13 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
 
     if (isBlockedBountyActor({ walletAddress: playerWallet, sgtMintAddress })) {
       return sendBlockedBountyResponse(res);
+    }
+
+    const dailyWinLimit = await getIdentityDailyWinStatus(
+      identityForBountyLimits(playerWallet, sgtMintAddress),
+    );
+    if (!dailyWinLimit.allowed) {
+      return sendDailyWinLimitResponse(res, dailyWinLimit);
     }
 
     const dailyLimit = await reserveWalletDailyBounty(playerWallet);
@@ -792,6 +821,25 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       signature,
       new Date(challengeEndsAt * 1000),
     );
+
+    if (success) {
+      try {
+        const recordedWin = await recordIdentityDailyWin(
+          identityForBountyLimits(bounty.playerWallet, bounty.sgtMintAddress),
+        );
+        if (!recordedWin.allowed) {
+          log.warn(
+            { bountyId, used: recordedWin.used, limit: recordedWin.limit },
+            'daily win cap exceeded after resolution',
+          );
+        }
+      } catch (error) {
+        log.error(
+          { err: error instanceof Error ? error.message : error, bountyId },
+          'failed to record daily win after resolution',
+        );
+      }
+    }
 
     // Build response
     const response: SubmitPhotoResponse = {
