@@ -12,6 +12,7 @@ import {
   LEGACY_ENTRY_AMOUNTS,
   SKR_MULTIPLIER,
   TIER_CONFIDENCE_THRESHOLDS,
+  ActiveBounty,
 } from '../types';
 import {
   createBounty,
@@ -21,6 +22,7 @@ import {
   isBountyExpired,
   getBountyMission,
   markBountyValidating,
+  setBountyResolutionOutcome,
   storeMissionSecrets,
   getMissionSecrets,
   storePreparedBounty,
@@ -32,6 +34,8 @@ import {
   releaseBountyLock,
   issueBountySubmitToken,
   verifyBountySubmitToken,
+  markMissionDelivered,
+  recoverBountyAfterValidationError,
 } from '../services/bounty.service';
 import { extractExifMetadata, formatMetadata } from '../services/exif.service';
 import { validatePhoto, isValidImageFormat, checkImageSize, canApplySgtConfidenceBonus } from '../services/ai.service';
@@ -41,6 +45,10 @@ import {
   generateMissionCommitment,
   getCurrentSlotAndTimestamp,
   resolveBountyOnChain,
+  recoverAcceptedBountyAccount,
+  getBountyOnChain,
+  bountyStatusName,
+  isPaymentRetrySafe,
   verifyTransaction,
 } from '../services/solana.service';
 import { getFinalizerSafetyPause } from '../services/finalizer.service';
@@ -63,7 +71,6 @@ import {
 } from '../services/bounty-session.service';
 import {
   getIdentityDailyWinStatus,
-  getWalletDailyBountyStatus,
   identityForBountyLimits,
   recordIdentityDailyWin,
   reserveWalletDailyBounty,
@@ -78,7 +85,7 @@ import { permissionPreflightSchema } from '../services/permission-preflight.serv
 const log = childLogger('bounty-routes');
 
 const router = Router();
-const CURRENT_CLIENT_PROTOCOL_VERSION = 3;
+const CURRENT_CLIENT_PROTOCOL_VERSION = 4;
 
 // Configure multer for photo uploads
 const upload = multer({
@@ -97,6 +104,8 @@ const startBountySchema = z.object({
   playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address (base58, 32-44 chars)'),
   bountyPda: z.string().regex(base58Pattern, 'Invalid PDA address (base58, 32-44 chars)'),
   transactionSignature: z.string().optional(),
+  recentBlockhash: z.string().min(32).max(64).optional(),
+  lastValidBlockHeight: z.number().int().positive().optional(),
   prepareId: z.string().min(32).max(128).optional(),
 });
 
@@ -104,6 +113,11 @@ const submitPhotoSchema = z.object({
   bountyId: z.string().uuid('Invalid bounty ID format'),
   playerWallet: z.string().regex(base58Pattern, 'Invalid Solana address').optional(),
   submitToken: z.string().min(32).max(128).optional(),
+});
+
+const acknowledgeMissionSchema = z.object({
+  bountyId: z.string().uuid('Invalid bounty ID format'),
+  submitToken: z.string().min(32).max(128),
 });
 
 // Prepare bounty schema (pre-transaction)
@@ -126,6 +140,46 @@ function wholeSkr(baseUnits: bigint): number {
   return Number(baseUnits / SKR_MULTIPLIER);
 }
 
+function sendUndeliveredExpiredResponse(res: Response, bounty: ActiveBounty) {
+  const cancelAvailableAt = Math.floor(bounty.expiresAt.getTime() / 1000) + 3600;
+  return res.status(410).json({
+    success: false,
+    error: 'The mission window expired before delivery. Your entry remains recoverable on-chain.',
+    data: {
+      recoveryRequired: true,
+      bountyPda: bounty.bountyPda,
+      cancelAvailableAt,
+    },
+  });
+}
+
+async function buildStartBountyResponse(
+  bounty: ActiveBounty,
+  missionDescription: string,
+): Promise<StartBountyResponse> {
+  const submitTokenTtl =
+    Math.ceil((bounty.expiresAt.getTime() - Date.now()) / 1000) + 10 * 60;
+  const submitToken = await issueBountySubmitToken(
+    bounty.id,
+    bounty.playerWallet,
+    submitTokenTtl,
+  );
+
+  return {
+    bountyId: bounty.id,
+    mission: {
+      id: bounty.missionId,
+      description: missionDescription,
+    },
+    expiresAt: bounty.expiresAt.toISOString(),
+    bountyPda: bounty.bountyPda,
+    submitToken,
+    sessionRequired: config.sessionProof.requireForBounties,
+    entryAmountSkr: wholeSkr(bounty.entryAmount),
+    returnAmountSkr: wholeSkr(bounty.entryAmount * 2n),
+  };
+}
+
 async function verifiedSgtMintForWallet(playerWallet: string): Promise<string | null> {
   const cached = await isWalletSGTVerified(playerWallet);
   const result = cached?.verified
@@ -133,15 +187,6 @@ async function verifiedSgtMintForWallet(playerWallet: string): Promise<string | 
     : await verifySGTOwnershipForWallet(playerWallet);
 
   return result?.sgtMintAddress ?? null;
-}
-
-async function isWalletBlockedForBounties(playerWallet: string): Promise<boolean> {
-  if (isBlockedBountyActor({ walletAddress: playerWallet })) {
-    return true;
-  }
-
-  const sgtMintAddress = await verifiedSgtMintForWallet(playerWallet);
-  return isBlockedBountyActor({ walletAddress: playerWallet, sgtMintAddress });
 }
 
 function sendBlockedBountyResponse(res: Response) {
@@ -281,7 +326,10 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
       });
     }
 
-    const dailyLimit = await getWalletDailyBountyStatus(playerWallet);
+    // Admission controls belong before payment. Once an exact prepared
+    // accept_bounty lands, /start must deliver or recover it rather than
+    // introducing a new post-payment denial.
+    const dailyLimit = await reserveWalletDailyBounty(playerWallet);
     if (!dailyLimit.allowed) {
       return res.status(429).json({
         success: false,
@@ -367,11 +415,15 @@ router.post('/prepare', bountyPrepareLimiter, validate(prepareBountySchema), asy
 // still proves the player authorized the on-chain accept_bounty.
 router.post('/start', bountyStartLimiter, validate(startBountySchema), async (req: Request, res: Response) => {
   try {
-    const { tier, bountyPda, transactionSignature, playerWallet, prepareId } = req.body;
-
-    if (isBlockedBountyActor({ walletAddress: playerWallet })) {
-      return sendBlockedBountyResponse(res);
-    }
+    const {
+      tier,
+      bountyPda,
+      transactionSignature,
+      recentBlockhash,
+      lastValidBlockHeight,
+      playerWallet,
+      prepareId,
+    } = req.body;
 
     // Acquire per-wallet lock (Redis-backed; multi-instance safe)
     if (!(await acquireWalletLock(playerWallet))) {
@@ -382,19 +434,6 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
     }
 
     try {
-    if (await isWalletBlockedForBounties(playerWallet)) {
-      return sendBlockedBountyResponse(res);
-    }
-
-    // Check for existing active bounty
-    const existing = await getPlayerActiveBounty(playerWallet);
-    if (existing) {
-      return res.status(409).json({
-        success: false,
-        error: 'Player already has an active bounty',
-      } as ApiResponse<never>);
-    }
-
     // Try to use prepared bounty data (from /prepare endpoint). New clients send
     // prepareId so anonymous callers cannot poison a wallet+bountyPda record.
     const prepared = prepareId
@@ -402,6 +441,9 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       : await getPreparedBounty(bountyPda);
 
     if (!prepared) {
+      if (isBlockedBountyActor({ walletAddress: playerWallet })) {
+        return sendBlockedBountyResponse(res);
+      }
       // No prepared data means commitment mismatch — reject
       return res.status(400).json({
         success: false,
@@ -436,14 +478,18 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
     }
 
     const sessionResult = await resolveBountySessionForWallet(req, playerWallet, {
-      required: config.sessionProof.requireForBounties || Boolean(prepared.sessionId),
+      // prepareId is a 256-bit recovery capability bound to the exact wallet,
+      // PDA, tier, commitment, and accepted on-chain account. An expired
+      // short-lived session must not strand an already-paid entry.
+      required: false,
     });
-    if (!sessionResult.ok) {
-      return sendBountySessionError(res, sessionResult);
-    }
-    const bountySession = sessionResult.session;
+    const bountySession = sessionResult.ok ? sessionResult.session : undefined;
 
-    if (prepared.sessionId && bountySession?.sessionId !== prepared.sessionId) {
+    if (
+      prepared.sessionId &&
+      bountySession &&
+      bountySession.sessionId !== prepared.sessionId
+    ) {
       return res.status(403).json({
         success: false,
         error: 'Bounty session does not match prepared bounty',
@@ -451,52 +497,153 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
     }
     if (
       prepared.sessionSgtMintAddress &&
-      bountySession?.sgtMintAddress !== prepared.sessionSgtMintAddress
+      bountySession &&
+      bountySession.sgtMintAddress !== prepared.sessionSgtMintAddress
     ) {
       return res.status(403).json({
         success: false,
         error: 'Bounty session SGT does not match prepared bounty',
       } as ApiResponse<never>);
     }
-    if (
-      bountySession &&
-      isBlockedBountyActor({
-        walletAddress: playerWallet,
-        sgtMintAddress: bountySession.sgtMintAddress,
-      })
-    ) {
-      return sendBlockedBountyResponse(res);
+    // /start is a recovery endpoint as well as the initial handoff. If the
+    // first response was lost after createBounty persisted, return the exact
+    // same mission and a fresh submit token. Never ask this wallet to pay
+    // again for the same prepared PDA.
+    const existing = await getPlayerActiveBounty(playerWallet);
+    if (existing) {
+      if (existing.bountyPda !== bountyPda) {
+        return res.status(409).json({
+          success: false,
+          error: 'Player already has a different active bounty',
+        } as ApiResponse<never>);
+      }
+
+      const mission = await getBountyMission(existing.id);
+      if (!mission) {
+        return res.status(500).json({
+          success: false,
+          error: 'Mission not found for existing paid bounty',
+        } as ApiResponse<never>);
+      }
+      if (
+        existing.requiresMissionAck &&
+        !existing.missionDeliveredAt &&
+        isBountyExpired(existing)
+      ) {
+        const onChainStatus = bountyStatusName(
+          await getBountyOnChain(existing.bountyPda),
+        );
+        if (onChainStatus === 'cancelled') {
+          await updateBountyStatus(existing.id, 'cancelled');
+          return res.status(200).json({
+            success: true,
+            data: {
+              paymentRecovered: true,
+              bountyPda: existing.bountyPda,
+            },
+          });
+        }
+        return sendUndeliveredExpiredResponse(res, existing);
+      }
+
+      const response = await buildStartBountyResponse(existing, mission.description);
+      // Delivery state must not depend solely on a client-controlled ACK. If a
+      // player could read the mission and deliberately withhold ACK, they
+      // could wait out a miss and reclaim the entry through cancel_bounty.
+      // Persist delivery before returning the mission; the durable mobile
+      // receipt makes this exact bounty recoverable if the response is lost.
+      await markMissionDelivered(existing.id);
+      log.info({ bountyId: existing.id }, 'resumed existing paid bounty');
+      return res.status(200).json({
+        success: true,
+        data: response,
+      } as ApiResponse<StartBountyResponse>);
     }
 
     // Verify on-chain transaction actually contains the prepared accept_bounty
     // call for THIS player, THIS bountyPda, THIS tier, and THIS amount.
     // Confirmation status alone is not enough — an attacker could paste any
     // random confirmed tx sig.
-    if (!transactionSignature) {
-      return res.status(400).json({
-        success: false,
-        error: 'transactionSignature required',
-      } as ApiResponse<never>);
-    }
-    const txVerified = await verifyTransaction(transactionSignature, playerWallet, bountyPda, {
+    const expectedAcceptance = {
       instructionVersion: prepared.instructionVersion,
       tier: prepared.tier,
       entryAmount: BigInt(prepared.entryAmount),
       timestamp: prepared.timestamp,
       commitment: prepared.commitment,
-    });
-    if (!txVerified) {
-      return res.status(400).json({
-        success: false,
-        error: 'Transaction does not contain a valid accept_bounty for this player + bountyPda',
-      } as ApiResponse<never>);
+    };
+    let acceptedAccount: any | null = null;
+    if (transactionSignature) {
+      const txVerified = await verifyTransaction(
+        transactionSignature,
+        playerWallet,
+        bountyPda,
+        expectedAcceptance,
+      );
+      if (!txVerified) {
+        const safeToRetryPayment = await isPaymentRetrySafe(
+          transactionSignature,
+          recentBlockhash,
+          lastValidBlockHeight,
+        );
+        return res.status(safeToRetryPayment ? 409 : 425).json({
+          success: false,
+          error: safeToRetryPayment
+            ? 'The previous transaction failed or expired without moving funds. A new payment is now safe.'
+            : 'Paid transaction is still confirming. Retry recovery; do not pay again.',
+          data: { safeToRetryPayment },
+        });
+      }
+      acceptedAccount = await recoverAcceptedBountyAccount(bountyPda, {
+        playerWallet,
+        tier: prepared.tier,
+        entryAmount: BigInt(prepared.entryAmount),
+        timestamp: prepared.timestamp,
+        commitment: prepared.commitment,
+      });
+    } else {
+      acceptedAccount = await recoverAcceptedBountyAccount(bountyPda, {
+        playerWallet,
+        tier: prepared.tier,
+        entryAmount: BigInt(prepared.entryAmount),
+        timestamp: prepared.timestamp,
+        commitment: prepared.commitment,
+      });
+      if (!acceptedAccount) {
+        if (!recentBlockhash || !lastValidBlockHeight) {
+          return res.status(425).json({
+            success: false,
+            error: 'Payment status is unknown. Retry recovery; do not pay again.',
+          } as ApiResponse<never>);
+        }
+        const safeToRetryPayment = await isPaymentRetrySafe(
+          undefined,
+          recentBlockhash,
+          lastValidBlockHeight,
+        );
+        return res.status(safeToRetryPayment ? 409 : 425).json({
+          success: false,
+          error: safeToRetryPayment
+            ? 'The previous transaction expired without landing. A new payment is now safe.'
+            : 'Wallet return is still settling. Retry recovery; do not pay again.',
+          data: { safeToRetryPayment },
+        });
+      }
+    }
+    if (bountyStatusName(acceptedAccount) === 'cancelled') {
+      return res.status(200).json({
+        success: true,
+        data: { paymentRecovered: true, bountyPda },
+      });
     }
 
     // Check SGT verification status. A bounty session already binds the wallet
     // to an SGT mint; old clients still use the passive Token-2022 lookup.
     let sgtVerified = false;
     let sgtMintAddress: string | null = null;
-    if (bountySession) {
+    if (prepared.sessionSgtMintAddress) {
+      sgtVerified = true;
+      sgtMintAddress = prepared.sessionSgtMintAddress;
+    } else if (bountySession) {
       sgtVerified = true;
       sgtMintAddress = bountySession.sgtMintAddress;
     } else {
@@ -506,29 +653,6 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
         : await verifySGTOwnershipForWallet(playerWallet);
       sgtVerified = sgtResult?.verified || false;
       sgtMintAddress = sgtResult?.sgtMintAddress ?? null;
-    }
-
-    if (isBlockedBountyActor({ walletAddress: playerWallet, sgtMintAddress })) {
-      return sendBlockedBountyResponse(res);
-    }
-
-    const dailyWinLimit = await getIdentityDailyWinStatus(
-      identityForBountyLimits(playerWallet, sgtMintAddress),
-    );
-    if (!dailyWinLimit.allowed) {
-      return sendDailyWinLimitResponse(res, dailyWinLimit);
-    }
-
-    const dailyLimit = await reserveWalletDailyBounty(playerWallet);
-    if (!dailyLimit.allowed) {
-      return res.status(429).json({
-        success: false,
-        error: 'Daily bounty limit reached',
-        data: {
-          limit: dailyLimit.limit,
-          resetAt: dailyLimit.resetAt.toISOString(),
-        },
-      });
     }
 
     // Create bounty using the prepared mission (not a new random one)
@@ -541,33 +665,32 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       sgtMintAddress,
       prepared.missionId, // Use the prepared mission, not a random one
       BigInt(prepared.entryAmount),
-      bountySession
+      prepared.sessionId
         ? {
-          sessionId: bountySession.sessionId,
-          sessionClientProtocolVersion: bountySession.clientProtocolVersion,
+          sessionId: prepared.sessionId,
+          sessionClientProtocolVersion:
+            prepared.sessionClientProtocolVersion ?? 3,
         }
-        : undefined,
+        : bountySession
+          ? {
+            sessionId: bountySession.sessionId,
+            sessionClientProtocolVersion: bountySession.clientProtocolVersion,
+          }
+          : undefined,
+      prepared.timestamp,
     );
 
     // Store prepared mission secrets (must match on-chain commitment)
     await storeMissionSecrets(bounty.id, prepared.missionIdBytes, prepared.salt);
-    const submitTokenTtl = Math.ceil((bounty.expiresAt.getTime() - Date.now()) / 1000) + 10 * 60;
-    const submitToken = await issueBountySubmitToken(bounty.id, bounty.playerWallet, submitTokenTtl);
-
-    // Return response
-    const response: StartBountyResponse = {
-      bountyId: bounty.id,
-      mission: {
-        id: bounty.missionId,
-        description: missionDescription,
-      },
-      expiresAt: bounty.expiresAt.toISOString(),
-      bountyPda: bounty.bountyPda,
-      submitToken,
-      sessionRequired: config.sessionProof.requireForBounties,
-      entryAmountSkr: wholeSkr(bounty.entryAmount),
-      returnAmountSkr: wholeSkr(bounty.entryAmount * 2n),
-    };
+    if (
+      bounty.requiresMissionAck &&
+      !bounty.missionDeliveredAt &&
+      isBountyExpired(bounty)
+    ) {
+      return sendUndeliveredExpiredResponse(res, bounty);
+    }
+    const response = await buildStartBountyResponse(bounty, missionDescription);
+    await markMissionDelivered(bounty.id);
 
     log.info({ bountyId: bounty.id, tier, missionDescription }, 'bounty started');
 
@@ -584,6 +707,34 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
       success: false,
       error: 'Internal server error',
     } as ApiResponse<never>);
+  }
+});
+
+/**
+ * POST /api/bounty/ack
+ * Confirm the mission response reached a protocol-v4 client. Until this ack,
+ * the expiry worker must not turn an undelivered paid mission into a loss.
+ */
+router.post('/ack', bountyStartLimiter, validate(acknowledgeMissionSchema), async (req: Request, res: Response) => {
+  try {
+    const { bountyId, submitToken } = req.body;
+    const bounty = await getBounty(bountyId);
+    if (!bounty) {
+      return res.status(404).json({ success: false, error: 'Bounty not found' });
+    }
+    if (!(await verifyBountySubmitToken(bountyId, submitToken, bounty.playerWallet))) {
+      return res.status(403).json({ success: false, error: 'Invalid bounty submit token' });
+    }
+    if (!(await markMissionDelivered(bountyId))) {
+      return res.status(409).json({
+        success: false,
+        error: `Mission cannot be acknowledged in status ${bounty.status}`,
+      });
+    }
+    return res.status(200).json({ success: true, data: { acknowledged: true } });
+  } catch (error) {
+    log.error({ err: error instanceof Error ? error.message : error }, 'mission ack error');
+    return res.status(500).json({ success: false, error: 'Internal server error' });
   }
 });
 
@@ -645,16 +796,6 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
         success: false,
         error: 'Bounty not found',
       } as ApiResponse<never>);
-    }
-
-    if (
-      isBlockedBountyActor({
-        walletAddress: bounty.playerWallet,
-        sgtMintAddress: bounty.sgtMintAddress,
-      }) ||
-      (!bounty.sgtMintAddress && await isWalletBlockedForBounties(bounty.playerWallet))
-    ) {
-      return sendBlockedBountyResponse(res);
     }
 
     const sessionResult = await resolveBountySessionForWallet(req, bounty.playerWallet, {
@@ -723,7 +864,9 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
 
     // Check expiration
     if (isBountyExpired(bounty)) {
-      await updateBountyStatus(bountyId, 'expired');
+      // Keep the local state Pending. The expiry worker owns the durable
+      // reveal/propose(false) transition; marking this `expired` here would
+      // remove it from that worker and strand the on-chain entry.
       return res.status(400).json({
         success: false,
         error: 'Bounty has expired',
@@ -805,6 +948,7 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
 
     // Resolve on-chain
     const success = validation.isValid;
+    await setBountyResolutionOutcome(bountyId, success);
     const secrets = await getMissionSecrets(bountyId);
     const { signature, challengeEndsAt, singularityWon } = await resolveBountyOnChain(
       bounty.bountyPda,
@@ -865,6 +1009,9 @@ router.post('/submit', bountySubmitLimiter, upload.single('photo'), async (req: 
       success: true,
       data: response,
     } as ApiResponse<SubmitPhotoResponse>);
+    } catch (error) {
+      await recoverBountyAfterValidationError(bountyId);
+      throw error;
     } finally {
       await releaseBountyLock(bountyId);
     }

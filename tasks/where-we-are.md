@@ -1,4 +1,67 @@
-# Where we are - Seek - 2026-07-21 - repeat-win abuse contained on VPS
+# Where we are - Seek - 2026-07-28 - paid mission recovery fix in review
+
+## Current State
+
+- The paid-mission handoff incident is contained and fixed. The operator
+  already refunded the ten identified accounts; this session did not issue or
+  duplicate refunds and did not sign cancel/resolve/finalize transactions for
+  those accounts.
+- Production backend repair is live on the Helsinki VPS. `/start` now recovers
+  exact paid PDAs without requiring another transaction, prepared mission
+  secrets persist for 24 hours, resolution/finalization reconcile ambiguous
+  RPC outcomes, and stale `validating` records with a persisted outcome resume
+  safely. Deployed source hashes match local and `/opt/seek-api/.env` remained
+  unchanged at mode `0600`.
+- Paid starts are open so the currently live v1.0.5 remains usable while
+  v1.0.6 is reviewed. At the operator's direction, the incident pause key was
+  deleted and the API restarted to clear its cached copy. A no-payment request
+  using v1.0.5's exact client protocol version `3` returned HTTP `200` from
+  `/prepare`; Redis confirms the pause key is absent. No transaction was built,
+  signed, or sent.
+- v1.0.5 benefits from the repaired idempotent backend but cannot persist an
+  ambiguous MWA handoff across a full app crash. The operator explicitly
+  accepted that residual risk and will personally handle any exceptional
+  refunds until v1.0.6 replaces it. v1.0.6 removes that device-side gap.
+- Final read-only on-chain state after deploy is unchanged: 218 total bounties,
+  comprising 183 Lost, 25 Won, 7 Pending, 2 Submitted, and 1 ChallengeLost.
+  `active_bounty_count=10` and active payout liability is `13,000 SKR`.
+- Mobile v1.0.6 / versionCode `7` durably saves the expected PDA, prepare ID,
+  recent blockhash, and last-valid block height before opening MWA. App restart,
+  missing wallet signature return, delayed RPC indexing, and lost `/start`
+  responses all resume the same payment. A second payment is allowed only
+  after chain evidence proves atomic failure or expiry without landing.
+- The signed release APK is
+  `mobile/android/app/build/outputs/apk/release/app-release.apk`, SHA-256
+  `497f54cf14c7e4d5a99181ea104b23d96198155ecca228414ee39e6fae7d9ae6`.
+  Package is `app.seek.mobile`, versionName `1.0.6`, versionCode `7`; signer
+  certificate SHA-256 remains
+  `c50d2751f3ede1c7e3e04aab312f497783e79b95b28a1835ee23b668d80af17c`.
+- v1.0.6 is submitted to Solana Mobile dApp Store review:
+  ticket `325451334378`, release mint
+  `FtooC9RXFo8VYheHiyLXcvRxCRCYHqGKqh3ShVuPpmYn`, ingestion session
+  `397833df-6aa5-42bd-9722-edfe16c2bf8c`, release ID
+  `2b144155-a0d6-4ef4-8ab6-2da5c9161c2a`, publication session
+  `96d98e90-ce7c-41c4-94f5-0b8bbd9a16e3`, and attestation request
+  `82554495546019744436956909714113`. Publisher balance after submission is
+  `0.03522762 SOL`.
+- Validation PASS: backend launch suite 68/68; backend build/typecheck; mobile
+  typecheck; contract tests 25/25; mainnet cargo check with known Anchor cfg
+  warnings; dApp assets; signed release assembly; APK package/signature;
+  `git diff --check`; live source parity, readiness, protocol-v3 admission,
+  stats, logs, and unchanged chain counts.
+- Latest three commits before this incident closeout are `d990303`,
+  `4c65999`, and `d23bf3d`. The branch has no upstream and remains local-only.
+  The pre-existing user-owned `AGENTS.md` change, both generated Codex
+  checkpoints, and `stash@{0}` remain preserved and intentionally uncommitted.
+- Next concrete action: watch ticket `325451334378`. Once the portal shows
+  v1.0.6 live, install/update from the dApp Store, verify versionCode `7`, and
+  run a launch/connect/mission smoke on the Seeker. Paid starts are already
+  admitted; do not recreate the incident pause unless new loss evidence or
+  settlement lag requires containment.
+
+---
+
+# Historical state - 2026-07-21 - repeat-win abuse contained on VPS
 
 ## Current State
 

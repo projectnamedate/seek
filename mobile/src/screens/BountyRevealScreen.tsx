@@ -14,10 +14,23 @@ import { PublicKey } from '@solana/web3.js';
 import { colors, spacing, fontSize, borderRadius, shadows } from '../theme';
 import { RootStackParamList, TIERS, Bounty } from '../types';
 import apiService from '../services/api.service';
-import { buildAcceptBountyTransaction } from '../services/solana.mobile';
+import {
+  buildAcceptBountyTransaction,
+  buildCancelBountyTransaction,
+} from '../services/solana.mobile';
 import { getOrCreateBountySession } from '../services/session.service';
+import {
+  pendingStartForWallet,
+  toStartBountyOptions,
+  type PendingBountyStart,
+} from '../services/pending-bounty-start';
 import { useApp } from '../context/AppContext';
 import { formatTime } from '../utils/format';
+import {
+  clearPendingBountyStart,
+  getPendingBountyStart,
+  savePendingBountyStart,
+} from '../utils/storage';
 import { hasSeekPermissions, requestSeekPermissions } from '../services/permissions.service';
 import { TOKEN } from '../config';
 
@@ -54,6 +67,8 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
   const rotateAnim = useRef(new Animated.Value(0)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
   const statusSpinAnim = useRef(new Animated.Value(0)).current;
+  const startInFlight = useRef(false);
+  const pendingReceiptRef = useRef<PendingBountyStart | null>(null);
 
   // Start the on-chain flow as soon as the screen mounts.
   useEffect(() => {
@@ -82,7 +97,43 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
    * 5. Call /start with bountyPda + tx signature
    * 6. Get mission details back
    */
+  const recoverExpiredEntry = async (receipt: PendingBountyStart) => {
+    const playerWallet = wallet.fullAddress;
+    if (!playerWallet || !connection || playerWallet !== receipt.playerWallet) {
+      Alert.alert('Recovery Error', 'Reconnect the wallet that paid for this hunt.');
+      return;
+    }
+
+    try {
+      setStatusText('Approve entry recovery in Seeker Wallet...');
+      const transaction = await buildCancelBountyTransaction(
+        connection,
+        new PublicKey(playerWallet),
+        new PublicKey(receipt.bountyPda),
+      );
+      const slot = await connection.getSlot('confirmed');
+      const signature = await signAndSendTransaction(transaction, slot);
+      if (typeof signature !== 'string') {
+        throw new Error('Wallet did not return a recovery transaction signature');
+      }
+      await clearPendingBountyStart(receipt.bountyPda);
+      pendingReceiptRef.current = null;
+      Alert.alert(
+        'Entry Recovery Submitted',
+        'Your wallet submitted the on-chain entry recovery. No additional payment was sent.',
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
+    } catch (error: any) {
+      Alert.alert(
+        'Recovery Not Submitted',
+        `${error?.message || 'Wallet recovery failed'}\n\nThe paid receipt is still saved. No new entry payment was sent.`,
+      );
+    }
+  };
+
   const startOnChainBounty = async () => {
+    if (startInFlight.current) return;
+
     const playerWallet = wallet.fullAddress;
     if (!playerWallet || !connection) {
       Alert.alert('Error', 'Wallet not connected');
@@ -90,149 +141,264 @@ export default function BountyRevealScreen({ navigation, route }: Props) {
       return;
     }
 
+    startInFlight.current = true;
+    let paidReceipt: PendingBountyStart | null = null;
+
     try {
-      setStatusText('Checking camera and location...');
-      const permissionState = await requestSeekPermissions();
-      if (!hasSeekPermissions(permissionState)) {
+      const storedReceipt = pendingReceiptRef.current ?? await getPendingBountyStart();
+      if (storedReceipt && storedReceipt.playerWallet !== playerWallet) {
+        throw new Error(
+          'A paid hunt is still waiting on the wallet that started it. Reconnect that wallet to recover its mission.',
+        );
+      }
+      paidReceipt = pendingStartForWallet(storedReceipt, playerWallet);
+
+      if (!paidReceipt) {
+        setStatusText('Checking camera and location...');
+        const permissionState = await requestSeekPermissions();
+        if (!hasSeekPermissions(permissionState)) {
+          Alert.alert(
+            'Permissions Required',
+            'Camera and location access are required before starting a paid hunt. No SKR has been moved.',
+            [{ text: 'OK', onPress: () => navigation.goBack() }],
+          );
+          return;
+        }
+
+        setStatusText('Creating secure session...');
+        const bountySession = await getOrCreateBountySession(playerWallet, signMessage);
+
+        setStatusText('Preparing bounty...');
+        const prepResult = await apiService.prepareBounty(playerWallet, tier, {
+          permissionsConfirmed: true,
+          sessionToken: bountySession.sessionToken,
+        });
+        if (!prepResult.success || !prepResult.data) {
+          throw new Error(prepResult.error || 'Failed to prepare bounty');
+        }
+
+        const {
+          commitment,
+          prepareId,
+          timestamp,
+          bountyPda,
+          entryAmount,
+          entryAmountSkr,
+          instructionVersion,
+          returnAmountSkr,
+        } = prepResult.data;
+        if (__DEV__) {
+          console.log('[BountyReveal] Prepared:', {
+            bountyPda: bountyPda.slice(0, 8),
+            timestamp,
+            instructionVersion,
+          });
+        }
+
+        setStatusText('Building transaction...');
+        const transaction = await buildAcceptBountyTransaction(
+          connection,
+          new PublicKey(playerWallet),
+          BigInt(entryAmount),
+          BigInt(timestamp),
+          commitment,
+          new PublicKey(bountyPda),
+          {
+            instructionVersion: instructionVersion ?? 1,
+            tier,
+          },
+        );
+
+        if (!transaction.recentBlockhash || !transaction.lastValidBlockHeight) {
+          throw new Error('Wallet transaction expiry metadata is unavailable');
+        }
+        paidReceipt = {
+          playerWallet,
+          tier,
+          bountyPda,
+          recentBlockhash: transaction.recentBlockhash,
+          lastValidBlockHeight: transaction.lastValidBlockHeight,
+          prepareId,
+          sessionToken: bountySession.sessionToken,
+          entryAmountSkr:
+            entryAmountSkr ?? wholeSkrFromBaseUnits(entryAmount),
+          returnAmountSkr:
+            returnAmountSkr ??
+            (entryAmountSkr ?? wholeSkrFromBaseUnits(entryAmount)) * 2,
+          createdAt: Date.now(),
+        };
+        // Persist the expected PDA before opening MWA. If the app is killed
+        // during the wallet deep link, /start can recover from the on-chain
+        // account without needing the lost signature string.
+        pendingReceiptRef.current = paidReceipt;
+        await savePendingBountyStart(paidReceipt);
+
+        setStatusText('Approve in Seeker Wallet...');
+        let slot: number | undefined;
+        try {
+          slot = await Promise.race([
+            connection.getSlot('confirmed'),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error('slot timeout')), 5000)),
+          ]);
+        } catch {
+          if (__DEV__) {
+            console.warn('[BountyReveal] getSlot timed out, sending without minContextSlot');
+          }
+        }
+
+        const txSignature = await signAndSendTransaction(
+          transaction,
+          ...(slot !== undefined ? [slot] : []) as [number],
+        );
+        if (typeof txSignature !== 'string') {
+          throw new Error('Wallet did not return a transaction signature');
+        }
+        if (__DEV__) console.log('[BountyReveal] Tx sent:', txSignature);
+
+        paidReceipt = {
+          ...paidReceipt,
+          transactionSignature: txSignature,
+        };
+        // Set the memory guard before touching storage. Even if AsyncStorage
+        // fails, this mounted screen will never build a second payment.
+        pendingReceiptRef.current = paidReceipt;
+        await savePendingBountyStart(paidReceipt);
+
+        // Brief delay after wallet return to let the deep link settle. Backend
+        // transaction verification also polls RPC indexing.
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      } else {
+        pendingReceiptRef.current = paidReceipt;
+      }
+
+      setStatusText('Recovering paid mission...');
+      const startResult = await apiService.startBounty(
+        playerWallet,
+        paidReceipt.tier,
+        toStartBountyOptions(paidReceipt),
+      );
+
+      if (!startResult.success) {
+        if (startResult.data?.recoveryRequired) {
+          const cancelAvailableAt = Number(startResult.data.cancelAvailableAt);
+          const recoveryAvailable = Date.now() > cancelAvailableAt * 1000;
+          const actions = recoveryAvailable
+            ? [
+                {
+                  text: 'Recover Entry',
+                  onPress: () => recoverExpiredEntry(paidReceipt!),
+                },
+                { text: 'Close', onPress: () => navigation.goBack() },
+              ]
+            : [{ text: 'Close', onPress: () => navigation.goBack() }];
+          Alert.alert(
+            'Mission Was Not Delivered',
+            recoveryAvailable
+              ? 'The mission timer expired before delivery. Your original entry is still in the contract and can now be recovered with one wallet approval.'
+              : `The mission timer expired before delivery. Your entry remains in the contract and becomes recoverable after ${new Date(cancelAvailableAt * 1000).toLocaleString()}.`,
+            actions,
+          );
+          return;
+        }
+        if (startResult.data?.safeToRetryPayment) {
+          await clearPendingBountyStart(paidReceipt.bountyPda);
+          pendingReceiptRef.current = null;
+          paidReceipt = null;
+        }
+        throw new Error(startResult.error || 'Paid mission recovery is still pending');
+      }
+
+      const responseData = startResult.data;
+      if (responseData?.paymentRecovered) {
+        await clearPendingBountyStart(paidReceipt.bountyPda);
+        pendingReceiptRef.current = null;
         Alert.alert(
-          'Permissions Required',
-          'Camera and location access are required before starting a paid hunt. No SKR has been moved.',
+          'Entry Recovered',
+          'The contract confirms this undelivered mission was cancelled and the entry was recovered.',
           [{ text: 'OK', onPress: () => navigation.goBack() }],
         );
         return;
       }
-
-      setStatusText('Creating secure session...');
-      const bountySession = await getOrCreateBountySession(playerWallet, signMessage);
-
-      // Step 2: Prepare bounty (get commitment from backend)
-      setStatusText('Preparing bounty...');
-      const prepResult = await apiService.prepareBounty(playerWallet, tier, {
-        permissionsConfirmed: true,
-        sessionToken: bountySession.sessionToken,
-      });
-      if (!prepResult.success || !prepResult.data) {
-        throw new Error(prepResult.error || 'Failed to prepare bounty');
+      if (!responseData?.bountyId || !responseData?.submitToken) {
+        throw new Error('Mission recovery response was incomplete');
       }
-
-      const {
-        commitment,
-        prepareId,
-        timestamp,
-        bountyPda,
-        entryAmount,
-        entryAmountSkr,
-        instructionVersion,
-        returnAmountSkr,
-      } = prepResult.data;
-      if (__DEV__) {
-        console.log('[BountyReveal] Prepared:', {
-          bountyPda: bountyPda.slice(0, 8),
-          timestamp,
-          instructionVersion,
-        });
-      }
-
-      // Step 3: Build the accept_bounty transaction
-      setStatusText('Building transaction...');
-      const playerPubkey = new PublicKey(playerWallet);
-      const bountyPdaPubkey = new PublicKey(bountyPda);
-      const transaction = await buildAcceptBountyTransaction(
-        connection,
-        playerPubkey,
-        BigInt(entryAmount),
-        BigInt(timestamp),
-        commitment,
-        bountyPdaPubkey,
-        {
-          instructionVersion: instructionVersion ?? 1,
-          tier,
-        }
+      const ackResult = await apiService.acknowledgeMission(
+        responseData.bountyId,
+        responseData.submitToken,
       );
-
-      // Step 4: Sign & send via wallet (only on-chain approval for this flow)
-      setStatusText('Approve in Seeker Wallet...');
-      let slot: number | undefined;
-      try {
-        slot = await Promise.race([
-          connection.getSlot('confirmed'),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('slot timeout')), 5000)),
-        ]);
-      } catch {
-        if (__DEV__) console.warn('[BountyReveal] getSlot timed out, sending without minContextSlot');
+      if (!ackResult.success) {
+        throw new Error(
+          ackResult.error || 'Mission delivery acknowledgement is still pending',
+        );
       }
-      const txSignature = await signAndSendTransaction(transaction, ...(slot !== undefined ? [slot] : []) as [number]);
-      if (__DEV__) console.log('[BountyReveal] Tx sent:', txSignature);
-
-      // Brief delay after wallet return to let network stabilize
-      await new Promise(r => setTimeout(r, 1500));
-
-      // Step 5: Call /start. The session token binds this to /prepare; the
-      // on-chain tx signature authorizes the paid bounty.
-      setStatusText('Starting mission...');
-      if (__DEV__) console.log('[BountyReveal] Calling /start...');
-      if (typeof txSignature !== 'string') {
-        throw new Error('Wallet did not return a transaction signature');
-      }
-      const startResult = await apiService.startBounty(
-        playerWallet,
-        tier,
-        {
-          bountyPda,
-          transactionSignature: txSignature,
-          prepareId,
-          sessionToken: bountySession.sessionToken,
-        },
-      );
-
-      if (!startResult.success) {
-        throw new Error(startResult.error || 'Failed to start bounty');
-      }
-
-      // Step 6: Build bounty object from response
-      const responseData = startResult.data;
       const now = Date.now();
       const description = responseData?.mission?.description || 'Find the target';
       const { target, hint } = parseMissionDescription(description);
-
-      const displayEntryAmount = responseData?.entryAmountSkr ?? entryAmountSkr ?? wholeSkrFromBaseUnits(entryAmount);
-      const displayReturnAmount = responseData?.returnAmountSkr ?? returnAmountSkr ?? displayEntryAmount * 2;
+      const recoveredTier = paidReceipt.tier;
+      const recoveredTierData = TIERS[recoveredTier];
+      const displayEntryAmount =
+        responseData?.entryAmountSkr ?? paidReceipt.entryAmountSkr;
+      const displayReturnAmount =
+        responseData?.returnAmountSkr ?? paidReceipt.returnAmountSkr;
 
       const newBounty: Bounty = {
         id: responseData?.bountyId || `onchain-${now}`,
-        tier,
+        tier: recoveredTier,
         target,
         targetHint: hint,
         startTime: now,
         endTime: responseData?.expiresAt
           ? new Date(responseData.expiresAt).getTime()
-          : now + tierData.timeLimit * 1000,
+          : now + recoveredTierData.timeLimit * 1000,
         status: 'revealing',
         entryAmount: displayEntryAmount,
         potentialReward: displayReturnAmount,
-        bountyPda,
+        bountyPda: paidReceipt.bountyPda,
         submitToken: responseData?.submitToken,
-        sessionToken: bountySession.sessionToken,
-        sessionExpiresAt: bountySession.expiresAt,
-        sgtMintAddress: bountySession.sgtMintAddress,
+        sessionToken: paidReceipt.sessionToken,
       };
 
       if (__DEV__) console.log('[BountyReveal] On-chain bounty started:', newBounty.id);
+      await clearPendingBountyStart(paidReceipt.bountyPda);
+      pendingReceiptRef.current = null;
       setBounty(newBounty);
     } catch (error: any) {
       if (__DEV__) console.error('[BountyReveal] On-chain flow error:', error);
       const message = error?.message || 'Transaction failed';
 
-      // User cancelled in wallet
-      if (message.includes('cancel') || message.includes('rejected') || message.includes('declined')) {
+      // Wallet rejection text is not enough to prove the transaction did not
+      // land: MWA can lose the signature during an interrupted deep-link
+      // return. Preserve any pre-wallet receipt until /start proves the PDA is
+      // absent and the prepared blockhash has expired.
+      const walletRejected =
+        message.includes('cancel') ||
+        message.includes('rejected') ||
+        message.includes('declined');
+      if (!paidReceipt && walletRejected) {
         navigation.goBack();
         return;
       }
 
-      Alert.alert('Transaction Failed', message, [
-        { text: 'Try Again', onPress: () => startOnChainBounty() },
-        { text: 'Cancel', onPress: () => navigation.goBack() },
-      ]);
+      if (paidReceipt) {
+        Alert.alert(
+          paidReceipt.transactionSignature
+            ? 'Payment Confirmed — Recovering Mission'
+            : 'Checking Payment Status',
+          `${message}\n\nRetry will reuse the confirmed payment. It will not send another transaction.`,
+          [
+            { text: 'Retry Recovery', onPress: () => startOnChainBounty() },
+            { text: 'Close', onPress: () => navigation.goBack() },
+          ],
+        );
+      } else {
+        Alert.alert('Transaction Failed', message, [
+          { text: 'Try Again', onPress: () => startOnChainBounty() },
+          { text: 'Cancel', onPress: () => navigation.goBack() },
+        ]);
+      }
+    } finally {
+      startInFlight.current = false;
     }
   };
 

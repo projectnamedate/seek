@@ -23,6 +23,7 @@ const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xW
 // accept_bounty instruction discriminator (from IDL)
 const ACCEPT_BOUNTY_DISCRIMINATOR = Buffer.from([165, 37, 99, 130, 123, 244, 67, 35]);
 const ACCEPT_BOUNTY_V2_DISCRIMINATOR = Buffer.from([6, 224, 241, 216, 81, 119, 234, 132]);
+const CANCEL_BOUNTY_DISCRIMINATOR = Buffer.from([79, 65, 107, 143, 128, 165, 135, 46]);
 
 // Program public key
 const SEEK_PROGRAM_ID = new PublicKey(PROGRAM_ID);
@@ -185,5 +186,41 @@ export async function buildAcceptBountyTransaction(
   transaction.lastValidBlockHeight = lastValidBlockHeight;
   transaction.feePayer = playerPubkey;
 
+  return transaction;
+}
+
+/**
+ * Build the player-signed recovery transaction for a Pending bounty whose
+ * mission was never delivered and whose on-chain expiry + 1h grace has passed.
+ */
+export async function buildCancelBountyTransaction(
+  connection: Connection,
+  playerPubkey: PublicKey,
+  bountyPda: PublicKey,
+): Promise<Transaction> {
+  const [globalStatePda] = deriveGlobalStatePda();
+  const [houseVaultPda] = deriveHouseVaultPda();
+  const playerTokenAccount = getAssociatedTokenAddress(SKR_MINT, playerPubkey);
+
+  const transaction = new Transaction().add(
+    new TransactionInstruction({
+      programId: SEEK_PROGRAM_ID,
+      keys: [
+        { pubkey: playerPubkey, isSigner: true, isWritable: true },
+        { pubkey: globalStatePda, isSigner: false, isWritable: true },
+        { pubkey: bountyPda, isSigner: false, isWritable: true },
+        { pubkey: playerTokenAccount, isSigner: false, isWritable: true },
+        { pubkey: houseVaultPda, isSigner: false, isWritable: true },
+        { pubkey: TOKEN_PROGRAM_ID, isSigner: false, isWritable: false },
+      ],
+      data: CANCEL_BOUNTY_DISCRIMINATOR,
+    }),
+  );
+
+  const { blockhash, lastValidBlockHeight } =
+    await connection.getLatestBlockhash('confirmed');
+  transaction.recentBlockhash = blockhash;
+  transaction.lastValidBlockHeight = lastValidBlockHeight;
+  transaction.feePayer = playerPubkey;
   return transaction;
 }

@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { PendingBountyStart } from '../services/pending-bounty-start';
 
 /**
  * Storage utilities for persisting data
@@ -9,6 +10,7 @@ const KEYS = {
   STATS: 'seek_stats',
   SETTINGS: 'seek_settings',
   LAST_BOUNTY: 'seek_last_bounty',
+  PENDING_BOUNTY_START: 'seek_pending_bounty_start',
 } as const;
 
 /**
@@ -55,6 +57,41 @@ export async function getWalletAddress(): Promise<string | null> {
  */
 export async function clearWalletAddress(): Promise<void> {
   await AsyncStorage.removeItem(KEYS.WALLET_ADDRESS);
+}
+
+export async function savePendingBountyStart(receipt: PendingBountyStart): Promise<void> {
+  await AsyncStorage.setItem(KEYS.PENDING_BOUNTY_START, JSON.stringify(receipt));
+}
+
+export async function getPendingBountyStart(): Promise<PendingBountyStart | null> {
+  try {
+    const raw = await AsyncStorage.getItem(KEYS.PENDING_BOUNTY_START);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PendingBountyStart;
+    if (
+      !parsed.playerWallet ||
+      !parsed.bountyPda ||
+      !parsed.recentBlockhash ||
+      !parsed.lastValidBlockHeight ||
+      !parsed.prepareId ||
+      !parsed.sessionToken
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export async function clearPendingBountyStart(receiptKey: string): Promise<void> {
+  const current = await getPendingBountyStart();
+  if (
+    current?.transactionSignature === receiptKey ||
+    current?.bountyPda === receiptKey
+  ) {
+    await AsyncStorage.removeItem(KEYS.PENDING_BOUNTY_START);
+  }
 }
 
 /**

@@ -20,6 +20,8 @@ import {
   deriveHouseVaultPda,
   deriveSingularityVaultPda,
   SKR_MINT,
+  getBountyOnChain,
+  isTerminalBountyStatus,
 } from './solana.service';
 import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../config';
@@ -368,6 +370,23 @@ async function finalizeReadyBounty(pending: PendingFinalization): Promise<void> 
     await removeQueueEntry(pending.bountyPda);
     log.info({ bountyPda: pending.bountyPda.slice(0, 8), signature }, 'finalized bounty');
   } catch (error: any) {
+    // A timed-out finalize RPC can still land. Reconcile before counting an
+    // attempt so an already terminal bounty is success, not ten false
+    // BountyNotPending failures followed by a critical page.
+    const onChainBounty = await getBountyOnChain(pending.bountyPda);
+    if (isTerminalBountyStatus(onChainBounty)) {
+      pendingFinalizations.delete(pending.bountyPda);
+      await removeQueueEntry(pending.bountyPda);
+      log.info(
+        {
+          bountyPda: pending.bountyPda.slice(0, 8),
+          status: Object.keys(onChainBounty.status ?? {})[0] ?? 'terminal',
+        },
+        'finalize reconciled after ambiguous RPC result',
+      );
+      return;
+    }
+
     if (isChallengePeriodActiveError(error)) {
       const now = Math.floor(Date.now() / 1000);
       pending.challengeEndsAt = now + CHALLENGE_PERIOD_RETRY_SECONDS;

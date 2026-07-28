@@ -1,5 +1,21 @@
 # Lessons Learned
 
+## Release Verification
+
+### A built release is not a submitted release
+- On 2026-07-28, I described v1.0.6 as ready for users after building the APK
+  and deploying the backend, even though the Solana Mobile portal still showed
+  only v1.0.5. I then incorrectly handed the upload back to the operator when
+  an initial publisher-key inspection was blocked.
+- **Rule:** Never say a store update was pushed, submitted, or is about to
+  reach users without current CLI or portal proof containing the new version
+  and a review ticket or release identifier. Build success and backend
+  deployment are separate facts.
+- **Rule:** Use the established portal-backed CLI first. If a credential path
+  is stale, locate it by filename without printing contents, pass the API key
+  via stdin, and use an idempotency key. Ask the operator to take over only
+  after the known workflow is genuinely unavailable.
+
 ## Mobile UX Copy
 
 ### Failed missions should not say missed

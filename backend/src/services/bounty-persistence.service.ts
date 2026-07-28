@@ -23,6 +23,9 @@ export interface SerializedActiveBounty {
   sessionId?: string;
   sessionClientProtocolVersion?: number;
   attestationType?: 'none' | 'standard';
+  resolutionOutcome?: boolean;
+  requiresMissionAck?: boolean;
+  missionDeliveredAt?: string;
 }
 
 export function serializeActiveBounty(bounty: ActiveBounty): SerializedActiveBounty {
@@ -33,11 +36,12 @@ export function serializeActiveBounty(bounty: ActiveBounty): SerializedActiveBou
     expiresAt: bounty.expiresAt.toISOString(),
     challengeEndsAt: bounty.challengeEndsAt?.toISOString(),
     disputedAt: bounty.disputedAt?.toISOString(),
+    missionDeliveredAt: bounty.missionDeliveredAt?.toISOString(),
   };
 }
 
 export function deserializeActiveBounty(serialized: SerializedActiveBounty): ActiveBounty {
-  const { challengeEndsAt, disputedAt, ...rest } = serialized;
+  const { challengeEndsAt, disputedAt, missionDeliveredAt, ...rest } = serialized;
   const bounty: ActiveBounty = {
     ...rest,
     entryAmount: BigInt(serialized.entryAmount),
@@ -50,6 +54,9 @@ export function deserializeActiveBounty(serialized: SerializedActiveBounty): Act
   }
   if (disputedAt) {
     bounty.disputedAt = new Date(disputedAt);
+  }
+  if (missionDeliveredAt) {
+    bounty.missionDeliveredAt = new Date(missionDeliveredAt);
   }
 
   return bounty;

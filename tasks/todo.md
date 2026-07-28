@@ -1,3 +1,82 @@
+# Paid Bounty Lifecycle Incident - 2026-07-28
+
+## Goal
+
+Stop Seek from accepting a paid bounty unless the same payment can always be
+resumed into its mission, recover cleanly from RPC/API timeouts without asking
+the wallet to pay again, and remove stuck validation/finalization states.
+The operator has already refunded the 10 identified accounts; this work must
+not send or duplicate any refund.
+
+## Checklist
+
+- [x] Re-run the mandatory Seek startup audit and reconstruct current live
+  backend, Redis, logs, and on-chain bounty state.
+- [x] Pause new `/prepare` admissions through the reversible Redis safety gate
+  while leaving health and settlement workers online.
+- [x] Add red regression coverage for idempotent `/start`, transaction
+  confirmation retries, prepared-state retention, and mobile paid-receipt reuse.
+- [x] Make `/start` return the original mission for the same already-created
+  bounty instead of returning 409 or requiring another payment.
+- [x] Persist a mobile paid-start receipt before the wallet handoff and update
+  it after submission;
+  retries and app restarts must reuse its signature and never prepare/sign a
+  second payment.
+- [x] Make resolution and finalization idempotent across RPC timeouts and
+  persist the intended outcome before the first on-chain resolution call.
+- [x] Reconcile stale backend `validating` records against chain state and
+  remove ghost monitoring counts.
+- [x] Run focused tests, both TypeScript checks, backend build/test suites,
+  contract regression checks, and `git diff --check`; inspect the final diff.
+- [x] Deploy the scoped backend repair to `/opt/seek-api` without replacing
+  production `.env`, then prove readiness, source parity, worker health, and
+  protocol-v3 admission before reopening v1.0.5 paid starts.
+- [x] Build, sign, verify, and submit v1.0.6 / versionCode 7 to Solana Mobile
+  dApp Store review.
+- [ ] Update `tasks/where-we-are.md` and complete the required shared-vault
+  end-session sweep.
+
+## Review
+
+- Root cause was an ambiguous wallet-to-app handoff: the transaction could
+  land while the app lost its signature or `/start` response. Retrying then
+  prepared a different paid bounty. Short prepared-state TTLs and non-idempotent
+  resolution/finalization paths amplified the incident.
+- Mobile v1.0.6 writes the exact PDA/blockhash/prepare receipt before opening
+  MWA, resumes it across app restarts, and will not build another payment until
+  chain evidence proves the first transaction failed atomically or its
+  blockhash expired without landing.
+- Backend `/start` now recovers by exact PDA/account data, polls RPC indexing,
+  returns the same mission idempotently, retains prepared secrets for 24 hours,
+  and marks mission delivery server-side before returning plaintext so a player
+  cannot withhold the client ACK for a risk-free cancel.
+- Resolution persists the intended outcome and resumes safely across timeouts;
+  finalization reconciles terminal on-chain state instead of retrying a landed
+  transaction ten times. The API restart removed two expired Redis monitoring
+  ghosts without signing or moving funds.
+- Final validation: backend launch suite PASS 68/68, backend build/typecheck
+  PASS, mobile typecheck PASS, contract tests PASS 25/25, mainnet cargo check
+  PASS with known Anchor cfg warnings, dApp assets PASS, signed APK build PASS,
+  and `git diff --check` PASS.
+- Production is healthy on the Helsinki VPS and the deployed source hashes
+  match local. The incident pause was removed at the operator's direction after
+  deployment; the released v1.0.5 protocol-v3 `/prepare` path returned HTTP 200
+  in a no-payment smoke test. No transaction was built, signed, or sent.
+- v1.0.5 has the repaired idempotent backend but cannot persist an ambiguous
+  wallet handoff across a full app crash. The operator accepted that residual
+  risk and will personally handle any exceptional refunds until v1.0.6 replaces
+  it; this session still sends no refunds.
+- Read-only chain proof remained unchanged after all deploys: 218 bounties
+  (183 Lost, 25 Won, 7 Pending, 2 Submitted, 1 ChallengeLost), 10 active, and
+  13,000 SKR active payout liability. The operator had already refunded the
+  identified ten accounts; this session sent no refund, cancel, resolve, or
+  finalize transaction for them.
+- v1.0.6 / versionCode 7 was submitted to review under ticket `325451334378`,
+  release mint `FtooC9RXFo8VYheHiyLXcvRxCRCYHqGKqh3ShVuPpmYn`, and APK SHA-256
+  `497f54cf14c7e4d5a99181ea104b23d96198155ecca228414ee39e6fae7d9ae6`.
+
+---
+
 # Wallet Abuse Incident - 2026-07-21
 
 ## Goal

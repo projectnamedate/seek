@@ -41,8 +41,8 @@ app:
     website: https://seek.mythx.art
 
 release:
-  # Prepared v1.0.5 update config. Keep this aligned with the APK candidate
-  # and portal-backed review submission.
+  # Submitted v1.0.6 update config. Keep this aligned with the APK and
+  # portal-backed review submission.
   address: AUTO_GENERATED_AT_CREATE_TIME
   media:
     - purpose: icon
@@ -90,9 +90,9 @@ release:
 
         18+ only. Skill-based competition. Not available where skill-based
         contests with cash prizes are restricted.
-      # Candidate v1.0.5 copy. Show this exact text to the user before upload.
+      # Submitted v1.0.6 copy.
       # Do not mention payout math or 2x total return in store changelogs.
-      new_in_version: Adds secure bounty sessions and strengthens Seeker Genesis Token verification for paid hunts.
+      new_in_version: Prevents duplicate entry payments and safely recovers paid missions when a wallet or network handoff is interrupted.
       saga_features_localized: Native Mobile Wallet Adapter, .SKR name resolution, Seeker Genesis Token bonus, camera attestation.
 
 solana_mobile_dapp_publisher_portal:

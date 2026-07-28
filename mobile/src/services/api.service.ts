@@ -142,7 +142,9 @@ export async function startBounty(
   tier: TierNumber,
   options: {
     bountyPda: string;
-    transactionSignature: string;
+    transactionSignature?: string;
+    recentBlockhash?: string;
+    lastValidBlockHeight?: number;
     prepareId?: string;
     sessionToken?: string;
   },
@@ -153,6 +155,8 @@ export async function startBounty(
       playerWallet: wallet,
       bountyPda: options.bountyPda,
       transactionSignature: options.transactionSignature,
+      recentBlockhash: options.recentBlockhash,
+      lastValidBlockHeight: options.lastValidBlockHeight,
       prepareId: options.prepareId,
     }, {
       headers: {
@@ -170,7 +174,26 @@ export async function startBounty(
     logError('[API] Start bounty error:', error);
     return {
       success: false,
+      data: error.response?.data?.data,
       error: error.response?.data?.error || 'Failed to start bounty',
+    };
+  }
+}
+
+export async function acknowledgeMission(
+  bountyId: string,
+  submitToken: string,
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await api.post('/bounty/ack', { bountyId, submitToken });
+    return response.data.success
+      ? { success: true }
+      : { success: false, error: response.data.error || 'Mission acknowledgement failed' };
+  } catch (error: any) {
+    logError('[API] Mission acknowledgement error:', error);
+    return {
+      success: false,
+      error: error.response?.data?.error || 'Mission acknowledgement failed',
     };
   }
 }
@@ -433,6 +456,7 @@ export async function resolveSkrName(
 export default {
   prepareBounty,
   startBounty,
+  acknowledgeMission,
   submitPhoto,
   getBountyStatus,
   getPlayerBounty,

@@ -44,7 +44,14 @@ export const TIER_CONFIDENCE_THRESHOLDS: Record<Tier, number> = {
 };
 
 // Bounty status
-export type BountyStatus = 'pending' | 'validating' | 'won' | 'lost' | 'disputed' | 'expired';
+export type BountyStatus =
+  | 'pending'
+  | 'validating'
+  | 'won'
+  | 'lost'
+  | 'disputed'
+  | 'expired'
+  | 'cancelled';
 
 // Mission definition (what player needs to find)
 export interface Mission {
@@ -76,6 +83,11 @@ export interface ActiveBounty {
   sessionId?: string; // Wallet-signed bounty session bound to this bounty
   sessionClientProtocolVersion?: number;
   attestationType?: 'none' | 'standard'; // Camera attestation type used
+  // Persisted before the first reveal/propose RPC so workers can resume the
+  // exact AI decision after a timeout or process restart.
+  resolutionOutcome?: boolean;
+  requiresMissionAck?: boolean;
+  missionDeliveredAt?: Date;
 }
 
 // Photo submission for validation

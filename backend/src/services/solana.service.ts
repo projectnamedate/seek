@@ -248,24 +248,84 @@ export async function resolveBountyOnChain(
   salt?: Buffer
 ): Promise<{ signature: string; challengeEndsAt: number; singularityWon?: boolean }> {
   try {
-    // Step 1: Reveal mission (if mission bytes provided)
-    if (missionIdBytes && salt) {
-      await revealMissionOnChain(bountyPda, missionIdBytes, salt);
+    let lastSignature = '';
+    let bountyAccount = await getBountyOnChain(bountyPda);
+    let status = bountyStatusName(bountyAccount) ?? 'pending';
+
+    if (isTerminalBountyStatus(status)) {
+      log.info({ bountyPda: bountyPda.slice(0, 8), status }, 'resolution already terminal');
+      return {
+        signature: lastSignature,
+        challengeEndsAt: Math.floor(Date.now() / 1000),
+        singularityWon: false,
+      };
     }
 
-    // Step 2: Propose resolution.
-    const proposeSig = await proposeResolutionOnChain(bountyPda, success);
+    // Reveal only while Pending. A timed-out RPC can still land, so re-read
+    // the account and continue from Submitted instead of failing the mission.
+    if (status === 'pending') {
+      if (!missionIdBytes || !salt) {
+        throw new Error('Mission secrets required while bounty is Pending');
+      }
+      try {
+        lastSignature = await revealMissionOnChain(bountyPda, missionIdBytes, salt);
+        status = 'submitted';
+      } catch (error) {
+        bountyAccount = await pollForConfirmedTransaction(
+          async () => {
+            const current = await getBountyOnChain(bountyPda);
+            return bountyStatusName(current) !== 'pending' ? current : null;
+          },
+          { attempts: 3, delayMs: 2_000 },
+        );
+        status = bountyStatusName(bountyAccount) ?? 'pending';
+        if (status === 'pending') throw error;
+      }
+    }
 
-    // Step 3: Queue finalization durably (awaited Redis persist). With public
-    // disputes disabled, this should be immediate and must mirror the on-chain
-    // CHALLENGE_PERIOD const.
-    const challengeEndsAt = Math.floor(Date.now() / 1000) + config.protocol.challengePeriodSeconds;
+    // Propose only while Submitted, with the same ambiguous-timeout recovery.
+    if (status === 'submitted') {
+      try {
+        lastSignature = await proposeResolutionOnChain(bountyPda, success);
+        status = success ? 'challengewon' : 'challengelost';
+        // The pre-proposal account snapshot is stale; use configured challenge
+        // timing unless a fresh post-timeout read supplied the on-chain value.
+        bountyAccount = null;
+      } catch (error) {
+        bountyAccount = await pollForConfirmedTransaction(
+          async () => {
+            const current = await getBountyOnChain(bountyPda);
+            return bountyStatusName(current) !== 'submitted' ? current : null;
+          },
+          { attempts: 3, delayMs: 2_000 },
+        );
+        status = bountyStatusName(bountyAccount) ?? 'submitted';
+        if (status === 'submitted') throw error;
+      }
+    }
+
+    if (isTerminalBountyStatus(status)) {
+      return {
+        signature: lastSignature,
+        challengeEndsAt: Math.floor(Date.now() / 1000),
+        singularityWon: false,
+      };
+    }
+    if (status !== 'challengewon' && status !== 'challengelost') {
+      throw new Error(`Unsupported bounty resolution state: ${status}`);
+    }
+
+    const rawChallengeEndsAt =
+      bountyAccount?.challengeEndsAt ?? bountyAccount?.challenge_ends_at;
+    const challengeEndsAt = rawChallengeEndsAt
+      ? Number(rawChallengeEndsAt)
+      : Math.floor(Date.now() / 1000) + config.protocol.challengePeriodSeconds;
     await queueFinalization(bountyPda, playerWallet, challengeEndsAt);
 
     log.info({ finalizeAt: new Date(challengeEndsAt * 1000).toISOString() }, 'resolution proposed, finalization queued');
 
     return {
-      signature: proposeSig,
+      signature: lastSignature,
       challengeEndsAt,
       singularityWon: false, // Will be determined at finalization
     };
@@ -363,6 +423,125 @@ export async function getBountyOnChain(bountyPda: string): Promise<any> {
   }
 }
 
+export function bountyStatusName(bountyOrStatus: any): string | null {
+  const status = bountyOrStatus?.status ?? bountyOrStatus;
+  const name = status && typeof status === 'object'
+    ? Object.keys(status)[0]
+    : typeof status === 'string'
+      ? status
+      : null;
+  return name ? name.toLowerCase() : null;
+}
+
+export function isTerminalBountyStatus(status: unknown): boolean {
+  const normalized = typeof status === 'string'
+    ? status.toLowerCase()
+    : bountyStatusName(status);
+  return normalized === 'won' || normalized === 'lost' || normalized === 'cancelled';
+}
+
+export function isPaymentRetrySafeFromChainEvidence(input: {
+  signatureStatus: { err: unknown } | null;
+  blockhashStillValid: boolean;
+  currentBlockHeight: number;
+  lastValidBlockHeight: number;
+}): boolean {
+  // Solana transactions are atomic. A confirmed error proves accept_bounty
+  // moved no SKR, so the prepared payment can be rebuilt immediately.
+  if (input.signatureStatus?.err) return true;
+  // A successful signature that failed our exact instruction checks is not
+  // safe to reinterpret as absent.
+  if (input.signatureStatus) return false;
+  return (
+    !input.blockhashStillValid &&
+    input.currentBlockHeight > input.lastValidBlockHeight
+  );
+}
+
+export async function isPaymentRetrySafe(
+  transactionSignature: string | undefined,
+  recentBlockhash: string | undefined,
+  lastValidBlockHeight: number | undefined,
+): Promise<boolean> {
+  const connection = getConnection();
+  const signatureStatus = transactionSignature
+    ? (
+      await connection.getSignatureStatus(transactionSignature, {
+        searchTransactionHistory: true,
+      })
+    ).value
+    : null;
+
+  if (signatureStatus?.err) return true;
+  if (!recentBlockhash || !lastValidBlockHeight) return false;
+
+  const [blockhashValidity, currentBlockHeight] = await Promise.all([
+    connection.isBlockhashValid(recentBlockhash, { commitment: 'confirmed' }),
+    connection.getBlockHeight('confirmed'),
+  ]);
+  return isPaymentRetrySafeFromChainEvidence({
+    signatureStatus,
+    blockhashStillValid: blockhashValidity.value,
+    currentBlockHeight,
+    lastValidBlockHeight,
+  });
+}
+
+export function acceptedBountyMatchesPrepared(
+  account: any,
+  expected: {
+    playerWallet: string;
+    tier: Tier;
+    entryAmount: bigint;
+    timestamp: number;
+    commitment: Buffer;
+  },
+): boolean {
+  try {
+    const player = account?.player?.toBase58?.() ?? String(account?.player ?? '');
+    const entryAmount = BigInt(
+      (account?.entryAmount ?? account?.entry_amount)?.toString(),
+    );
+    const createdAt = Number(
+      (account?.createdAt ?? account?.created_at)?.toString(),
+    );
+    const commitment = Buffer.from(
+      account?.missionCommitment ?? account?.mission_commitment ?? [],
+    );
+
+    return (
+      player === expected.playerWallet &&
+      Number(account?.tier) === expected.tier &&
+      entryAmount === expected.entryAmount &&
+      createdAt === expected.timestamp &&
+      commitment.equals(expected.commitment)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export async function recoverAcceptedBountyAccount(
+  bountyPda: string,
+  expected: {
+    playerWallet: string;
+    tier: Tier;
+    entryAmount: bigint;
+    timestamp: number;
+    commitment: Buffer;
+  },
+): Promise<any | null> {
+  const program = getProgram();
+  const account = await (program.account as any).bounty.fetchNullable(
+    new PublicKey(bountyPda),
+  );
+  if (!account) return null;
+  if (!acceptedBountyMatchesPrepared(account, expected)) {
+    throw new Error('On-chain bounty does not match prepared payment');
+  }
+  return account;
+}
+
 /**
  * Verify a transaction signature actually contains the expected accept_bounty
  * call for this player + bounty PDA. Confirmation alone is not sufficient —
@@ -413,6 +592,27 @@ export function parseAcceptBountyInstructionData(
   };
 }
 
+export async function pollForConfirmedTransaction<T>(
+  fetchTransaction: () => Promise<T | null>,
+  options: {
+    attempts?: number;
+    delayMs?: number;
+    wait?: (delayMs: number) => Promise<void>;
+  } = {},
+): Promise<T | null> {
+  const attempts = Math.max(1, options.attempts ?? 6);
+  const delayMs = Math.max(0, options.delayMs ?? 2_000);
+  const wait = options.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const transaction = await fetchTransaction();
+    if (transaction) return transaction;
+    if (attempt < attempts) await wait(delayMs);
+  }
+
+  return null;
+}
+
 export async function verifyTransaction(
   signature: string,
   expectedPlayer: string,
@@ -427,10 +627,14 @@ export async function verifyTransaction(
 ): Promise<boolean> {
   try {
     const conn = getConnection();
-    const tx = await conn.getTransaction(signature, {
-      maxSupportedTransactionVersion: 0,
-      commitment: 'confirmed',
-    });
+    // A wallet may return from MWA before the RPC node has indexed the new
+    // signature. Treat that as propagation lag, not an invalid payment.
+    const tx = await pollForConfirmedTransaction(
+      () => conn.getTransaction(signature, {
+        maxSupportedTransactionVersion: 0,
+        commitment: 'confirmed',
+      }),
+    );
     if (!tx || tx.meta?.err) return false;
 
     const programIdStr = PROGRAM_ID.toBase58();

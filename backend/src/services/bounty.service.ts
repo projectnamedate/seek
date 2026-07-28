@@ -41,6 +41,11 @@ const walletLocks = new Set<string>();
 const bountyLocks = new Set<string>();
 const WALLET_LOCK_TTL_SECONDS = 60;
 const BOUNTY_LOCK_TTL_SECONDS = 120; // submit handler can run > 60s with Claude Vision
+const PREPARED_BOUNTY_TTL_SECONDS = 24 * 60 * 60;
+
+export function getPreparedBountyTtlSeconds(): number {
+  return PREPARED_BOUNTY_TTL_SECONDS;
+}
 
 export async function acquireWalletLock(wallet: string): Promise<boolean> {
   if (walletLocks.has(wallet)) return false;
@@ -114,7 +119,8 @@ export async function createBounty(
   session?: {
     sessionId: string;
     sessionClientProtocolVersion: number;
-  }
+  },
+  acceptedAtEpochSeconds?: number,
 ): Promise<{ bounty: ActiveBounty; missionDescription: string }> {
   // Check if player already has an active bounty
   const existing = await getPlayerActiveBounty(playerWallet);
@@ -128,8 +134,11 @@ export async function createBounty(
     : getRandomMission(tier);
 
   // Calculate expiration
-  const now = new Date();
+  const now = acceptedAtEpochSeconds
+    ? new Date(acceptedAtEpochSeconds * 1000)
+    : new Date();
   const expiresAt = new Date(now.getTime() + TIER_DURATIONS[tier] * 1000);
+  const requiresMissionAck = (session?.sessionClientProtocolVersion ?? 0) >= 4;
 
   // Create bounty record
   const bounty: ActiveBounty = {
@@ -147,6 +156,8 @@ export async function createBounty(
     sgtMintAddress: sgtMintAddress || undefined,
     sessionId: session?.sessionId,
     sessionClientProtocolVersion: session?.sessionClientProtocolVersion,
+    requiresMissionAck,
+    missionDeliveredAt: requiresMissionAck ? undefined : new Date(),
   };
 
   // Store bounty. Redis is durable/shared truth on production; Maps are a
@@ -263,6 +274,28 @@ export function isBountyExpired(bounty: ActiveBounty): boolean {
   return new Date() > bounty.expiresAt;
 }
 
+export function isBountyEligibleForExpiry(
+  bounty: ActiveBounty,
+  now: Date = new Date(),
+): boolean {
+  return (
+    bounty.status === 'pending' &&
+    now > bounty.expiresAt &&
+    (!bounty.requiresMissionAck || Boolean(bounty.missionDeliveredAt))
+  );
+}
+
+export async function markMissionDelivered(bountyId: string): Promise<boolean> {
+  const bounty = await getBounty(bountyId);
+  if (!bounty || bounty.status !== 'pending') return false;
+  if (!bounty.missionDeliveredAt) {
+    bounty.missionDeliveredAt = new Date();
+    activeBounties.set(bounty.id, bounty);
+    await persistActiveBounty(bounty);
+  }
+  return true;
+}
+
 /**
  * Get mission for a bounty
  */
@@ -326,26 +359,35 @@ export async function getMissionSecrets(
 
 /**
  * Store prepared bounty data (from /prepare, before on-chain tx).
- * Mirrored to Redis with 5-min TTL so restart doesn't break /start.
+ * Mirrored to Redis for 24h so a paid wallet return, RPC indexing delay, app
+ * restart, or brief API outage cannot destroy the only copy of the committed
+ * mission before /start is retried.
  */
 export async function storePreparedBounty(bountyPda: string, data: PreparedBounty): Promise<void> {
   const prepared = { ...data, bountyPda };
 
   preparedBounties.set(bountyPda, prepared);
-  setTimeout(() => preparedBounties.delete(bountyPda), 5 * 60 * 1000);
+  setTimeout(
+    () => preparedBounties.delete(bountyPda),
+    PREPARED_BOUNTY_TTL_SECONDS * 1000,
+  ).unref();
   if (prepared.prepareId) {
     preparedBountiesById.set(prepared.prepareId, prepared);
     setTimeout(() => {
       if (prepared.prepareId) preparedBountiesById.delete(prepared.prepareId);
-    }, 5 * 60 * 1000);
+    }, PREPARED_BOUNTY_TTL_SECONDS * 1000).unref();
   }
 
   const r = await getRedis();
   if (r) {
     const serialized = serializePreparedBounty(prepared);
-    await r.set(RK.preparedBounty(bountyPda), serialized, { EX: 5 * 60 });
+    await r.set(RK.preparedBounty(bountyPda), serialized, {
+      EX: PREPARED_BOUNTY_TTL_SECONDS,
+    });
     if (prepared.prepareId) {
-      await r.set(RK.preparedBountyById(prepared.prepareId), serialized, { EX: 5 * 60 });
+      await r.set(RK.preparedBountyById(prepared.prepareId), serialized, {
+        EX: PREPARED_BOUNTY_TTL_SECONDS,
+      });
     }
   }
 }
@@ -405,7 +447,7 @@ export async function issueBountySubmitToken(
   const ttl = Math.max(60, ttlSeconds);
 
   submitTokens.set(bountyId, record);
-  setTimeout(() => submitTokens.delete(bountyId), ttl * 1000);
+  setTimeout(() => submitTokens.delete(bountyId), ttl * 1000).unref();
 
   const r = await getRedis();
   if (r) {
@@ -486,6 +528,44 @@ export async function markBountyValidating(bountyId: string): Promise<boolean> {
   return true;
 }
 
+export async function setBountyResolutionOutcome(
+  bountyId: string,
+  outcome: boolean,
+): Promise<boolean> {
+  const bounty = await getBounty(bountyId);
+  if (!bounty || bounty.status !== 'validating') return false;
+
+  bounty.resolutionOutcome = outcome;
+  activeBounties.set(bounty.id, bounty);
+  await persistActiveBounty(bounty);
+  return true;
+}
+
+export async function recoverBountyAfterValidationError(
+  bountyId: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const bounty = await getBounty(bountyId);
+  if (
+    !bounty ||
+    bounty.status !== 'validating' ||
+    typeof bounty.resolutionOutcome === 'boolean'
+  ) {
+    return;
+  }
+
+  if (now > bounty.expiresAt) {
+    // The player can no longer submit a replacement photo. Persist a loss so
+    // the resolution worker can reveal/propose it on the next tick.
+    await setBountyResolutionOutcome(bountyId, false);
+    return;
+  }
+
+  // Metadata/AI failed before deciding an outcome. Re-open the same paid
+  // bounty for a retry rather than leaving it validating forever.
+  await updateBountyStatus(bountyId, 'pending');
+}
+
 export async function hydrateActiveBountiesFromRedis(): Promise<number> {
   const restored = await loadAllActiveBounties();
   for (const bounty of restored) {
@@ -515,44 +595,76 @@ export async function expireAndResolveOldBounties(): Promise<number> {
   // Lazy-import to avoid module-init order issues
   const { resolveBountyOnChain } = await import('./solana.service');
 
-  const candidates: Array<{ id: string; bountyPda: string; playerWallet: string }> = [];
+  const candidates: Array<{
+    id: string;
+    bountyPda: string;
+    playerWallet: string;
+    outcome: boolean;
+  }> = [];
   for (const [id, bounty] of activeBounties) {
-    if (bounty.status === 'pending' && now > bounty.expiresAt) {
-      candidates.push({ id, bountyPda: bounty.bountyPda, playerWallet: bounty.playerWallet });
+    if (isBountyEligibleForExpiry(bounty, now)) {
+      candidates.push({
+        id,
+        bountyPda: bounty.bountyPda,
+        playerWallet: bounty.playerWallet,
+        outcome: false,
+      });
+    } else if (
+      bounty.status === 'validating' &&
+      typeof bounty.resolutionOutcome === 'boolean'
+    ) {
+      candidates.push({
+        id,
+        bountyPda: bounty.bountyPda,
+        playerWallet: bounty.playerWallet,
+        outcome: bounty.resolutionOutcome,
+      });
     }
   }
 
-  for (const { id, bountyPda, playerWallet } of candidates) {
+  for (const { id, bountyPda, playerWallet, outcome } of candidates) {
     if (!(await acquireBountyLock(id))) continue; // skip — submit handler is already running
     try {
       const bounty = activeBounties.get(id);
-      if (!bounty || bounty.status !== 'pending' || now <= bounty.expiresAt) continue;
+      if (!bounty) continue;
+      const expiredPending = isBountyEligibleForExpiry(bounty, now);
+      const resumableValidation =
+        bounty.status === 'validating' &&
+        typeof bounty.resolutionOutcome === 'boolean';
+      if (!expiredPending && !resumableValidation) continue;
 
       const secrets = await getMissionSecrets(id);
       if (!secrets) {
-        log.error({ bountyId: id }, 'expirer: missing mission secrets — cannot reveal/propose. Marking expired locally only.');
-        await updateBountyStatus(id, 'expired');
+        // Do not convert this to a terminal-looking local state. Keeping the
+        // record pending/validating preserves retry and, for an unrecoverable
+        // Pending account, the player's on-chain cancel escape hatch.
+        log.error({ bountyId: id }, 'resolution worker: missing mission secrets — retrying without changing status');
         continue;
       }
 
-      await updateBountyStatus(id, 'validating'); // prevent submit handler from racing in
+      if (bounty.status === 'pending') {
+        await updateBountyStatus(id, 'validating'); // prevent submit handler from racing in
+        await setBountyResolutionOutcome(id, false);
+      }
       const { signature } = await resolveBountyOnChain(
         bountyPda,
         playerWallet,
-        false, // forced loss for timer expiry
+        outcome,
         secrets.missionIdBytes,
         secrets.salt,
       );
-      await updateBountyStatus(id, 'lost', signature);
+      await updateBountyStatus(id, outcome ? 'won' : 'lost', signature);
       resolvedCount++;
-      log.info({ bountyId: id, signature }, 'expirer: bounty timed out → propose_resolution(false)');
+      log.info(
+        { bountyId: id, signature, outcome },
+        resumableValidation
+          ? 'resolution worker resumed persisted outcome'
+          : 'expirer: bounty timed out → propose_resolution(false)',
+      );
     } catch (err) {
       log.error({ err: err instanceof Error ? err.message : err, bountyId: id }, 'expirer: failed to resolve expired bounty');
-      // leave as-is for next cycle to retry
-      const bounty = activeBounties.get(id);
-      if (bounty && bounty.status === 'validating') {
-        await updateBountyStatus(id, 'pending');
-      }
+      // Leave validating + resolutionOutcome intact for the next idempotent
+      // worker tick. Reverting to pending loses whether AI decided win/loss.
     } finally {
       await releaseBountyLock(id);
     }

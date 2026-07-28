@@ -109,6 +109,31 @@ Adds secure bounty sessions and strengthens Seeker Genesis Token verification fo
 
 ## Current submitted update
 
+v1.0.6 / versionCode `7` was submitted to Solana Mobile dApp Store review on
+2026-07-28 with the portal-backed CLI and `--api-key-stdin`.
+
+```text
+Prevents duplicate entry payments and safely recovers paid missions when a wallet or network handoff is interrupted.
+```
+
+- Release mint: `FtooC9RXFo8VYheHiyLXcvRxCRCYHqGKqh3ShVuPpmYn`
+- Collection mint: `4PdmCnEsoUCYMgDAw6X8KFjX7nJHKoVAke8zaAYyjpr1`
+- Ticket ID: `325451334378`
+- APK SHA-256:
+  `497f54cf14c7e4d5a99181ea104b23d96198155ecca228414ee39e6fae7d9ae6`
+- Ingestion session: `397833df-6aa5-42bd-9722-edfe16c2bf8c`
+- Release ID: `2b144155-a0d6-4ef4-8ab6-2da5c9161c2a`
+- Publication session: `96d98e90-ce7c-41c4-94f5-0b8bbd9a16e3`
+- Idempotency key: `seek-update-1.0.6-v7-20260728-paid-recovery`
+- Release transaction:
+  `2hbptT1WUhU4LACaAuxBVXQGqfgFBwbq3wHSSYeNcqA9LznkNMrqv3W1ACkNFgpftYvbB3xwk7f5T9hJXXU84uBo`
+- Collection verification transaction:
+  `334WJ6wvHu1nYwNYNxxJY5a4Uus8FEAv93JUpzfoXbBrWnuhwdQtCiQLn8uYUixKpULK548jU6WKC7H3dX9nqNAs`
+- Attestation request ID: `82554495546019744436956909714113`
+- Publisher wallet balance after submission: `0.03522762 SOL`
+
+## Previous submitted update
+
 v1.0.5 / versionCode `6` was submitted to Solana Mobile dApp Store review on
 2026-06-11 with the portal-backed CLI and `--api-key-stdin`.
 
@@ -132,7 +157,7 @@ Adds secure bounty sessions and strengthens Seeker Genesis Token verification fo
 - Attestation request ID: `32557393368506399883497423818849`
 - Publisher wallet balance after submission: `0.05588918 SOL`
 
-## Previous submitted update
+## Earlier submitted update
 
 v1.0.4 / versionCode `5` was submitted to Solana Mobile dApp Store review on
 2026-05-19 with the portal-backed CLI and `--api-key-stdin`.
@@ -157,7 +182,7 @@ Updates SKR hunt tiers and refreshes the mission pool for more globally availabl
 - Attestation request ID: `17985067346990183540214621176997`
 - Publisher wallet balance after submission: `0.07655074 SOL`
 
-## Earlier submitted update
+## Earlier submitted update (v1.0.3)
 
 v1.0.3 / versionCode `4` was submitted to Solana Mobile dApp Store review on
 2026-05-18 with the portal-backed CLI and `--api-key-stdin`.

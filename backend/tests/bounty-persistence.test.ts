@@ -24,6 +24,7 @@ const bounty: ActiveBounty = {
   sessionId: 'e7ec369873d89d35f0f76843b54fb55a',
   sessionClientProtocolVersion: 3,
   attestationType: 'standard',
+  resolutionOutcome: false,
 };
 
 test('serializes active bounty state without losing Date or bigint fields', () => {
