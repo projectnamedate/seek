@@ -33,7 +33,7 @@ not send or duplicate any refund.
   protocol-v3 admission before reopening v1.0.5 paid starts.
 - [x] Build, sign, verify, and submit v1.0.6 / versionCode 7 to Solana Mobile
   dApp Store review.
-- [ ] Update `tasks/where-we-are.md` and complete the required shared-vault
+- [x] Update `tasks/where-we-are.md` and complete the required shared-vault
   end-session sweep.
 
 ## Review

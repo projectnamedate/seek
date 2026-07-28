@@ -51,8 +51,11 @@
   stats, logs, and unchanged chain counts.
 - Latest three commits before this incident closeout are `d990303`,
   `4c65999`, and `d23bf3d`. The branch has no upstream and remains local-only.
-  The pre-existing user-owned `AGENTS.md` change, both generated Codex
+  The pre-existing user-owned `AGENTS.md` change, three generated Codex
   checkpoints, and `stash@{0}` remain preserved and intentionally uncommitted.
+- Incident implementation is committed locally as `5acae4c`. The required
+  AgentMemory project/session closeout is pushed separately as vault commit
+  `ecb7930`.
 - Next concrete action: watch ticket `325451334378`. Once the portal shows
   v1.0.6 live, install/update from the dApp Store, verify versionCode `7`, and
   run a launch/connect/mission smoke on the Seeker. Paid starts are already
