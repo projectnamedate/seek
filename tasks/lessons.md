@@ -1,5 +1,16 @@
 # Lessons Learned
 
+## Session Closeout
+
+### "Wrap up" means invoke the end-session-sweep skill explicitly
+- On 2026-07-28, I answered a `wrap up` request with a summary of closeout work
+  that had already happened instead of explicitly invoking
+  `$end-session-sweep`.
+- **Rule:** Every user phrase matched by the end-session-sweep trigger list
+  starts a fresh invocation of that skill before the final response, even when
+  repo and vault closeout work appears complete already. The forced
+  AgentMemory session entry must still be written.
+
 ## Release Verification
 
 ### A built release is not a submitted release
