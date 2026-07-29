@@ -111,19 +111,22 @@ test('resolution recovery recognizes every on-chain lifecycle stage', () => {
   assert.equal(isTerminalBountyStatus('Submitted'), false);
 });
 
-test('signature-less recovery accepts only the exact prepared on-chain bounty', () => {
+test('signature-less recovery accepts chain-clock drift for the exact prepared bounty', () => {
+  const preparedTimestamp = 1_785_000_000;
   const expected = {
     playerWallet: PLAYER_WALLET,
     tier: 1 as const,
     entryAmount: 500_000_000n,
-    timestamp: 1_785_000_000,
     commitment: Buffer.alloc(32, 7),
   };
   const account = {
     player: { toBase58: () => PLAYER_WALLET },
     tier: 1,
     entry_amount: { toString: () => '500000000' },
-    created_at: { toString: () => '1785000000' },
+    // The contract stores Clock::unix_timestamp when accept_bounty executes.
+    // The prepared timestamp is only the PDA seed and can be several seconds
+    // older by the time the transaction lands.
+    created_at: { toString: () => String(preparedTimestamp + 12) },
     mission_commitment: Array.from(Buffer.alloc(32, 7)),
   };
 

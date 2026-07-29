@@ -597,7 +597,6 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
         playerWallet,
         tier: prepared.tier,
         entryAmount: BigInt(prepared.entryAmount),
-        timestamp: prepared.timestamp,
         commitment: prepared.commitment,
       });
     } else {
@@ -605,7 +604,6 @@ router.post('/start', bountyStartLimiter, validate(startBountySchema), async (re
         playerWallet,
         tier: prepared.tier,
         entryAmount: BigInt(prepared.entryAmount),
-        timestamp: prepared.timestamp,
         commitment: prepared.commitment,
       });
       if (!acceptedAccount) {

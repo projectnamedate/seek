@@ -1,3 +1,62 @@
+# Paid Bounty Recovery Regression - 2026-07-28
+
+## Goal
+
+Stop the production `/start` verifier from rejecting every real
+`accept_bounty_v2` payment when the contract's chain-clock `created_at` differs
+from the client timestamp used only to derive the bounty PDA.
+
+## Checklist
+
+- [x] Pause new paid starts without stopping settlement workers.
+- [x] Prove the live failure and quantify paid Pending bounties without moving
+  funds or duplicating operator-issued refunds.
+- [x] Add a regression test with realistic client/chain timestamp drift and
+  watch it fail against the deployed verifier logic.
+- [x] Remove the invalid timestamp equality while retaining exact
+  player/tier/amount/commitment verification on the prepared PDA.
+- [x] Run the focused regression, backend suite/build/typecheck, mobile
+  typecheck, contract checks/tests, mission tests, and `git diff --check`.
+- [x] Deploy only the backend repair while preserving the production env.
+- [x] Prove an already-paid Pending bounty can pass `/start` recovery before
+  reopening paid admission.
+- [ ] Update the repo and shared-vault incident handoff.
+
+## Review
+
+- Root cause: the recovery verifier required the client timestamp used in the
+  PDA seeds to equal `Bounty.created_at`, but the contract writes
+  `Clock::unix_timestamp` when the transaction executes. Production payments
+  differed by seconds, so the transfer landed and `/start` returned HTTP 500.
+- Blast radius after the v1.0.6 backend deploy: 50 verifier failures across 15
+  prepares. Seven paid Pending bounties totaling 4,000 SKR belonged to five
+  unique players. The operator refunded them before this repair; the repair
+  sent no refund and did not duplicate one.
+- The regression was observed RED with a realistic 12-second clock difference,
+  then GREEN 9/9 after removing only the invalid equality. Exact prepared PDA,
+  player, tier, entry amount, and commitment checks remain.
+- Full local validation passed: backend launch suite 68/68, backend
+  build/typecheck, mobile typecheck, contract tests 25/25, mainnet cargo check
+  with known Anchor cfg warnings, mission tests 6/6, and `git diff --check`.
+- The scoped backend was deployed to the Helsinki VPS with `.env` metadata
+  unchanged and local/deployed source hashes equal. Live read-only recovery
+  checks matched all 7 paid accounts, including all 3 protocol-v4 records; the
+  old verifier matched none.
+- One already-refunded legacy protocol-v3 Pending record was used for the live
+  `/start` route proof. It passed the repaired verifier, created the recovery
+  session, and—because its timer was already expired—was finalized as a loss
+  by the existing expiry worker before cleanup. The player had already been
+  refunded; no second refund was sent. Its temporary Redis session and index
+  were removed, the API was restarted, and the exact on-chain outcome was
+  recorded rather than hidden.
+- Paid admission was reopened only after the verifier proof. Readiness is HTTP
+  200, the pause key is absent, the container has only its normal API process,
+  and fresh logs contain zero recurrence errors. No organic post-reopen player
+  start arrived during the initial observation window, so that remains the
+  next live confirmation.
+
+---
+
 # Paid Bounty Lifecycle Incident - 2026-07-28
 
 ## Goal

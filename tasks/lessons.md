@@ -38,6 +38,21 @@
 
 ## Incident Response
 
+### PDA seed time is not the contract's execution time
+- On 2026-07-28, the paid-bounty recovery verifier compared the client
+  timestamp used in the bounty PDA seeds with `Bounty.created_at`. The contract
+  stores `Clock::unix_timestamp` at execution, so every real payment differed
+  by several seconds and `/start` rejected it after the SKR transfer landed.
+  The unit fixture incorrectly made both clocks identical and hid the failure.
+- **Rule:** Verify an accepted bounty through the exact prepared PDA plus its
+  player, tier, entry amount, and commitment. Do not require chain-clock
+  `created_at` to equal a client-supplied PDA seed timestamp unless the contract
+  explicitly stores that seed value.
+- **Rule:** Recovery tests must model realistic transaction delay between
+  prepare and execution. After a paid-handoff backend change, keep admission
+  paused until one already-paid Pending bounty completes `/start` recovery on
+  the live route.
+
 ### Emergency denylist changes must ship outside broad WIP
 - A 2026-06-09 reported cheater wallet was already present in local
   session-proof WIP blocklist code, but production Railway did not include that

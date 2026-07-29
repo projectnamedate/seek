@@ -493,7 +493,6 @@ export function acceptedBountyMatchesPrepared(
     playerWallet: string;
     tier: Tier;
     entryAmount: bigint;
-    timestamp: number;
     commitment: Buffer;
   },
 ): boolean {
@@ -501,9 +500,6 @@ export function acceptedBountyMatchesPrepared(
     const player = account?.player?.toBase58?.() ?? String(account?.player ?? '');
     const entryAmount = BigInt(
       (account?.entryAmount ?? account?.entry_amount)?.toString(),
-    );
-    const createdAt = Number(
-      (account?.createdAt ?? account?.created_at)?.toString(),
     );
     const commitment = Buffer.from(
       account?.missionCommitment ?? account?.mission_commitment ?? [],
@@ -513,7 +509,6 @@ export function acceptedBountyMatchesPrepared(
       player === expected.playerWallet &&
       Number(account?.tier) === expected.tier &&
       entryAmount === expected.entryAmount &&
-      createdAt === expected.timestamp &&
       commitment.equals(expected.commitment)
     );
   } catch {
@@ -527,7 +522,6 @@ export async function recoverAcceptedBountyAccount(
     playerWallet: string;
     tier: Tier;
     entryAmount: bigint;
-    timestamp: number;
     commitment: Buffer;
   },
 ): Promise<any | null> {
