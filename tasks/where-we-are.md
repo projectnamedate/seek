@@ -1,4 +1,4 @@
-# Where we are - Seek - 2026-07-28 - v1.0.6 paid-start hotfix live
+# Where we are - Seek - 2026-07-28 - v1.0.6 verified after repair
 
 ## Current State
 
@@ -28,8 +28,10 @@
 - Paid starts are open on the hotfix. Redis has no safety-pause key, readiness
   is HTTP 200, the container has only the normal API process, and fresh logs
   contain zero `On-chain bounty does not match prepared payment` recurrences.
-  No organic post-reopen `/start` arrived during the initial observation
-  window, so the first real player handoff remains the decisive live check.
+- The operator confirms v1.0.6 is good after the update. Independent production
+  evidence closes the first-real-handoff gate: three protocol-v4 paid starts
+  after the repair persisted mission delivery and followed the normal
+  resolution path without verifier mismatches.
 - The deployed source hashes match local for both repaired files.
   `/opt/seek-api/.env` remained unchanged at mode `0600`.
 - Regression evidence: the focused test failed against the old verifier with a
@@ -37,22 +39,23 @@
   validation passes: backend launch suite 68/68, backend build/typecheck,
   mobile typecheck, contract tests 25/25, mainnet cargo check with known Anchor
   cfg warnings, mission tests 6/6, and `git diff --check`.
-- v1.0.6 / versionCode `7` was submitted under dApp Store ticket
-  `325451334378`. This session could not independently authenticate to the
-  publisher portal, so submission is confirmed from local records but public
-  live-store status is not claimed. Production prepared-state records do prove
-  that protocol-v4 clients are already reaching the API.
-- Incident implementation is committed locally as `3ea9d7a`. The preceding
-  commits are `b145b84` and `ee023e4`. The branch has no upstream and remains
-  intentionally unpushed. The user-owned `AGENTS.md` edit, generated Codex
-  checkpoints, and `stash@{0}` remain untouched.
+- The operator reports the v1.0.6 update is good. This closeout did not
+  independently authenticate the publisher portal, but current production
+  records prove version-4 clients are completing the repaired paid-start
+  handoff.
+- Fresh closeout validation passes: backend/mobile typechecks, contract tests
+  25/25, mainnet cargo check with known Anchor cfg warnings, mission tests 6/6,
+  dApp assets, demo-residue grep, and `git diff --check`. Fresh GitHub history
+  shows the latest three `master` CI runs succeeded; the local-only WIP branch
+  has no remote CI claim.
+- Latest local commits before this closeout are `9b71bee`, `3ea9d7a`, and
+  `b145b84`. The branch has no upstream and remains intentionally unpushed.
+  The user-owned `AGENTS.md` edit, four generated Codex checkpoints, and
+  `stash@{0}` remain untouched.
 - The shared AgentMemory project/decision/session handoff is pushed separately
   as vault commit `53c360f`.
-- Next concrete action: tail production until the first organic protocol-v4
-  `/start`. Require a 2xx response with no verifier mismatch. If the same
-  post-payment failure recurs, immediately restore
-  `seek:finalizer:safety-pause` and roll back the store release to v1.0.5
-  rather than allowing another paid attempt.
+- Next concrete action: run `/check-seek` at the start of the next Seek session;
+  if it passes, resume normal product work. No incident follow-up is queued.
 
 ---
 

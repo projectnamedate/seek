@@ -1,3 +1,44 @@
+# v1.0.6 Post-Update Closeout - 2026-07-28
+
+## Goal
+
+Confirm the repaired v1.0.6 paid-start path is working in production after the
+operator's update, then leave a cold-start-safe repo and AgentMemory handoff
+without touching the local-only branch boundary or preserved WIP.
+
+## Checklist
+
+- [x] Run the mandatory `/check-seek` startup and drift checks.
+- [x] Verify fresh GitHub `master` CI, backend/mobile typechecks, contract
+  checks/tests, mission tests, dApp assets, and demo-residue removal.
+- [x] Verify production readiness, queues, containers, safety-pause state, and
+  post-hotfix verifier logs.
+- [x] Prove successful protocol-v4 paid starts after the repair from production
+  logs and persisted bounty delivery records.
+- [x] Classify and preserve the user-owned `AGENTS.md` edit, generated Codex
+  checkpoints, local-only branch, and existing stash.
+- [x] Refresh the repo and shared-vault closeout handoffs.
+
+## Review
+
+- The operator reports v1.0.6 is good after the update. Independent production
+  evidence shows three protocol-v4 paid starts after the repair; each persisted
+  mission delivery and followed the normal resolution path. Fresh logs contain
+  zero `On-chain bounty does not match prepared payment` recurrences.
+- Public readiness is HTTP 200 with RPC/program/Redis healthy. Both VPS
+  containers are healthy; pending `0`, validating `0`, finalizer queue `0`,
+  and no safety pause is active.
+- Fresh local validation passes: backend/mobile typechecks, contract tests
+  25/25, mainnet cargo check with only known Anchor cfg warnings, mission tests
+  6/6, dApp assets, demo-residue grep, and `git diff --check`.
+- Fresh `gh run list --limit 3` shows the latest three `master` runs succeeded.
+  This does not claim CI coverage for the intentionally local-only
+  `wip/session-proof-rollout` branch.
+- The pre-existing `AGENTS.md` edit, four generated Codex checkpoints, and
+  `stash@{0}` remain preserved and intentionally outside this closeout commit.
+
+---
+
 # Paid Bounty Recovery Regression - 2026-07-28
 
 ## Goal
