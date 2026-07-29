@@ -20,7 +20,7 @@ from the client timestamp used only to derive the bounty PDA.
 - [x] Deploy only the backend repair while preserving the production env.
 - [x] Prove an already-paid Pending bounty can pass `/start` recovery before
   reopening paid admission.
-- [ ] Update the repo and shared-vault incident handoff.
+- [x] Update the repo and shared-vault incident handoff.
 
 ## Review
 
