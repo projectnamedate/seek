@@ -1,4 +1,59 @@
-# Where we are - Seek - 2026-07-28 - v1.0.6 verified after repair
+# Where we are - Seek - 2026-08-04 - 100k SKR house withdrawal complete
+
+## Current State
+
+- The operator-requested mainnet withdrawal is complete. Exactly `100,000 SKR`
+  moved from house-vault PDA `65ot25…g758` to cold-authority Ledger
+  `GkpX…YNtY` in finalized transaction
+  `3jDNWfTtRikv2unMGR5j7C1yu7BdUUeZjGEhE5iRQee37emRHS4tCYXHfxaEyvhaXsqA7xcxq3XectXTLAKD2EZB`.
+- The cold Ledger then created the canonical recipient SKR ATA
+  `PoqSWw…BS8` and transferred exactly `100,000 SKR` to wallet
+  `CYZXot6nR8N3MDdfJPJDGSy9STfeVUqJ9QaaTPnWxaSD` in finalized transaction
+  `39w1G2TGytRPJNtWniFEuyaes4oQ6p28K9Edk6M7rbpF87cWa7J3eNyMfuBh66LL4Fs3YRNzssNc9d7Kxbya14aQ`.
+  Finalized metadata proves the recipient received `100,000,000,000` base
+  units and the cold Ledger retained `0.411462 SKR`.
+- The recipient wallet immediately signed Jupiter transaction
+  `37bqkLzuuxYXEWYauKcY8Lru7uUARQ4BEoNw8hKw9hX484xHRDEaQz9XmmLs5sPCh9ZXKoWno1umykZ6JAQMfniR`,
+  swapping the `100,000 SKR` for `872.534279 USDC`, then signed transaction
+  `4Uhw51RDLVhrXk2nCQXZttzN3rSuNWP9cSzd5bWcxfYR1iiLrdciNCTUP3hMJkUedDLkEGKQxxq8VaM2yheFHXdj`
+  to send all proceeds to fees Ledger `Fmv8…Y9Hr`.
+- Pre-signing direct mainnet truth: actual and tracked house balances matched at
+  `155,238 SKR`; active payout liability was `20,000 SKR` across `16` active
+  bounties; unreserved house funds were `135,238 SKR`; the protocol was not
+  paused. The contract therefore allowed the withdrawal without touching
+  reserved payout coverage.
+- Final direct mainnet truth: actual and tracked house balances match at
+  `55,238 SKR`; active payout liability remains `20,000 SKR`; unreserved house
+  funds are `35,238 SKR`; Singularity remains `30,700 SKR`; the protocol is not
+  paused. Production readiness is HTTP 200 with RPC/program/Redis OK.
+- The `16` on-chain active accounts explain a live observability gap with the
+  VPS API, which currently indexes four pending hunts. Direct enumeration found
+  `13 Pending`, `2 Submitted`, and `1 ChallengeLost`, totaling the exact
+  `20,000 SKR` liability. Most predate the current VPS Redis dataset. The
+  liability is fully reserved, but these accounts require a separate audit and
+  reconciliation plan. Do not finalize, refund, cancel, or reconstruct them
+  without explicit operator approval.
+- Mandatory `/check-seek` passed on 2026-08-04: backend/mobile typechecks,
+  mainnet Cargo check with known Anchor cfg warnings, contract tests `25/25`,
+  mission tests `6/6`, dApp assets, demo-residue grep, and `git diff --check`.
+  Fresh GitHub history shows the latest three `master` CI runs succeeded; this
+  local-only branch still has no remote CI claim.
+- Cold signer custody: the connected Ledger at `usb://ledger?key=1` returned
+  `GkpX…YNtY`, matching both on-chain authority and the contract constant. No
+  keypair file, secret material, or temporary path was used. The Ledger itself
+  remains the durable recovery surface.
+- Repo remains on local-only branch `wip/session-proof-rollout`. The pre-existing
+  user-owned `AGENTS.md` change, four generated Codex checkpoints, and
+  `stash@{0}` remain untouched. Latest pre-closeout local commits are `e32ff6d`,
+  `9b71bee`, and `3ea9d7a`.
+- Next concrete action: run a read-only reconciliation of all 16 active
+  mainnet bounty accounts against VPS Redis and transaction history, then
+  present an exact per-account remediation plan for operator approval before
+  any signing or fund movement.
+
+---
+
+# Historical state - 2026-07-28 - v1.0.6 verified after repair
 
 ## Current State
 

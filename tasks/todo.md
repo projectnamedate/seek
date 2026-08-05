@@ -549,3 +549,27 @@ Prepare and ship the next Seek update in this order:
 - [x] Drain or document the durable fee-payer/buffer remainder plan.
 - [x] Deploy backend after the program upgrade is confirmed.
 - [x] Submit dApp Store update only after APK verification, hardware smoke, and explicit changelog approval pass.
+
+---
+
+# 2026-08-04 — House withdrawal to CYZX…WxaSD
+
+- [x] Run the mandatory `check-seek` startup audit and inspect existing worktree dirt.
+- [x] Verify live API readiness/stats and fetch mainnet Global State plus house-vault balance directly.
+- [x] Confirm `100,000 SKR` is below the live unreserved amount and leaves active payout liability fully covered.
+- [x] Verify the recipient is system-owned and derive its canonical SKR ATA.
+- [x] Probe the cold Ledger and verify pubkey `GkpX…YNtY` before signing.
+- [x] Withdraw exactly `100,000 SKR` from the house PDA to the cold Ledger's canonical SKR ATA.
+- [x] Transfer exactly `100,000 SKR` from the cold Ledger ATA to wallet `CYZX…WxaSD`, creating its canonical SKR ATA if needed.
+- [x] Verify both transactions at confirmed/finalized commitment and re-read all affected balances/liability.
+
+## Review
+
+- Pre-signing mainnet snapshot: house `155,238 SKR`, tracked balance matched the token account, active payout liability `20,000 SKR` across `16` active bounties, unreserved `135,238 SKR`, protocol unpaused.
+- Expected post-withdrawal house balance: `55,238 SKR`, comprising `20,000 SKR` reserved plus `35,238 SKR` unreserved at the pre-signing snapshot.
+- Recipient wallet `CYZXot6nR8N3MDdfJPJDGSy9STfeVUqJ9QaaTPnWxaSD` is a funded System Program account. Its canonical SKR ATA is `PoqSWw42HoRWLy7Rc1kzECfT9asg5pchcTugCrmuBS8` and did not exist at the pre-signing snapshot.
+- House withdrawal finalized in transaction `3jDNWfTtRikv2unMGR5j7C1yu7BdUUeZjGEhE5iRQee37emRHS4tCYXHfxaEyvhaXsqA7xcxq3XectXTLAKD2EZB`.
+- Recipient ATA creation plus exact `100,000 SKR` transfer finalized in transaction `39w1G2TGytRPJNtWniFEuyaes4oQ6p28K9Edk6M7rbpF87cWa7J3eNyMfuBh66LL4Fs3YRNzssNc9d7Kxbya14aQ`.
+- Finalized transaction metadata proves the recipient ATA received `100,000,000,000` base units and the cold Ledger retained `0.411462 SKR`.
+- The recipient wallet then signed Jupiter transaction `37bqkLzuuxYXEWYauKcY8Lru7uUARQ4BEoNw8hKw9hX484xHRDEaQz9XmmLs5sPCh9ZXKoWno1umykZ6JAQMfniR`, swapping the `100,000 SKR` for `872.534279 USDC`, and signed transaction `4Uhw51RDLVhrXk2nCQXZttzN3rSuNWP9cSzd5bWcxfYR1iiLrdciNCTUP3hMJkUedDLkEGKQxxq8VaM2yheFHXdj`, moving all proceeds to fees Ledger `Fmv8…Y9Hr`.
+- Final state: house token/tracked balance `55,238 SKR`; active liability `20,000 SKR` across `16` active bounties; unreserved `35,238 SKR`; Singularity `30,700 SKR`; protocol unpaused; API ready with RPC/program/Redis OK.
