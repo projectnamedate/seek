@@ -1,4 +1,31 @@
-# Where we are - Seek - 2026-08-04 - 100k SKR house withdrawal complete
+# Where we are - Seek - 2026-08-28 - hardening plan saved, awaiting operator re-audit
+
+- [tasks/hardening-plan-2026-08-13.md](hardening-plan-2026-08-13.md) is
+  saved and marked NOT EXECUTED. The operator wants an independent re-audit
+  before any phase runs. The plan's file:line touchpoints must be
+  re-verified against current code at that time.
+- Next concrete action: run the re-audit; only then decide whether to start
+  Phase 0 (backup push) of the plan.
+
+---
+
+# Historical state - 2026-08-13 - winner-legitimacy audit saved
+
+- 2026-08-13 read-only audit complete; full notes in
+  [tasks/audit-2026-08-13-winners.md](audit-2026-08-13-winners.md).
+- Verdict: no new exploit or cheating ring on-chain. 366 bounties scanned
+  (provably complete vs `GlobalState`): 11.3% all-time completion, house
+  +164,000 SKR net, 0 Singularity wins. Current winners are legitimate
+  cap-optimizers farming broad Tier-1 missions up to the 2-wins/day cap.
+- Biggest open hole: the daily win cap is keyed `wallet:` whenever no SGT is
+  attached and `REQUIRE_BOUNTY_SESSION_PROOF=false` in production, so sybil
+  wallets bypass it. Photo replay and EXIF/attestation spoofing also open.
+- Next concrete action: decide on the anti-farm package (session-proof flip,
+  pHash dedupe, rolling-24h cap, T1 tightening) — none started.
+
+---
+
+# Historical state - 2026-08-04 - 100k SKR house withdrawal complete
 
 ## Current State
 

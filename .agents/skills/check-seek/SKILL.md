@@ -27,7 +27,14 @@ Read these files before making launch claims:
 3. `tasks/roadmap.md` - current phase and launch blockers.
 4. `tasks/phase-b-execution.md` - user-gated launch playbook.
 5. `tasks/lessons.md` - known failure modes and verification rules.
-6. Current memory, when available:
+6. `tasks/audit-2026-08-13-winners.md` - winner-legitimacy audit (on-chain
+   forensics: 11.3% completion, no cheating ring, four open anti-farm holes).
+7. `tasks/hardening-plan-2026-08-13.md` - staged anti-farm hardening plan.
+   SAVED, NOT EXECUTED — an independent re-audit of its file:line touchpoints
+   is required before any phase runs. When the operator triggers the
+   re-audit, verify the plan's claims against current code and report drift
+   in the briefing before recommending execution.
+8. Current memory, when available:
    - Codex memory quick pass: search `/Users/hammer/.codex/memories/MEMORY.md`
      for `seek`.
    - Legacy Claude memory is optional and may not exist on this machine:

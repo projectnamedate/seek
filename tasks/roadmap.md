@@ -1,7 +1,11 @@
 # Seek Roadmap
 
-**Current phase:** v1.0.4 tier reprice update live -> official-store smoke.
-**Snapshot date:** 2026-06-09.
+**Current phase:** v1.0.6 live (post v1.0.4 tier reprice). Next gated item:
+[hardening-plan-2026-08-13.md](hardening-plan-2026-08-13.md) — saved 2026-08-28,
+NOT EXECUTED; operator re-audit required first. See
+[audit-2026-08-13-winners.md](audit-2026-08-13-winners.md) for the findings it
+fixes.
+**Snapshot date:** 2026-08-28.
 **Timeline target:** 2-week solid launch.
 **Founder/operator:** Jeff (solo). Ledger hot/cold split. External audit skipped.
 
