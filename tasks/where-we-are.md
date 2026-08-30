@@ -1,4 +1,33 @@
-# Where we are - Seek - 2026-08-28 - hardening plan saved, awaiting operator re-audit
+# Where we are - Seek - 2026-08-30 - 70k SKR house withdrawal complete
+
+- Operator-requested mainnet withdrawal complete. Exactly `70,000 SKR`
+  moved house-vault PDA → cold Ledger ATA (`Pvtziv…FHb`) in finalized tx
+  `2JVdW73BtFKUb1X7EjMc4TvawA3bomUJZqkNLZZ91xT3av9oVMYeybs4Q624AoPdPdwZ8PKBqyWJKJH3LbVGWTQv`,
+  then cold Ledger forwarded exactly `70,000 SKR` to the fees-wallet SKR ATA
+  `7cCSyQaDctviNtHygxRkpSgzG9GbQebfW1CHwCogYQ4K` (wallet `Fmv8H…Y9Hr`) in
+  finalized tx
+  `2WtuhFGcyHE3HPaVqoYs5MLy7fGjyeDRx6p3Fh7qa1pkDVvMoNkQ9e2TbwtAQyErSLusBgk9qoYGrh1s7Pbi5FU1`.
+- Pre-signing mainnet truth: house `109,188 SKR` (tracked == actual),
+  liability `22,000 SKR` / 18 active bounties, unreserved `87,188 SKR`,
+  not paused. Singularity `48,400 SKR` (untouched).
+- Post-withdrawal mainnet truth: house `39,188 SKR`, liability still
+  `22,000 SKR` fully reserved, unreserved `17,188 SKR`, not paused.
+  Fees ATA balance `77,851.308477 SKR` (was `7,851.308477`). Cold ATA back
+  to `0.411462` SKR dust.
+- New helper scripts (local backend): `scripts/read-vault-state.ts`
+  (read-only GlobalState + vault probe) and `scripts/transfer-skr-ledger.ts`
+  (Ledger-signed SKR transfer, creates dest ATA if missing). Both are
+  mainnet-safe; transfer script refuses non-mainnet.
+- NOTE: local `backend/.env` points at DEVNET — always source mainnet
+  env from the VPS container (`ssh helsinki`, container `seek-api`) for
+  mainnet probes/admin. The cold authority lives at Ledger path
+  `44'/501'/1'` (fees wallet is `44'/501'/0'` on the same device).
+- Next concrete action: proceed with the operator's planned update work
+  (hardening-plan re-audit was the prior next step).
+
+---
+
+# Historical state - 2026-08-28 - hardening plan saved, awaiting operator re-audit
 
 - [tasks/hardening-plan-2026-08-13.md](hardening-plan-2026-08-13.md) is
   saved and marked NOT EXECUTED. The operator wants an independent re-audit

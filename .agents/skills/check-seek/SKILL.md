@@ -1,6 +1,6 @@
 ---
 name: check-seek
-description: "Use in the Seek repo whenever the user asks to check Seek, resume the project, verify launch readiness, inspect current status, or find where work left off. This is the first skill to use at session start in /Users/hammer/Desktop/Claude/seek."
+description: "Use in the Seek repo whenever the user asks to check Seek, resume the project, verify launch readiness, inspect current status, or find where work left off. This is the first skill to use at session start in /Users/hammer/Desktop/vibe/seek."
 ---
 
 # check-seek
@@ -13,7 +13,7 @@ and current code. This exists because prior docs once claimed "complete" and
 
 Use this skill only for the Seek checkout:
 
-`/Users/hammer/Desktop/Claude/seek`
+`/Users/hammer/Desktop/vibe/seek`
 
 If the current working directory differs, first confirm the actual repo root
 with `pwd` and `git rev-parse --show-toplevel`.
@@ -56,6 +56,35 @@ Run these from the repo root unless a subdirectory is stated:
 - Contract mainnet check: `cargo check --features mainnet --no-default-features`
   in `contracts/`
 - Contract tests: `npm test` in `contracts/`
+- Live readiness: `curl -s https://api.seek.mythx.art/api/health/ready`
+  (VPS backend; should report RPC/program/Redis OK)
+
+## Live Mainnet State
+
+Local `backend/.env` points at **devnet** — never use it for mainnet
+probes or admin. For mainnet truth:
+
+- Env source: the production backend container on the VPS —
+  `ssh helsinki 'sudo docker exec seek-api printenv SOLANA_RPC_URL'`
+  (also `SOLANA_NETWORK`, `SKR_MINT`, `SEEK_PROGRAM_ID`). The RPC URL
+  contains an API key — keep it in shell vars, never echo it.
+  Containers: `seek-api` + `seek-redis`, compose at `/opt/seek-api/compose.yaml`.
+- Read-only probe: `npx ts-node scripts/read-vault-state.ts` from `backend/`
+  with the mainnet env injected. Prints paused/authority, house tracked +
+  actual, `active_payout_liability`, `active_bounty_count`, unreserved,
+  Singularity, cold-ATA and fees-ATA balances. Withdrawable =
+  `min(tracked, actual) - liability`.
+- Ledger paths (same physical device): cold authority `44'/501'/1'`
+  (`GkpX…YNtY`), fees wallet `44'/501'/0'` (`Fmv8H…Y9Hr`). Admin scripts
+  need `AUTHORITY_SIGNER=ledger` + `AUTHORITY_LEDGER_PATH` +
+  `AUTHORITY_LEDGER_PUBKEY`; the pubkey guard rejects the wrong path —
+  that is expected behavior, not a failure.
+- House withdrawals are two-legged: `admin.ts withdraw-house <amt>` lands
+  on the cold authority ATA, then `scripts/transfer-skr-ledger.ts
+  <dest_wallet> <amt>` forwards (cold-signed, creates dest ATA if
+  missing). Singularity withdrawals require paused + zero active bounties.
+- Never print private keys or `.env` secrets; pubkeys and on-chain state
+  are fine.
 
 If `gh run list` fails from network sandboxing, rerun it with the normal
 approval/escalation path instead of reporting CI as unknown from memory.
@@ -68,10 +97,10 @@ Flag any drift above the normal briefing:
 |---|---|
 | Demo residue | `rg -n "addWinnings|DEMO_TARGETS|DEMO_WALLET|DEMO_MODE|useFallbackDemoBounty|isDemoMode|demo mode|demo-mode" mobile/src backend/src` returns no matches. |
 | Mission count | `cd backend && node --test -r ts-node/register tests/missions.test.ts` passes, confirming 600 missions and the 140/60, 120/80, 100/100 outdoor/indoor splits. |
-| Mainnet init authority | `EXPECTED_INITIAL_AUTHORITY` is still placeholder until the user provides the cold Ledger pubkey; this is a launch blocker, not a code failure. |
-| dApp Store assets | `node check-assets.mjs` in `dapp-store-publishing/` should fail until real `icon.png`, `banner.png`, and screenshots exist. |
-| Publisher wallet | `dapp-store-publishing/config.yaml` still has `PLACEHOLDER_PUBLISHER_PUBKEY` until B5 is done. |
-| Marketing site | top-level `web/` is absent until B9 is built. |
+| Mainnet init authority | `EXPECTED_INITIAL_AUTHORITY` (mainnet feature) should equal the cold Ledger `GkpXKrovpRLgAgQpkeX7wFC3FDKHJDBED5YzNog2YNtY` — B0 is done, placeholder means regression. |
+| dApp Store assets | `node check-assets.mjs` in `dapp-store-publishing/` should PASS — icon/banner/screenshots are submitted and accepted. |
+| Publisher wallet | `dapp-store-publishing/config.yaml` has the real publisher pubkey `Dzbqbjh8qowVK7x89vj1vo1ApUz7LNRqmR39yYXehenR`; balance ~0.077 SOL — top up before the next store update. |
+| Marketing site | top-level `web/` exists; `/privacy`, `/terms`, `/license` must return HTTPS 200 on `seek.mythx.art`. |
 | Redis fail-closed | `backend/src/services/redis.service.ts` should fail closed when `REDIS_URL` is set but Redis is unavailable. |
 | Cancel exploit | `cancel_bounty` should accept `Pending` only, not `Submitted`. |
 | Reveal/propose timeout | `revealMissionOnChain` and `proposeResolutionOnChain` should use `withTimeout`. |
@@ -98,14 +127,12 @@ Use this shape:
 - Last session ended:
 - Next action:
 
-## Phase B Status
-- B0 paste Ledger pubkey:
-- B1 keystore:
-- B3 Ledger SOL:
-- B4 SKR vault:
-- B5 publisher wallet:
-- B6 dApp Store assets:
-- B9 marketing/legal site:
+## Launch Status
+- App: v1.0.6 live (mainnet program + dApp Store v1.0.4 / versionCode 5 listed).
+- Authority: cold Ledger `GkpX…YNtY` (path `44'/501'/1'`); fees wallet Ledger `Fmv8H…Y9Hr` (path `44'/501'/0'`); hot keypair backend-held.
+- Vault: see Live Mainnet State probe for current balances.
+- Publisher wallet balance: check before any store update (top up ~0.5 SOL).
+- Open gates: hardening-plan-2026-08-13 re-audit (saved, NOT EXECUTED).
 
 ## Recommended Next Move
 - One concrete next action.
