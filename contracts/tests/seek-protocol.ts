@@ -271,6 +271,44 @@ describe("seek-protocol (client-side invariants)", () => {
       assert.include(names, "set_protocol_paused");
       assert.include(names, "withdraw_unreserved_house");
       assert.include(names, "withdraw_singularity");
+      assert.include(names, "expire_bounty");
+    });
+
+    it("expire_bounty is cold-signed and needs no player token account", () => {
+      const expire = instructions.find((i) => i.name === "expire_bounty");
+      assert.ok(expire);
+      const accounts = (expire as any).accounts as Array<{ name: string; signer?: boolean }>;
+      assert.deepEqual(
+        accounts.filter((a) => a.signer).map((a) => a.name),
+        ["authority"]
+      );
+      assert.notInclude(accounts.map((a) => a.name), "player_token_account");
+    });
+
+    it("expire_bounty excludes proposed wins and keeps the cancel grace period", () => {
+      const body = programSource.slice(
+        programSource.indexOf("pub fn expire_bounty"),
+        programSource.indexOf("pub fn propose_authority_transfer")
+      );
+      const statusCheck = body.slice(0, body.indexOf("SeekError::BountyAlreadyResolved"));
+      const allowed = (statusCheck.match(/BountyStatus::\w+/g) || []).sort();
+      assert.deepEqual(allowed, [
+        "BountyStatus::ChallengeLost",
+        "BountyStatus::Pending",
+        "BountyStatus::Submitted",
+      ]);
+      assert.include(body, "EXPIRE_GRACE_PERIOD");
+      assert.include(programSource, "pub const EXPIRE_GRACE_PERIOD: i64 = 86_400;");
+    });
+
+    it("withdraw_singularity no longer requires a pause or an idle protocol", () => {
+      const body = programSource.slice(
+        programSource.indexOf("pub fn withdraw_singularity"),
+        programSource.indexOf("pub fn dispute_bounty")
+      );
+      assert.notInclude(body, "SeekError::ProtocolNotPaused");
+      assert.notInclude(body, "SeekError::ActiveBountiesExist");
+      assert.include(body, "SeekError::InsufficientSingularityFunds");
     });
 
     it("GlobalState account has auth + exposure-reserve + pause fields", () => {

@@ -1,3 +1,43 @@
+# Where we are - Seek - 2026-10-21 - Railway exposure contained, Singularity swept
+
+- Railway reported a compromise. Audit: `/opt/seek-api/.env` was unchanged
+  since the 2026-07-12 migration, so the live hot key, `ANTHROPIC_API_KEY` and
+  `HELIUS_API_KEY` were Railway's values. Never on Railway: cold Ledger, fees
+  Ledger, keystore, publisher key, upgrade payer.
+- Hot authority rotated `Gm6x…dLk` -> `H7EGXs4i8C2XEwEUZdvNC3wEt31rX2Sgj2aDxJTio6Xs`
+  (pause `6CmiEmxF…`, set-hot `3JoQ87w4…`, resume `yNyCZpBj…`). Key generated
+  on the VPS into `/opt/seek-api/secrets/seek-hot-authority-20261021.env`
+  (0600 root), backup `backend/.secrets/solana/seek-hot-authority-20261021.env`
+  (0600), hashes match. Old key drained to 0 SOL (`DyH5Cg9j…`). Old env kept at
+  `/opt/seek-api/.env.bak-20261021` (0600). The first live hunt on the new key
+  has not happened yet.
+- Program upgrade `6fiPyJtG26i7DamquUoAUyjP2p5h89FUwUbkHgAnUGgkppLRH2TQxUR2D8Mzj2Xn7bW5pqr19U576xtqqRy7zxZ`
+  (finalized). On-chain bytes = local `cfcafaab…08f0`, ProgramData extended to
+  509,584 bytes (`3FGm6dJ7…`), authority still Ledger `GkpX…YNtY`. Changes:
+  `withdraw_singularity` needs no pause or idle protocol; new cold-signed
+  `expire_bounty` settles Pending/Submitted/ChallengeLost bounties as losses
+  24h after their timer. Rehearsed on localnet with cloned mainnet accounts
+  before shipping; fresh-context review found nothing blocking.
+- Expired all 18 orphan bounties (5 batches, first `2TpPwuLG…`). Liability
+  22,000 -> 0, active count 18 -> 0, Singularity +2,100. The operator is
+  refunding players off-chain from another wallet (list in
+  `/Users/hammer/.claude/plans/check-seek-i-got-generic-donut.md`).
+- Singularity swept: 66,300 SKR withdrawn (`374b9MUc…`), forwarded to fees
+  Ledger (`3EqCQMnM…`), cold-ATA remainder 0.411462 SKR forwarded
+  (`3Ka7s3PZ…`). Final: Singularity 0, house 86,338 (tracked == actual),
+  liability 0, fees ATA 69,650.411462 SKR, cold ATA 0 SKR, not paused.
+- Upgrade payer drained (`2MDmZGWN…`); payer and buffer 0 SOL; cold Ledger
+  4.431 SOL.
+- Not done: on-chain IDL account still has the old IDL (explorer decoding
+  only; backend bundles the new one). Backend not redeployed (new instructions
+  are admin-only). Operator still to rotate Anthropic + Helius keys, delete the
+  Railway project, and revoke the Railway CLI login.
+- Next concrete action: after the operator rotates the Anthropic and Helius
+  keys, swap them into `/opt/seek-api/.env` and recreate `seek-api`, then
+  confirm one live hunt signs with `H7EG…`.
+
+---
+
 # Where we are - Seek - 2026-08-30 - 70k SKR house withdrawal complete
 
 - Operator-requested mainnet withdrawal complete. Exactly `70,000 SKR`

@@ -90,3 +90,40 @@ test('accept_bounty parser rejects wrong discriminator for requested version', (
   assert.equal(parseAcceptBountyInstructionData(v1Data, 2), null);
   assert.equal(parseAcceptBountyInstructionData(v2Data, 1), null);
 });
+
+test('expire_bounty IDL is cold-signed with no args and no player account', () => {
+  const expire = getIdlInstruction('expire_bounty');
+
+  assert.deepEqual(expire.args, []);
+  assert.deepEqual(
+    expire.accounts.map((account) => account.name),
+    [
+      'authority',
+      'global_state',
+      'bounty',
+      'house_vault',
+      'singularity_vault',
+      'protocol_treasury',
+      'token_program',
+    ],
+  );
+});
+
+test('withdraw_singularity IDL keeps amount arg and cold-authority ATA destination', () => {
+  const withdraw = getIdlInstruction('withdraw_singularity');
+
+  assert.deepEqual(
+    withdraw.args.map((arg) => arg.name),
+    ['amount'],
+  );
+  assert.deepEqual(
+    withdraw.accounts.map((account) => account.name),
+    [
+      'authority',
+      'global_state',
+      'authority_token_account',
+      'singularity_vault',
+      'token_program',
+    ],
+  );
+});

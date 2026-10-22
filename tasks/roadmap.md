@@ -174,8 +174,9 @@ program upgrade authority. Current cold SOL balance verified at
 `set_protocol_paused`, `withdraw_unreserved_house`, and
 `withdraw_singularity`. `accept_bounty` rejects new entries while paused.
 House withdrawals are capped to tracked house balance minus active payout
-liability. Singularity withdrawals require the protocol to be paused with zero
-active bounties.
+liability. Since the 2026-10-21 upgrade, Singularity withdrawals need no pause
+or idle protocol, and `expire_bounty` settles stale unresolved bounties as
+losses 24h after their timer.
 
 **CLI:** `admin.ts pause`, `admin.ts resume`,
 `admin.ts withdraw-house <amount>`, `admin.ts withdraw-singularity <amount>`.
@@ -535,7 +536,8 @@ are not on the critical path but should land within the first month live.
   the primary no-uncovered-liability guard for viral launch traffic.
 - [x] **Manual pause + liability-safe withdrawals** — contract-level.
   Cold authority can pause new entries, withdraw only unreserved house surplus,
-  and withdraw Singularity funds only while paused with zero active bounties.
+  withdraw Singularity funds (no pause needed since 2026-10-21), and expire
+  stale bounties as losses.
   Existing bounty resolution paths remain open while paused.
 - [ ] **Tier gating by vault size** — optional stricter contract change. Disable tier 2 acceptance until `house_fund_balance > 200_000 SKR` (~$3.4k); disable tier 3 until > 500_000 SKR (~$8.5k). This matters because hard-tier wins draw down 5,000 SKR net from a small launch vault even after the payout reduction.
 - [ ] **Automatic vault floor pause** — contract or backend gate. New `accept_bounty` calls reject when `house_fund_balance < 30_000 SKR` (~$510). Backend can enforce this in `/prepare` for v1; manual contract pause now exists, but auto-pause is still cleaner.

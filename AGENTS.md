@@ -153,12 +153,12 @@ Required env on mainnet (see `backend/.env.example`):
 - `SOLANA_NETWORK=mainnet-beta` + `SOLANA_RPC_URL` (Helius/QuickNode)
 - `HOT_AUTHORITY_PRIVATE_KEY` (hot — backend-held; reveal + propose only). Config throws if missing on mainnet.
 - Local cold-admin/init scripts: `AUTHORITY_SIGNER=ledger` +
-  `AUTHORITY_LEDGER_PUBKEY=<cold Ledger pubkey>` (not Railway runtime env).
+  `AUTHORITY_LEDGER_PUBKEY=<cold Ledger pubkey>` (not VPS runtime env).
 - `SKR_MINT=SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`
 - `FEES_WALLET=Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr` (only consumed by `initialize-protocol.ts` at init)
 - `REDIS_URL` (Upstash recommended) + `SENTRY_DSN`
 
-Do **not** put the cold Ledger/private authority key in Railway runtime env.
+Do **not** put the cold Ledger/private authority key in the VPS runtime env.
 Cold admin/init signing is local only.
 
 ### Mobile
@@ -181,10 +181,10 @@ Switch `NETWORK` in `mobile/src/config/index.ts` to swap mainnet/devnet ($SKR mi
 ## On-chain auth model (3 roles, 2 Ledgers + 1 hot keypair minimum)
 - **Cold authority** (`GlobalState.authority`) — Ledger hardware wallet (Ledger #1). Signs: `fund_house`, `set_protocol_paused`, `withdraw_unreserved_house`, `withdraw_singularity`, `set_hot_authority`, `set_treasury`, `propose_authority_transfer`, `accept_authority_transfer`, `cancel_authority_transfer`, `resolve_dispute`. Two-step transfer prevents typo loss.
 - **Fees wallet / protocol_treasury OWNER** (`GlobalState.protocol_treasury` = its SKR ATA) — separate Ledger #2 (`Fmv8H…Y9Hr`). Signs **nothing on-chain in the Seek protocol**, just receives 10% protocol revenue from missed missions. **The revenue is income**: user periodically swaps SKR → USDC on a DEX (Ledger-signed) and off-ramps to fiat. Operating expenses are NOT paid from this wallet. Rotatable via `admin.ts set-treasury` (cold-signed). The contract has no `withdraw_treasury` instruction — it was removed 2026-04-23 because under the FEES_WALLET-owned-ATA design the cold authority cannot authorize SPL transfers from FEES_WALLET's account; the Ledger spends directly via DEX.
-- **Hot authority** (`GlobalState.hot_authority`) — Backend keypair in Railway env (NOT a Ledger). Signs ONLY: `reveal_mission`, `propose_resolution`. Compromise is contained (cannot drain treasury, cannot rotate any authority). Rotate via `set_hot_authority` (cold-signed).
+- **Hot authority** (`GlobalState.hot_authority`) — Backend keypair in the VPS env `/opt/seek-api/.env` (NOT a Ledger; rotated 2026-10-21 to `H7EGXs…io6Xs` after the Railway exposure, backup `backend/.secrets/solana/seek-hot-authority-20261021.env`). Signs ONLY: `reveal_mission`, `propose_resolution`. Compromise is contained (cannot drain treasury, cannot rotate any authority). Rotate via `set_hot_authority` (cold-signed).
 - **Program upgrade authority** — Ledger (same as cold authority by default, or split into a third Ledger). Keep upgradeable during launch; do not use `--final` until post-launch tweaks are done. Set via `solana program set-upgrade-authority` only after an explicit decision.
 - **House vault** (`GlobalState.house_vault`) — PDA token account, NOT an EOA. Completion payouts are PDA-signed CPIs from the program; **no human signs payouts**. Cold authority can `fund_house` to add SKR and can withdraw only unreserved surplus via `withdraw_unreserved_house`; active payout liability remains locked for already-accepted bounties. This is explicit public admin control, not a hidden backdoor.
-- **Singularity vault** (`GlobalState.singularity_vault`) — PDA token account for bonus-pool SKR. Cold authority can withdraw via `withdraw_singularity` only while the protocol is paused and there are zero active bounties; the instruction emits an on-chain event.
+- **Singularity vault** (`GlobalState.singularity_vault`) — PDA token account for bonus-pool SKR. Cold authority can withdraw via `withdraw_singularity` at any time (no pause or idle requirement since the 2026-10-21 upgrade; Singularity carries no reserved liability); the instruction emits an on-chain event. Stale unresolved bounties (Pending/Submitted/ChallengeLost, 24h past the timer) can be settled as losses with the cold-signed `expire_bounty`.
 - User is solo operator — uses Ledger, not Squads multisig. Don't suggest multisig unless explicitly asked.
 - **External audit skipped** — internal audit only. Don't re-propose unless contract surface changes materially.
 
@@ -203,8 +203,8 @@ full payout for every active bounty. `accept_bounty` rejects new entries if
 the projected vault balance cannot cover every active bounty as a win. Viral
 traffic may queue/throttle, but the program does not accept uncovered payout
 liability. Cold-authority emergency controls can pause new entries, withdraw
-only unreserved house surplus, and sweep Singularity only while paused with no
-active bounties.
+only unreserved house surplus, sweep Singularity, and expire stale unresolved
+bounties as losses (`expire_bounty`, 24h after the timer).
 
 | Completion rate | Protocol edge | Status at launch vault |
 |---------:|-----------:|:-----------------------|

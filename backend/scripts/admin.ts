@@ -12,7 +12,8 @@
  *   npx ts-node scripts/admin.ts pause                            Pause new bounty acceptance
  *   npx ts-node scripts/admin.ts resume                           Resume new bounty acceptance
  *   npx ts-node scripts/admin.ts withdraw-house <amount>          Withdraw unreserved house SKR
- *   npx ts-node scripts/admin.ts withdraw-singularity <amount>    Withdraw Singularity SKR while paused with no active bounties
+ *   npx ts-node scripts/admin.ts withdraw-singularity <amount|--all>  Withdraw Singularity SKR
+ *   npx ts-node scripts/admin.ts expire-bounties <pda...>         Expire stale unresolved bounties as losses
  *   npx ts-node scripts/admin.ts set-hot <pubkey>                 Rotate hot authority
  *   npx ts-node scripts/admin.ts set-treasury <wallet_pubkey>     Rotate fees wallet (cold-signed)
  *   npx ts-node scripts/admin.ts resolve-dispute <bounty_pda> <win|loss>
@@ -394,16 +395,31 @@ async function withdrawUnreservedHouse(amountSkr: number) {
   });
 }
 
-async function withdrawSingularity(amountSkr: number) {
+async function withdrawSingularity(amountArg: string) {
   return withSetup(async (s) => {
-    const amountLamports = new BN(Math.round(amountSkr * s.multiplier));
+    let amountLamports: BN;
+    if (amountArg === '--all') {
+      const state = await (s.program.account as any).globalState.fetch(
+        s.globalStatePda
+      );
+      const vault = await getAccount(s.connection, s.singularityVaultPda);
+      const tracked = BigInt(state.singularityBalance.toString());
+      const actual = vault.amount;
+      amountLamports = new BN((tracked < actual ? tracked : actual).toString());
+      console.log(
+        `Singularity tracked ${formatSkr(tracked, s.decimals)}, vault ${formatSkr(actual, s.decimals)}`
+      );
+      if (amountLamports.isZero()) {
+        console.log('Nothing to withdraw.');
+        return;
+      }
+    } else {
+      amountLamports = new BN(Math.round(Number(amountArg) * s.multiplier));
+    }
     const authorityAta = await getOrCreateAuthorityAta(s);
 
     console.log(
-      `Withdrawing ${amountSkr} SKR (${amountLamports.toString()} base units) from Singularity pool...`
-    );
-    console.log(
-      'Protocol must already be paused with zero active bounties for this instruction.'
+      `Withdrawing ${formatSkr(BigInt(amountLamports.toString()), s.decimals)} (${amountLamports.toString()} base units) from Singularity pool...`
     );
     console.log(`Destination ATA: ${authorityAta.toBase58()}`);
 
@@ -419,6 +435,72 @@ async function withdrawSingularity(amountSkr: number) {
       .rpc();
 
     console.log(`Withdrawn! TX: ${sig}`);
+  });
+}
+
+// Mirrors the on-chain expire_bounty rules so ineligible bounties are refused
+// before the Ledger is asked to sign anything.
+const EXPIRABLE_STATUSES = ['pending', 'submitted', 'challengeLost'];
+const EXPIRE_GRACE_SECONDS = 86_400;
+const EXPIRE_BATCH_SIZE = 4;
+
+async function expireBounties(pdas: string[]) {
+  return withSetup(async (s) => {
+    const state = await (s.program.account as any).globalState.fetch(
+      s.globalStatePda
+    );
+    const now = Math.floor(Date.now() / 1000);
+    const targets: PublicKey[] = [];
+
+    for (const pda of pdas) {
+      const bountyPk = new PublicKey(pda);
+      const bounty = await (s.program.account as any).bounty.fetch(bountyPk);
+      const status = Object.keys(bounty.status)[0];
+      const expirableAt = Number(bounty.expiresAt) + EXPIRE_GRACE_SECONDS;
+      const problems: string[] = [];
+      if (!EXPIRABLE_STATUSES.includes(status)) problems.push(`status ${status}`);
+      if (bounty.isDisputed) problems.push('disputed');
+      if (now <= expirableAt) problems.push(`not expirable until ${new Date(expirableAt * 1000).toISOString()}`);
+      if (problems.length > 0) {
+        throw new Error(`${pda} is not expirable: ${problems.join(', ')}`);
+      }
+      console.log(
+        `  ${pda} ${status} entry ${formatSkr(BigInt(bounty.entryAmount.toString()), s.decimals)} player ${bounty.player.toBase58()}`
+      );
+      targets.push(bountyPk);
+    }
+
+    console.log(
+      `\nExpiring ${targets.length} bounties as losses in batches of ${EXPIRE_BATCH_SIZE}...`
+    );
+    for (let i = 0; i < targets.length; i += EXPIRE_BATCH_SIZE) {
+      const tx = new Transaction();
+      for (const bountyPk of targets.slice(i, i + EXPIRE_BATCH_SIZE)) {
+        tx.add(
+          await (s.program.methods as any)
+            .expireBounty()
+            .accounts({
+              authority: s.authority.publicKey,
+              globalState: s.globalStatePda,
+              bounty: bountyPk,
+              houseVault: s.houseVaultPda,
+              singularityVault: s.singularityVaultPda,
+              protocolTreasury: state.protocolTreasury,
+              tokenProgram: TOKEN_PROGRAM_ID
+            })
+            .instruction()
+        );
+      }
+      const sig = await sendAuthorityTransaction(s.connection, s.authority, tx, {
+        preflightCommitment: 'confirmed'
+      });
+      console.log(`  Batch ${i / EXPIRE_BATCH_SIZE + 1} TX: ${sig}`);
+    }
+
+    for (const bountyPk of targets) {
+      const bounty = await (s.program.account as any).bounty.fetch(bountyPk);
+      console.log(`  ${bountyPk.toBase58()} -> ${Object.keys(bounty.status)[0]}`);
+    }
   });
 }
 
@@ -722,14 +804,25 @@ switch (command) {
     withdrawUnreservedHouse(Number(arg)).catch(console.error);
     break;
   case 'withdraw-singularity':
-    if (!arg || isNaN(Number(arg))) {
+    if (!arg || (arg !== '--all' && isNaN(Number(arg)))) {
       console.error(
-        'Usage: npx ts-node scripts/admin.ts withdraw-singularity <amount_in_skr>'
+        'Usage: npx ts-node scripts/admin.ts withdraw-singularity <amount_in_skr|--all>'
       );
       process.exit(1);
     }
-    withdrawSingularity(Number(arg)).catch(console.error);
+    withdrawSingularity(arg).catch(console.error);
     break;
+  case 'expire-bounties': {
+    const pdas = process.argv.slice(3);
+    if (pdas.length === 0) {
+      console.error(
+        'Usage: npx ts-node scripts/admin.ts expire-bounties <bounty_pda> [bounty_pda...]'
+      );
+      process.exit(1);
+    }
+    expireBounties(pdas).catch(console.error);
+    break;
+  }
   case 'set-hot':
     if (!arg) {
       console.error(
@@ -820,7 +913,10 @@ switch (command) {
       '  withdraw-house <amount>  Withdraw unreserved house funds (SKR)'
     );
     console.log(
-      '  withdraw-singularity <amount> Withdraw Singularity funds while paused and idle (SKR)'
+      '  withdraw-singularity <amount|--all> Withdraw Singularity funds (SKR)'
+    );
+    console.log(
+      '  expire-bounties <pda...>  Expire stale unresolved bounties as losses'
     );
     console.log('  set-hot <pubkey>          Rotate hot authority');
     console.log(

@@ -689,6 +689,145 @@
       "args": []
     },
     {
+      "name": "expire_bounty",
+      "docs": [
+        "Expire an unresolved bounty as a loss. Cold authority only, and only",
+        "once the hunt timer plus `EXPIRE_GRACE_PERIOD` has passed. Covers",
+        "bounties the backend can no longer resolve (for example, a lost mission",
+        "salt) so they cannot hold payout liability forever. A proposed win",
+        "(`ChallengeWon`) is excluded: it settles through `finalize_bounty`."
+      ],
+      "discriminator": [
+        109,
+        181,
+        117,
+        16,
+        169,
+        115,
+        89,
+        94
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Cold authority expiring a stale bounty."
+          ],
+          "signer": true
+        },
+        {
+          "name": "global_state",
+          "docs": [
+            "Global state PDA"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  103,
+                  108,
+                  111,
+                  98,
+                  97,
+                  108,
+                  95,
+                  115,
+                  116,
+                  97,
+                  116,
+                  101
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "bounty",
+          "docs": [
+            "The bounty being expired"
+          ],
+          "writable": true
+        },
+        {
+          "name": "house_vault",
+          "docs": [
+            "House vault"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  104,
+                  111,
+                  117,
+                  115,
+                  101,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "singularity_vault",
+          "docs": [
+            "Singularity bonus vault"
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  115,
+                  105,
+                  110,
+                  103,
+                  117,
+                  108,
+                  97,
+                  114,
+                  105,
+                  116,
+                  121,
+                  95,
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "protocol_treasury",
+          "docs": [
+            "Protocol treasury for fees"
+          ],
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "docs": [
+            "Token program"
+          ],
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "finalize_bounty",
       "docs": [
         "Finalize bounty immediately after resolution if no dispute exists.",
@@ -1731,9 +1870,10 @@
     {
       "name": "withdraw_singularity",
       "docs": [
-        "Withdraw Singularity bonus funds. Cold authority only, only while paused,",
-        "and only after all active bounties have resolved. This is an explicit",
-        "public emergency/admin operation, not a hidden path."
+        "Withdraw Singularity bonus funds. Cold authority only. Singularity holds",
+        "no reserved payout liability (wins pay from the house vault and the bonus",
+        "roll skips an empty pool), so this needs neither a pause nor an idle",
+        "protocol. Every withdrawal emits `SingularityWithdrawn` on-chain."
       ],
       "discriminator": [
         88,
@@ -1749,7 +1889,7 @@
         {
           "name": "authority",
           "docs": [
-            "Cold authority withdrawing Singularity funds while paused."
+            "Cold authority withdrawing Singularity funds."
           ],
           "signer": true
         },
@@ -2017,6 +2157,19 @@
         20,
         243,
         60
+      ]
+    },
+    {
+      "name": "BountyExpired",
+      "discriminator": [
+        74,
+        29,
+        44,
+        239,
+        139,
+        31,
+        54,
+        100
       ]
     },
     {
@@ -2552,6 +2705,32 @@
       }
     },
     {
+      "name": "BountyExpired",
+      "docs": [
+        "Emitted when the cold authority expires an unresolved bounty as a loss"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bounty",
+            "type": "pubkey"
+          },
+          {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "prior_status",
+            "docs": [
+              "Status before expiry: 0 = Pending, 1 = Submitted, 3 = ChallengeLost"
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
       "name": "BountyFinalized",
       "docs": [
         "Emitted when bounty is finalized"
@@ -2742,7 +2921,8 @@
             "docs": [
               "Cold authority. Signs admin ops: fund_house, set_protocol_paused,",
               "withdraw_unreserved_house, withdraw_singularity, set_hot_authority,",
-              "set_treasury, propose/accept/cancel_authority_transfer, resolve_dispute.",
+              "set_treasury, propose/accept/cancel_authority_transfer, resolve_dispute,",
+              "expire_bounty.",
               "Should be a hardware wallet (Ledger) on mainnet."
             ],
             "type": "pubkey"
@@ -2963,7 +3143,7 @@
     {
       "name": "SingularityWithdrawn",
       "docs": [
-        "Emitted when the cold authority withdraws Singularity funds while paused."
+        "Emitted when the cold authority withdraws Singularity funds."
       ],
       "type": {
         "kind": "struct",

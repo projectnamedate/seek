@@ -82,7 +82,9 @@ probes or admin. For mainnet truth:
 - House withdrawals are two-legged: `admin.ts withdraw-house <amt>` lands
   on the cold authority ATA, then `scripts/transfer-skr-ledger.ts
   <dest_wallet> <amt>` forwards (cold-signed, creates dest ATA if
-  missing). Singularity withdrawals require paused + zero active bounties.
+  missing). Singularity withdrawals need no pause since the 2026-10-21
+  upgrade: `admin.ts withdraw-singularity --all`, then forward. Stale
+  bounties: `admin.ts expire-bounties <pda...>` (24h after timer, as loss).
 - Never print private keys or `.env` secrets; pubkeys and on-chain state
   are fine.
 

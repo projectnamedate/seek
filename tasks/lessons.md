@@ -267,3 +267,23 @@ This is the meta-lesson from the B8 → B9 cycle. The B8 audit memory said "all 
 - **Make verification cheap.** A `check-seek` skill that runs `gh run list`, `cargo check`, `tsc --noEmit`, and `grep -rn` for known regressions in 30s removes the excuse for not verifying. It also surfaces drift between docs/memory and code at session start, before the drift compounds.
 
 The cost of one missed verification compounds over days: B8's incorrect "complete" claims survived in memory for 4 days. B9's re-audit took ~3 hours but found 15 items that would have been exploited within a week of mainnet launch. The ratio of "verify cost" to "ignore-and-eat-the-tail-risk cost" is enormous when the tail is a $1k vault going to zero.
+
+## Platform Exposure And Admin Guards
+
+### Migrating secrets off a platform is not rotating them
+- On 2026-07-12 the backend moved from Railway to the VPS by copying Railway's
+  env verbatim. When Railway reported a compromise on 2026-10-21, the live hot
+  authority, Anthropic key and Helius key were all still the Railway values.
+  The hot key could self-win bounties (accept takes a player-supplied
+  commitment with no backend co-sign).
+- **Rule:** When leaving a hosting platform, rotate every secret it held as
+  part of the migration, then delete the old project. Prove a secret is new by
+  comparing fingerprints, never by the env file's location.
+
+### An admin sweep gated on global idle state can be blocked forever
+- `withdraw_singularity` required `active_bounty_count == 0`, but 15 Pending
+  bounties had lost their mission salts and only the player can cancel, so the
+  count could never reach zero without an upgrade.
+- **Rule:** Never gate an admin action on a global condition that a third party
+  or lost off-chain data can hold open. Pair any such guard with an admin path
+  that clears the blocking state (`expire_bounty`, 24h after the timer).

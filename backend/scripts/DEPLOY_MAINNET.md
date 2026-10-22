@@ -4,7 +4,7 @@ Step-by-step to take Seek from the devnet hackathon state to a live mainnet
 deployment with Ledger-backed cold authority + Railway-hosted backend.
 
 Prereqs (user-side):
-- **Cold authority Ledger** (Ledger #1) with Solana app installed — used for admin ops (fund_house, pause/resume, withdraw unreserved house funds, withdraw Singularity while paused with zero active bounties, set_hot_authority, set_treasury, propose/accept_authority_transfer, resolve_dispute) AND program upgrade authority by default
+- **Cold authority Ledger** (Ledger #1) with Solana app installed — used for admin ops (fund_house, pause/resume, withdraw unreserved house funds, withdraw Singularity, expire stale bounties, set_hot_authority, set_treasury, propose/accept_authority_transfer, resolve_dispute) AND program upgrade authority by default
 - **Fees wallet Ledger** (Ledger #2): `Fmv8HqyQPUEp29wkybPimVkGbDverxs9BVji1rn2Y9Hr` — separate Ledger that owns the SKR ATA receiving the 10% rake. Signs nothing on-chain in the Seek protocol; rake accumulates as SKR, user periodically swaps to USDC/SOL on a DEX (Ledger-signed) and off-ramps to fiat. Operating expenses are funded separately, not paid from this wallet. **Rotatable** post-init via `admin.ts set-treasury` (cold-signed) — not locked forever.
 - SOL on the cold Ledger for Ledger-signed admin/IDL transactions, plus a
   durable git-ignored upgrade payer funded only after pubkey/permission
@@ -270,8 +270,12 @@ npx ts-node scripts/admin.ts resume
 # Withdraw only house funds not reserved for active payout liability.
 npx ts-node scripts/admin.ts withdraw-house <AMOUNT_IN_SKR>
 
-# Withdraw Singularity funds. Protocol must be paused with zero active bounties.
-npx ts-node scripts/admin.ts withdraw-singularity <AMOUNT_IN_SKR>
+# Withdraw Singularity funds (no pause needed). --all takes min(tracked, vault).
+npx ts-node scripts/admin.ts withdraw-singularity <AMOUNT_IN_SKR|--all>
+
+# Settle stale unresolved bounties (Pending/Submitted/ChallengeLost, 24h past
+# the timer) as losses. Batches 4 per Ledger signature.
+npx ts-node scripts/admin.ts expire-bounties <BOUNTY_PDA> [BOUNTY_PDA...]
 ```
 
 Before withdrawing, check:
@@ -361,7 +365,7 @@ railway variables set NODE_ENV=production
 # Add custom domain (api.seek.mythx.art) — Railway handles SSL automatically
 ```
 
-Do **not** set the cold Ledger/private authority key in Railway runtime env.
+Do **not** set the cold Ledger/private authority key in the VPS runtime env.
 The backend signs only hot-path `reveal_mission` / `propose_resolution`
 transactions with `HOT_AUTHORITY_PRIVATE_KEY`; cold admin ops stay local.
 

@@ -40,7 +40,12 @@ const PAYER_KEYPAIR_PATH = path.join(
 const EXPECTED_PAYER = new PublicKey(
   '3EKi2PzKrDi22Ld6NgixdBX7djSKMrZA2TG1utg1tJAS'
 );
-const ADDITIONAL_BYTES = 10_240;
+const bytesFlag = process.argv.indexOf('--bytes');
+const ADDITIONAL_BYTES =
+  bytesFlag === -1 ? 10_240 : Number(process.argv[bytesFlag + 1]);
+if (!Number.isInteger(ADDITIONAL_BYTES) || ADDITIONAL_BYTES <= 0) {
+  throw new Error('--bytes must be a positive integer');
+}
 
 function readKeypair(filePath: string): Keypair {
   const raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
