@@ -48,8 +48,10 @@ replace the mandatory `/check-seek` first action. After the check-seek startup
 pass, read `/Users/hammer/Obsidian/AgentMemory/AGENTS.md` and the Seek project
 note before substantive product work. Treat vault notes as durable cross-agent
 memory, not a replacement for repo docs or live runtime truth. At wrap-up for
-substantive Seek work, update the project note and append a dated session
-summary; never store secrets, keypairs, `.env` values, or credentials in the
+substantive Seek work, run the **end-session-sweep** skill (Codex:
+`$end-session-sweep`) — it forces the vault session write and runs the full
+per-project closeout: update the project note and append a dated session
+summary. Never store secrets, keypairs, `.env` values, or credentials in the
 vault.
 
 ## Workflow Orchestration
