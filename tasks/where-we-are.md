@@ -28,13 +28,19 @@
   liability 0, fees ATA 69,650.411462 SKR, cold ATA 0 SKR, not paused.
 - Upgrade payer drained (`2MDmZGWN…`); payer and buffer 0 SOL; cold Ledger
   4.431 SOL.
+- Anthropic and Helius keys rotated (operator issued new keys and deleted the
+  old ones). The new keys are in `/opt/seek-api/.env` and `seek-api` was
+  recreated. From inside the container: Claude call with `claude-sonnet-4-6`
+  returned 200, Helius `getHealth` ok, readiness 200. Pre-swap env kept at
+  `/opt/seek-api/.env.bak-20261021-apikeys` (0600 root; its API keys are now
+  revoked).
 - Not done: on-chain IDL account still has the old IDL (explorer decoding
   only; backend bundles the new one). Backend not redeployed (new instructions
-  are admin-only). Operator still to rotate Anthropic + Helius keys, delete the
-  Railway project, and revoke the Railway CLI login.
-- Next concrete action: after the operator rotates the Anthropic and Helius
-  keys, swap them into `/opt/seek-api/.env` and recreate `seek-api`, then
-  confirm one live hunt signs with `H7EG…`.
+  are admin-only). Operator still to delete the Railway project and revoke the
+  Railway CLI login.
+- Next concrete action: confirm the first live hunt after the rotation
+  validates a photo and signs reveal/propose with `H7EG…` (check `seek-api`
+  logs).
 
 ---
 
