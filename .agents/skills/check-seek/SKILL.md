@@ -85,6 +85,18 @@ probes or admin. For mainnet truth:
   missing). Singularity withdrawals need no pause since the 2026-10-21
   upgrade: `admin.ts withdraw-singularity --all`, then forward. Stale
   bounties: `admin.ts expire-bounties <pda...>` (24h after timer, as loss).
+- Before any cold-signed admin tx, check the cold Ledger's SOL
+  (`solana balance GkpX…YNtY`). On 2026-11-14 it was 0 SOL, and Anchor
+  reported only `Transaction simulation failed` with empty logs. An
+  empty-log simulation failure means: check fee SOL first.
+- Sweeps: ask the operator what house float to keep. With the house at 0,
+  every `accept_bounty` fails on-chain (it needs house ≥ entry), and the
+  backend does not check for this before `/prepare`. On 2026-11-14 the
+  operator kept 10,000 SKR, unpaused.
+- Address poisoning targets both Ledgers: fake fees `Fmv8Li5j…Y9Hr` and
+  fake cold `GkpXtZvh…BttY`. Never copy an address from transaction
+  history. Derive the fees ATA (`7cCSyQaDctviNtHygxRkpSgzG9GbQebfW1CHwCogYQ4K`)
+  and compare the full string before signing.
 - Never print private keys or `.env` secrets; pubkeys and on-chain state
   are fine.
 
