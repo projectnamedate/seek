@@ -1,3 +1,30 @@
+# Where we are - Seek - 2026-11-14 - 89,838 SKR swept to fees Ledger, 10k house float
+
+- Operator asked to pull as much SKR as possible into the Ledger, keeping a
+  10,000 SKR house float so hunts keep running (not paused). `/check-seek`
+  passed first (tsc both, mainnet cargo check, contracts 28/28, missions 6/6,
+  demo grep clean, assets OK, readiness 200, master CI success).
+- Pre-signing mainnet truth: house 96,838 (tracked == actual), liability 0,
+  0 active, Singularity 3,000, cold ATA 0, fees ATA 1,450, not paused.
+- Cold Ledger had 0 SOL: on 2026-11-07 it sent 16.708 SOL to the fees Ledger
+  `Fmv8H…Y9Hr` (tx `4FbpptwC…`). Operator topped it up to ~0.0977 SOL.
+- Txs (all finalized):
+  - house withdraw 86,838 → cold ATA: `5A3XeJjx87PABE8MFhZ6rYUzqnMNU5qh65asGUwmt7THMZfW4f42BFuv8QeKQW9ZG1xaezqC16EqxyX2Nb3wSRzy`
+  - Singularity withdraw 3,000 → cold ATA: `5jm17uouae2CCmgJx1PKMNGNi8PvpcjJdMK817u1hhouV9MtNkrgyzsw3vkF2QCiGcBu8ET21GWor8eSpAygzB3L`
+  - forward 89,838 → fees ATA `7cCSyQ…YQ4K`: `4A13sjYbsCZdi9eFqv2jqVGxXaefG3qtbQRJH5hnH2N5p5JxFHuhgY9Sygz9Y3YXyoRp6115FcqPWDNMoLRSUenT`
+- Post truth: house 10,000 (tracked == actual), liability 0, Singularity 0,
+  cold ATA 0, fees ATA 89,838 (the fees Ledger itself moved its prior 1,450
+  out at 07:43 PST in `2TKLWcxN…`), cold Ledger ~0.0977 SOL, readiness 200,
+  `/api/health/stats` vaults 10,000 / 0, not paused.
+- Address poisoning now hits the fees ATA too: 29 s after the forward,
+  lookalike `GkpXtZvhWajVHUSbWEVZozEvrBrvaNa4sWYJRzQCBttY` (real cold is
+  `GkpXKrov…YNtY`) sent a zero-value SKR transfer into `7cCSy…` (tx
+  `3Kyd5wb2…`). Never copy addresses from either wallet's history.
+- Next concrete action: watch the 10k float; refund the house with
+  `admin.ts fund` before it drops below ~2,000 SKR (one top-tier entry).
+
+---
+
 # Where we are - Seek - 2026-10-21 - Railway exposure contained, Singularity swept
 
 - Railway reported a compromise. Audit: `/opt/seek-api/.env` was unchanged
