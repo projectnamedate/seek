@@ -494,6 +494,15 @@ Not on the critical path. Each unblocks future scale or raises the security bar.
 **Scope:** split `finalize_bounty` into 3-instruction flow (propose → commit VRF → consume). Touches contract + backend finalizer.
 **Effort:** ~3-4 hrs.
 
+**Security audit 2026-11-16 (open; needs a Ledger-signed upgrade):** the roll is not just slot-leader grindable. Every seed input is public to the player: `mission_commitment` and the bounty key sit in the account, and slot plus timestamp are known per slot (`lib.rs:936-951`). `finalize_bounty` also takes any `Signer` as caller (`lib.rs:2017-2018`). So a winning player can send `[finalize_bounty, SPL transfer of pre-balance + payout + pool]` every slot: misses revert atomically, and one eventually lands with the pool. The comment at `lib.rs:928-931` ("only a slot leader can grind") understates this and should be corrected with the fix.
+- **Backend stopgap, live:** `6e53374` sends propose + finalize in one hot-signed transaction while `CHALLENGE_PERIOD_SECONDS=0`, so `ChallengeWon` is never observable on chain. That closes the window only while the challenge period is 0 and the backend is the only proposer. It does not cover the queued-finalizer recovery path (`finalizeBountyNow`) or a future non-zero challenge period.
+- **Program options, smallest first:**
+  1. Require `caller == global_state.hot_authority` in `FinalizeBounty`, which keeps today's behaviour and removes player timing.
+  2. Add a hot-authority secret committed at propose and revealed at finalize to the seed.
+  3. Switchboard VRF, as above.
+- Do option 1 now regardless of pool size: it's a one-line constraint plus an IDL refresh, and the regression test in `backend/tests/atomic-resolution.test.ts` stays valid.
+- Report: `~/security-audit-skill/seek/run-1/REPORT.md`.
+
 ### E2. Full Anchor integration tests
 **Scope:** accept → reveal → propose → finalize win + loss paths, dispute flow both outcomes, two-step authority rotation, cancel after grace, hot authority rotation.
 **Blocker:** SKR_MINT const is compile-gated. Either (a) add a `test` feature that makes the mint pluggable, or (b) run tests against `solana-test-validator --clone <devnet SKR mint>`.
