@@ -2,9 +2,12 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  sendAndConfirmTransaction,
+  Transaction,
+  TransactionInstruction,
 } from '@solana/web3.js';
 import { AnchorProvider, Program, Wallet } from '@coral-xyz/anchor';
-import { getAssociatedTokenAddress } from '@solana/spl-token';
+import { getAssociatedTokenAddress, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { config } from '../config';
 import { Tier, AcceptBountyInstructionVersion, ENTRY_AMOUNTS, SKR_MULTIPLIER } from '../types';
 import bs58 from 'bs58';
@@ -237,6 +240,90 @@ export async function proposeResolutionOnChain(
 }
 
 /**
+ * With a zero challenge period a result is final as soon as it is proposed, so
+ * propose and finalize go out in one transaction. finalize_bounty is
+ * permissionless and its Singularity roll uses only public inputs; a separate
+ * finalize leaves a window in which the player can choose the slot.
+ */
+export function finalizesWithProposal(challengePeriodSeconds: number): boolean {
+  return challengePeriodSeconds === 0;
+}
+
+export type ResolutionAccounts = {
+  hotAuthority: PublicKey;
+  globalState: PublicKey;
+  bounty: PublicKey;
+  playerTokenAccount: PublicKey;
+  houseVault: PublicKey;
+  singularityVault: PublicKey;
+  protocolTreasury: PublicKey;
+};
+
+/** propose_resolution followed by finalize_bounty, both signed by the hot authority. */
+export async function buildProposeAndFinalizeInstructions(
+  program: Program,
+  success: boolean,
+  accounts: ResolutionAccounts
+): Promise<TransactionInstruction[]> {
+  const propose = await program.methods
+    .proposeResolution(success)
+    .accounts({
+      hotAuthority: accounts.hotAuthority,
+      globalState: accounts.globalState,
+      bounty: accounts.bounty,
+    })
+    .instruction();
+  const finalize = await program.methods
+    .finalizeBounty()
+    .accounts({
+      caller: accounts.hotAuthority,
+      globalState: accounts.globalState,
+      bounty: accounts.bounty,
+      playerTokenAccount: accounts.playerTokenAccount,
+      houseVault: accounts.houseVault,
+      singularityVault: accounts.singularityVault,
+      protocolTreasury: accounts.protocolTreasury,
+      tokenProgram: TOKEN_PROGRAM_ID,
+    })
+    .instruction();
+  return [propose, finalize];
+}
+
+export async function proposeAndFinalizeOnChain(
+  bountyPda: string,
+  playerWallet: string,
+  success: boolean
+): Promise<string> {
+  const program = getProgram();
+  const hot = getHotAuthorityKeypair();
+  const [globalStatePda] = deriveGlobalStatePda();
+  const [houseVaultPda] = deriveHouseVaultPda();
+  const [singularityVaultPda] = deriveSingularityVaultPda();
+  const globalState = await (program.account as any).globalState.fetch(globalStatePda);
+
+  const instructions = await buildProposeAndFinalizeInstructions(program, success, {
+    hotAuthority: hot.publicKey,
+    globalState: globalStatePda,
+    bounty: new PublicKey(bountyPda),
+    playerTokenAccount: await getAssociatedTokenAddress(SKR_MINT, new PublicKey(playerWallet)),
+    houseVault: houseVaultPda,
+    singularityVault: singularityVaultPda,
+    protocolTreasury: globalState.protocolTreasury as PublicKey,
+  });
+
+  const signature = await withTimeout(
+    sendAndConfirmTransaction(getConnection(), new Transaction().add(...instructions), [hot], {
+      commitment: 'confirmed',
+    }),
+    30_000,
+    'propose_and_finalize'
+  );
+
+  log.info({ outcome: success ? 'WIN' : 'LOSS', signature }, 'resolution proposed and finalized');
+  return signature;
+}
+
+/**
  * Resolve bounty on-chain (called after AI validation)
  * Full flow: reveal_mission → propose_resolution → finalize_bounty
  */
@@ -285,7 +372,17 @@ export async function resolveBountyOnChain(
 
     // Propose only while Submitted, with the same ambiguous-timeout recovery.
     if (status === 'submitted') {
+      const atomic = finalizesWithProposal(config.protocol.challengePeriodSeconds);
       try {
+        if (atomic) {
+          lastSignature = await proposeAndFinalizeOnChain(bountyPda, playerWallet, success);
+          const finalized = await getBountyOnChain(bountyPda);
+          return {
+            signature: lastSignature,
+            challengeEndsAt: Math.floor(Date.now() / 1000),
+            singularityWon: Boolean(finalized?.singularityWon ?? finalized?.singularity_won),
+          };
+        }
         lastSignature = await proposeResolutionOnChain(bountyPda, success);
         status = success ? 'challengewon' : 'challengelost';
         // The pre-proposal account snapshot is stale; use configured challenge
